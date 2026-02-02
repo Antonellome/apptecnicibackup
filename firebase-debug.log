@@ -1,0 +1,142 @@
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-01T19:54:17.929Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:17.932Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:26.080Z] Running auto auth
+[debug] [2026-02-01T19:54:26.081Z] Running auto auth
+[debug] [2026-02-01T19:54:26.128Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.130Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-01T19:54:26.339Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.341Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-01T19:54:26.592Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-01T19:54:26.592Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[debug] [2026-02-01T19:54:26.651Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.651Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.652Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.652Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.653Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.655Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.655Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.691Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.691Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.693Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.693Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.702Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.702Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.706Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.706Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.710Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.711Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.716Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.716Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.719Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.719Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.721Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.721Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.725Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.725Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.727Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [none]
+[debug] [2026-02-01T19:54:26.727Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.880Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-01T19:54:26.881Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[debug] [2026-02-01T19:54:26.893Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.899Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.908Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.916Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.916Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.920Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.922Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.979Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.980Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:26.980Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.983Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.992Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.993Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.995Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.996Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:26.998Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com [none]
+[debug] [2026-02-01T19:54:26.998Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:27.001Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com [none]
+[debug] [2026-02-01T19:54:27.001Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:27.004Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-02-01T19:54:27.004Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:27.006Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com [none]
+[debug] [2026-02-01T19:54:27.006Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:27.008Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [none]
+[debug] [2026-02-01T19:54:27.008Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:27.010Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [none]
+[debug] [2026-02-01T19:54:27.010Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-01T19:54:27.473Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com 403
+[debug] [2026-02-01T19:54:27.474Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [omitted]
+[debug] [2026-02-01T19:54:27.602Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com 200
+[debug] [2026-02-01T19:54:27.608Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.609Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com 200
+[debug] [2026-02-01T19:54:27.609Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.652Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com 200
+[debug] [2026-02-01T19:54:27.653Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.663Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com 200
+[debug] [2026-02-01T19:54:27.663Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.673Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-02-01T19:54:27.674Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.679Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com 200
+[debug] [2026-02-01T19:54:27.679Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.725Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com 200
+[debug] [2026-02-01T19:54:27.727Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.768Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com 403
+[debug] [2026-02-01T19:54:27.770Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [omitted]
+[debug] [2026-02-01T19:54:27.772Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com 200
+[debug] [2026-02-01T19:54:27.772Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.830Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com 200
+[debug] [2026-02-01T19:54:27.831Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/fcm.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.930Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com 200
+[debug] [2026-02-01T19:54:27.931Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.957Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com 200
+[debug] [2026-02-01T19:54:27.957Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/identitytoolkit.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:27.999Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com 200
+[debug] [2026-02-01T19:54:28.000Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/storage.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:28.018Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com 200
+[debug] [2026-02-01T19:54:28.018Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseremoteconfig.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:28.040Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com 200
+[debug] [2026-02-01T19:54:28.040Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:28.061Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-02-01T19:54:28.061Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [omitted]
+[debug] [2026-02-01T19:54:28.068Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com 200
+[debug] [2026-02-01T19:54:28.068Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firestore.googleapis.com [omitted]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-01T19:54:28.095Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:28.095Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-01T19:54:28.095Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:28.096Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-01T19:54:28.318Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-01T19:54:28.318Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-01T19:54:28.326Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:28.326Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-01T19:54:28.421Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:28.421Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-01T19:54:28.422Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:28.422Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-01T19:54:28.439Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:28.439Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-01T19:54:28.440Z] No OAuth tokens found
+[debug] [2026-02-01T19:54:28.440Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-01T19:54:28.587Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-01T19:54:28.589Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-01T19:54:28.595Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:28.595Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-01T19:54:28.684Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-01T19:54:28.684Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-01T19:54:28.690Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-01T19:54:28.690Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
