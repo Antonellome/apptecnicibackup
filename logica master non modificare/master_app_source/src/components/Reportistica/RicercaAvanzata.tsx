@@ -205,7 +205,7 @@ const RicercaAvanzata: React.FC = () => {
             const cliente = data.clienteId ? clientiMap.get(data.clienteId) : null;
             const luogo = data.luogoId ? luoghiMap.get(data.luogoId) : null;
             
-            let dataValue: Date | null = data.data?.toDate ? data.data.toDate() : null;
+            const dataValue: Date | null = data.data?.toDate ? data.data.toDate() : null;
 
             let oreString = '--';
             if (data.oreLavorate != null) {

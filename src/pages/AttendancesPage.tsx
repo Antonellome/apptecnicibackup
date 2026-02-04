@@ -21,7 +21,7 @@ const AttendancesPage = () => {
         {/* Qui andrà il contenuto per la gestione delle presenze */}
       </Box>
       <Typography variant="body2" sx={{ color: '#2563eb', fontStyle: 'italic', textAlign: 'center', p: 2 }}>
-        by "AS"
+        by &quot;AS&quot;
       </Typography>
     </Box>
   );

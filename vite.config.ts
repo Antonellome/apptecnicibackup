@@ -4,8 +4,15 @@ import { VitePWA } from 'vite-plugin-pwa';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 // https://vitejs.dev/config/
-// FORZO RIAVVIO: Questo commento forza il riavvio del server di sviluppo.
 export default defineConfig({
+  // Blocco server per forzare il riavvio completo.
+  server: {
+    host: '0.0.0.0',
+    // Aggiungiamo un parametro per essere sicuri di invalidare la cache
+    fs: {
+      strict: true,
+    }
+  },
   plugins: [
     react(),
     tsconfigPaths(),

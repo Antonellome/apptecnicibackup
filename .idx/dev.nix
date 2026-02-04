@@ -1,37 +1,33 @@
-# To learn more about how to use Nix to configure your environment
-# see: https://developers.google.com/idx/guides/customize-idx-env
 { pkgs, ... }: {
-  # Which nixpkgs channel to use.
-  channel = "stable-24.05"; # or "unstable"
-  # Use https://search.nixos.org/packages to find packages
+  # CAMBIA DA "stable-24.05" A "stable-24.11"
+  # Questo è il cuore del problema. Senza questo, resterai sempre alla v22.10.
+  channel = "stable-24.11";
+
   packages = [
-    pkgs.nodejs_20
+    pkgs.nodejs_22
   ];
-  # Sets environment variables in the workspace
-  env = {};
+
   idx = {
-    # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
-      # "vscodevim.vim"
-      "google.gemini-cli-vscode-ide-companion"
+      "astro-build.astro-vscode"
+      "csstools.postcss"
+      "bradlc.vscode-tailwindcss"
     ];
-    workspace = {
-      # Runs when a workspace is first created with this `dev.nix` file
-      onCreate = {
-        npm-install = "npm i --no-audit --no-progress --timing";
-        # Open editors for the following files by default, if they exist:
-        default.openFiles = [ "src/App.tsx" "src/App.ts" "src/App.jsx" "src/App.js" ];
-      };
-      # To run something each time the workspace is (re)started, use the `onStart` hook
-    };
-    # Enable previews and customize configuration
+
     previews = {
       enable = true;
       previews = {
         web = {
-          command = ["npm" "run" "dev" "--" "--port" "$PORT" "--host" "0.0.0.0"];
+          command = [ "npm" "run" "dev" "--" "--port" "$PORT" "--host" "0.0.0.0" ];
           manager = "web";
         };
+      };
+    };
+
+    workspace = {
+      onCreate = {
+        # Rimuoviamo i vecchi moduli per sicurezza
+        install-dependencies = "rm -rf node_modules && npm install";
       };
     };
   };

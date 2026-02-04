@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, TextField, Button, CircularProgress, Alert } from '@mui/material';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext'; // FIX: Percorso di importazione corretto
 
 const LoginPage = () => {
   const [email, setEmail] = useState('antonio.scuderi@gmail.com');
@@ -19,20 +19,15 @@ const LoginPage = () => {
     }
   }, [user, navigate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/'); // Reindirizzamento al successo
+      navigate('/');
     } catch (err: any) {
-      // Semplice gestione dell'errore di Firebase Auth
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError('Credenziali non valide. Riprova.');
-      } else {
-        setError('Si è verificato un errore inatteso.');
-      }
+      setError(err.message || 'Credenziali non valide. Riprova.');
     } finally {
       setLoading(false);
     }
@@ -43,90 +38,52 @@ const LoginPage = () => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
         minHeight: '100vh',
-        backgroundColor: '#000000',
-        padding: 3,
+        bgcolor: 'background.default',
+        p: 3,
       }}
     >
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <Typography variant="h4" component="div" sx={{ color: '#4F7DFF', fontWeight: 'bold', lineHeight: 1.1 }}>
-                R.I.S.O.
-            </Typography>
-            <Typography variant="h6" component="div" sx={{ color: '#4F7DFF', opacity: 0.9 }}>
-                App Tecnici
-            </Typography>
-        </Box>
-
-        <Typography sx={{ fontSize: 18, color: '#4F7DFF', opacity: 0.8, textAlign: 'center', mb: 4 }}>
-          Report Individuali Sincronizzati Online
-        </Typography>
-
-        <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%', maxWidth: 360 }}>
-          <TextField
-            label="Email"
-            variant="filled"
-            fullWidth
-            margin="normal"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete='email'
-            sx={{ 
-              '& .MuiFilledInput-root': { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-              '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.7)' },
-              '& .MuiInputBase-input': { color: '#ffffff' },
-            }}
-          />
-          <TextField
-            label="Password"
-            type="password"
-            variant="filled"
-            fullWidth
-            margin="normal"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete='current-password'
-            sx={{ 
-              '& .MuiFilledInput-root': { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-              '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.7)' },
-              '& .MuiInputBase-input': { color: '#ffffff' },
-              mb: 2 
-            }}
-          />
-          
-          {error && (
-            <Alert severity="warning" sx={{ mt: 2, background: '#FFB74D', color: '#6A4F00' }}>
-              {error}
-            </Alert>
-          )}
-          
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            disabled={loading}
-            size="large"
-            sx={{
-                backgroundColor: '#4F7DFF',
-                padding: '14px 0',
-                borderRadius: 50,
-                fontSize: '18px',
-                fontWeight: '600',
-                mt: 3,
-                boxShadow: '0 4px 20px 0 rgba(79, 125, 255, 0.5)',
-                '&:hover': { backgroundColor: '#406AD4' }
-            }}
-          >
-            {loading ? <CircularProgress size={26} color="inherit" /> : 'Accedi'}
-          </Button>
-        </Box>
-
-        <Typography sx={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.6)', fontStyle: 'italic', mt: 4 }}>
-          by AS
-        </Typography>
+      <Typography variant="h4" component="h1" gutterBottom>
+        Login
+      </Typography>
+      <Box component="form" onSubmit={handleLogin} sx={{ mt: 1, width: '100%', maxWidth: '400px' }}>
+        <TextField
+          margin="normal"
+          required
+          fullWidth
+          id="email"
+          label="Indirizzo Email"
+          name="email"
+          autoComplete="email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <TextField
+          margin="normal"
+          required
+          fullWidth
+          name="password"
+          label="Password"
+          type="password"
+          id="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {error && <Alert severity="error" sx={{ width: '100%', mt: 2 }}>{error}</Alert>}
+        <Button
+          type="submit"
+          fullWidth
+          variant="contained"
+          sx={{ mt: 3, mb: 2 }}
+          disabled={loading}
+        >
+          {loading ? <CircularProgress size={24} /> : 'Accedi'}
+        </Button>
+      </Box>
     </Box>
   );
 };
