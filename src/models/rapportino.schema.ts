@@ -13,8 +13,8 @@ export const createRapportinoSchema = (tipiGiornata: TipoGiornata[]) => {
     // --- SEZIONE TEMPO ---
     inserimentoManualeOre: z.boolean().default(false),
     data: z.coerce.date({ required_error: 'La data è obbligatoria.', invalid_type_error: "Formato data non valido" }),
-    oraInizio: z.coerce.date().nullable().optional(),
-    oraFine: z.coerce.date().nullable().optional(),
+    oraInizio: z.any().nullable().optional(),
+    oraFine: z.any().nullable().optional(),
     pausa: z.number().min(0, "La pausa non può essere negativa.").optional(),
     oreLavorate: z.number().min(0, 'Le ore non possono essere negative.').optional(),
 
@@ -28,6 +28,8 @@ export const createRapportinoSchema = (tipiGiornata: TipoGiornata[]) => {
     luogoId: z.string().nullable().optional(),
     giornataId: z.string({ required_error: 'Il tipo di giornata è obbligatorio.' }),
     veicoloId: z.string().nullable().optional(),
+    clienteId: z.string().nullable().optional(),
+
   })
   .superRefine((data, ctx) => {
     // Trova il tipo di giornata selezionato
@@ -84,5 +86,4 @@ export const createRapportinoSchema = (tipiGiornata: TipoGiornata[]) => {
   });
 };
 
-const staticSchema = createRapportinoSchema([]);
-export type RapportinoSchema = z.infer<typeof staticSchema>;
+export type RapportinoSchema = z.infer<ReturnType<typeof createRapportinoSchema>>;

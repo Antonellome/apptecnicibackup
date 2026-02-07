@@ -10,7 +10,6 @@ import ArticleIcon from '@mui/icons-material/Article';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import LogoutIcon from '@mui/icons-material/Logout';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import SettingsIcon from '@mui/icons-material/Settings';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
@@ -19,15 +18,14 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 const mainAction = { 
   text: 'Nuovo Report', 
   icon: <AddCircleOutlineIcon sx={{ fontSize: '2rem' }} />, 
-  path: '/new-report', 
+  path: '/rapportini/nuovo', 
   description: 'Crea e invia il tuo report giornaliero.' 
 };
 
 const menuItems = [
-  { text: 'Lista Report', icon: <ArticleIcon sx={{ fontSize: { xs: 28, sm: 32 } }} />, path: '/report-list' },
+  { text: 'Lista Report', icon: <ArticleIcon sx={{ fontSize: { xs: 28, sm: 32 } }} />, path: '/rapportini' },
   { text: 'Riepilogo Mensile', icon: <BarChartIcon sx={{ fontSize: { xs: 28, sm: 32 } }} />, path: '/monthly-report' },
   { text: 'Presenze', icon: <DateRangeIcon sx={{ fontSize: { xs: 28, sm: 32 } }} />, path: '/attendances' },
-  { text: 'Notifiche', icon: <NotificationsIcon sx={{ fontSize: { xs: 28, sm: 32 } }} />, path: '/notifications' },
 ];
 
 

@@ -13,7 +13,6 @@ import {
     Divider,
     useTheme as useMuiTheme 
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import MenuBar from '../components/MenuBar';
@@ -27,7 +26,6 @@ const SettingsPage = () => {
   const muiTheme = useMuiTheme();
   const { mode, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {

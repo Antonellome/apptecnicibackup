@@ -1,4 +1,4 @@
-import type { Tecnico, Ditta, Categoria } from '@/models/definitions';
+import type { Tecnico } from '@/models/definitions';
 import { Timestamp } from 'firebase/firestore';
 import dayjs from 'dayjs';
 
