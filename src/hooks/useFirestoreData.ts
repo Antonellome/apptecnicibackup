@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onSnapshot } from 'firebase/firestore';
-import type { Query, DocumentData, FirebaseError } from 'firebase/firestore';
+import type { Query, FirebaseError } from 'firebase/firestore';
 
 /**
  * Stato restituito dall'hook useFirestoreData.
@@ -26,15 +26,14 @@ export const useFirestoreData = <T extends { id: string }>(query: Query | null):
   const [error, setError] = useState<FirebaseError | null>(null);
 
   useEffect(() => {
-    // Se la query non è valida, resettiamo lo stato e interrompiamo.
+    // Se la query non è valida, resettiamo lo stato solo se necessario per evitare render a cascata.
     if (!query) {
-      setData(null);
-      setLoading(false);
-      setError(null);
+      if (data !== null) setData(null);
+      if (loading) setLoading(false);
+      if (error !== null) setError(null);
       return;
     }
 
-    // All'avvio di un nuovo fetch, impostiamo lo stato di caricamento.
     setLoading(true);
     setError(null);
 
@@ -49,13 +48,15 @@ export const useFirestoreData = <T extends { id: string }>(query: Query | null):
       const firebaseError = err as FirebaseError;
       console.error(`[useFirestoreData] Errore durante il fetch dei dati:`, firebaseError);
       setError(firebaseError);
+      setData(null); // In caso di errore, i dati non sono più validi.
       setLoading(false);
     });
 
-    // Pulizia dell'iscrizione quando il componente viene smontato o la query cambia.
     return () => unsubscribe();
 
-  }, [query]); // L'hook si ri-esegue solo se l'oggetto query cambia.
+  // Aggiungiamo le dipendenze mancanti per conformarci alle regole di React Hooks.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   return { data, loading, error };
 };

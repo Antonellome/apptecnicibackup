@@ -1,11 +1,10 @@
-
-import { 
+import {
     createContext, 
-    useContext, 
     ReactNode, 
     useState, 
     useEffect, 
-    useMemo 
+    useMemo, 
+    useCallback
 } from 'react';
 import { 
     getAuth, 
@@ -18,8 +17,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { Tecnico } from '../models/definitions';
 
-// Definisce la struttura dei dati esposti dal contesto
-interface AuthContextType {
+// Esportato per essere utilizzato dall'hook e dai componenti
+export interface AuthContextType {
   currentUser: Tecnico | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
@@ -27,10 +26,9 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-// Crea il contesto con un valore di default undefined
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Esportato per essere utilizzato dall'hook personalizzato `useAuth`.
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Provider component
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -38,71 +36,61 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [currentUser, setCurrentUser] = useState<Tecnico | null>(null);
-  const [loading, setLoading] = useState(true); // Inizia come true per gestire il check iniziale
+  const [loading, setLoading] = useState(true);
 
   const auth = getAuth();
 
   useEffect(() => {
-    // Listener per i cambiamenti dello stato di autenticazione di Firebase
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        // Se l'utente è loggato, recupera i dati dal documento Firestore corrispondente
-        const userDocRef = doc(db, 'tecnici', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          // Combina l'ID con i dati del documento per creare l'oggetto Tecnico completo
-          setCurrentUser({ id: userDoc.id, ...userDoc.data() } as Tecnico);
-        } else {
-          // L'utente esiste in Auth ma non c'è un record corrispondente in Firestore
-          console.error(`Nessun documento trovato per l'utente con ID: ${user.uid}`);
-          setCurrentUser(null);
+        // L'utente è autenticato. Cerco il suo profilo in 'tecnici_data' usando l'UID.
+        const userDocRef = doc(db, 'tecnici_data', user.uid);
+        
+        try {
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            // Trovato il tecnico.
+            setCurrentUser({ id: docSnap.id, ...docSnap.data() } as Tecnico);
+          } else {
+            // L'utente è autenticato su Firebase, ma non esiste un record corrispondente.
+            console.error(`Autenticazione riuscita per ${user.email}, ma nessun profilo dati trovato in 'tecnici_data'.`);
+            setCurrentUser(null);
+          }
+        } catch (error) {
+            console.error("Errore durante la ricerca del profilo dati del tecnico:", error);
+            setCurrentUser(null);
         }
+
       } else {
-        // Nessun utente loggato
+        // Nessun utente loggato.
         setCurrentUser(null);
       }
-      setLoading(false); // Fine del caricamento dopo aver controllato lo stato
+      setLoading(false);
     });
 
-    // Cleanup: rimuove il listener quando il componente viene smontato
     return () => unsubscribe();
   }, [auth]);
 
-  // Funzione di LOGIN
-  const login = async (email: string, pass: string) => {
+  const login = useCallback(async (email: string, pass: string) => {
     await signInWithEmailAndPassword(auth, email, pass);
-    // Il listener onAuthStateChanged si occuperà di aggiornare lo stato
-  };
+  }, [auth]);
 
-  // Funzione di LOGOUT
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await signOut(auth);
-    // Il listener onAuthStateChanged si occuperà di aggiornare lo stato a null
-  };
+  }, [auth]);
 
-  // Memoizza il valore del contesto per evitare rerender non necessari
   const value = useMemo(() => ({
     currentUser,
     firebaseUser,
     loading,
     login,
     logout,
-  }), [currentUser, firebaseUser, loading]);
+  }), [currentUser, firebaseUser, loading, login, logout]);
 
   return (
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
-};
-
-// Hook personalizzato per un accesso più semplice e sicuro al contesto
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    // Corretto l'errore di sintassi usando le virgolette doppie
-    throw new Error("useAuth deve essere utilizzato all'interno di un AuthProvider");
-  }
-  return context;
 };

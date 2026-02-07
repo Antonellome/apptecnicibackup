@@ -2,7 +2,7 @@ import { AppBar, Toolbar, IconButton, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext'; // FIX: Percorso di importazione corretto
+import { useAuth } from '@/hooks/useAuth'; // CORRETTO
 
 interface MenuBarProps {
   title: string;

@@ -1,10 +1,10 @@
 
 import { Navigate } from 'react-router-dom';
-import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../hooks/useAuth'; // Corretto: usa l'hook di autenticazione
 import { Box, CircularProgress } from '@mui/material';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, loading } = useApp();
+  const { currentUser, loading } = useAuth(); // Corretto: usa i dati giusti
 
   if (loading) {
     return (
@@ -14,7 +14,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  // Corretto: l'autenticazione dipende dall'esistenza di currentUser
+  return currentUser ? children : <Navigate to="/login" replace />;
 };
 
 export default ProtectedRoute;

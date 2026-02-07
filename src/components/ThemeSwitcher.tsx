@@ -1,10 +1,10 @@
 import React from 'react';
 import { Card, CardContent, Typography, Switch, Box } from '@mui/material';
-import { useThemeContext } from '@/hooks/useThemeContext';
+import { useTheme } from '@/hooks/useTheme'; // CORRETTO: importo il nuovo hook
 import { WbSunny, Brightness2 } from '@mui/icons-material';
 
 const ThemeSwitcher = () => {
-  const { mode, toggleTheme } = useThemeContext();
+  const { mode, toggleTheme } = useTheme(); // CORRETTO: uso il nuovo hook
 
   return (
     <Card variant="outlined">

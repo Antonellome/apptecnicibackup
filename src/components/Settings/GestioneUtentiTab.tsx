@@ -4,7 +4,7 @@ import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { getFunctions, httpsCallable, HttpsCallableResult } from 'firebase/functions';
 import { db } from '@/firebase';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // CORRETTO
 import {
     Box, Typography, Alert, CircularProgress, Tooltip, Select, MenuItem, FormControl, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, SelectChangeEvent
 } from '@mui/material';

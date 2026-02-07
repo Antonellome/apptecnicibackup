@@ -1,4 +1,4 @@
-import React, { createContext, useState, useMemo, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useMemo, ReactNode } from 'react';
 import { ThemeProvider as MUIThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { getTheme } from '@/theme';
@@ -12,18 +12,10 @@ export interface ThemeContextInterface {
 }
 
 // 2. CREAZIONE DEL CONTESTO
+// Esportato per essere utilizzato dall'hook personalizzato `useTheme`.
 export const ThemeContext = createContext<ThemeContextInterface | undefined>(undefined);
 
-// 3. HOOK PERSONALIZZATO
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
-
-// 4. PROVIDER COMPONENT
+// 3. PROVIDER COMPONENT
 const getInitialMode = (): ThemeMode => {
   if (typeof window !== 'undefined') {
     const savedMode = localStorage.getItem('themeMode');
@@ -33,7 +25,7 @@ const getInitialMode = (): ThemeMode => {
     const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     return prefersDark ? 'dark' : 'light';
   }
-  return 'light';
+  return 'light'; // Default per l'ambiente server-side
 };
 
 interface ThemeProviderProps {
@@ -54,7 +46,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   };
 
   const theme = useMemo(() => getTheme(mode), [mode]);
-  const contextValue: ThemeContextInterface = useMemo(() => ({ toggleTheme, mode }), [mode]);
+  const contextValue = useMemo(() => ({ toggleTheme, mode }), [mode, toggleTheme]);
 
   return (
     <ThemeContext.Provider value={contextValue}>

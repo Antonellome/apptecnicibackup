@@ -1,8 +1,8 @@
 import React from 'react';
 import { Box, Typography, Grid, Card, CardActionArea, IconButton, useTheme as useMuiTheme, Divider } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 
 // Icons
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';

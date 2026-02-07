@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, TextField, Button, CircularProgress, Alert } from '@mui/material';
-import { useAuth } from '@/contexts/AuthContext'; // FIX: Percorso di importazione corretto
+import { useAuth } from '@/hooks/useAuth'; // CORRETTO
 
 const LoginPage = () => {
   const [email, setEmail] = useState('antonio.scuderi@gmail.com');
@@ -12,7 +12,6 @@ const LoginPage = () => {
   const { login, user } = useAuth();
   const navigate = useNavigate();
 
-  // Se l'utente è già loggato, lo redireziona alla home
   useEffect(() => {
     if (user) {
       navigate('/');

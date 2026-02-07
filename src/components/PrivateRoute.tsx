@@ -1,9 +1,10 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext'; // FIX: Percorso di importazione corretto
+import { useAuth } from '../hooks/useAuth';
 import { Box, CircularProgress } from '@mui/material';
 
 const PrivateRoute = ({ children }: { children: JSX.Element }) => {
-  const { user, loading } = useAuth();
+  // L'ERRORE ERA QUI. Deve usare currentUser, non user.
+  const { currentUser, loading } = useAuth();
 
   if (loading) {
     return (
@@ -13,7 +14,8 @@ const PrivateRoute = ({ children }: { children: JSX.Element }) => {
     );
   }
 
-  return user ? children : <Navigate to="/login" />;
+  // Ora il controllo è corretto.
+  return currentUser ? children : <Navigate to="/login" />;
 };
 
 export default PrivateRoute;

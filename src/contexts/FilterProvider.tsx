@@ -1,8 +1,4 @@
-import React, { useState, ReactNode, createContext, useContext, Dispatch, SetStateAction } from 'react';
-
-// =========================================================================
-// INIZIO SEZIONE UNITA DA FilterContext.ts
-// =========================================================================
+import React, { useState, ReactNode, createContext, Dispatch, SetStateAction } from 'react';
 
 // --- 1. DEFINIZIONE DEI TIPI ---
 
@@ -17,26 +13,9 @@ export interface IFilterContext {
 
 // --- 2. CREAZIONE DEL CONTESTO ---
 
-// Il contesto viene creato con 'undefined' e sarà il Provider a fornirgli un valore.
 export const FilterContext = createContext<IFilterContext | undefined>(undefined);
 
-// --- 3. CREAZIONE DELL'HOOK PERSONALIZZATO ---
-
-export const useFilter = () => {
-    const context = useContext(FilterContext);
-    if (context === undefined) {
-        // Lancia un errore se l'hook viene usato fuori dal suo provider.
-        throw new Error('useFilter must be used within a FilterProvider');
-    }
-    return context;
-};
-
-// =========================================================================
-// FINE SEZIONE UNITA
-// =========================================================================
-
-
-// --- PROVIDER COMPONENT ---
+// --- 3. PROVIDER COMPONENT ---
 
 interface FilterProviderProps {
     children: ReactNode;

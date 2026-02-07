@@ -1,16 +1,11 @@
-
-import React, { ReactNode, useState, useEffect, useMemo, useCallback, createContext, useContext } from 'react';
+import React, { ReactNode, useState, useEffect, useMemo, useCallback, createContext } from 'react';
 import { collection, onSnapshot, Timestamp, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@/hooks/useAuth'; // CORRETTO: Import aggiornato
 import type { DocumentData } from 'firebase/firestore';
 import type { Tecnico, Veicolo, Nave, Luogo, Ditta, Categoria, TipoGiornata, Rapportino, Cliente, Documento, WebAppUser, Qualifica, CollectionName, BaseEntity } from '@/models/definitions';
 
-// =========================================================================
-// INIZIO SEZIONE UNITA DA DataContext.ts
-// =========================================================================
-
-// 1. DEFINIZIONE DELL'INTERFACCIA DEL CONTESTO
+// 1. DEFINIZIONE DELL'INTERFACCIA DEL CONTESTO (esportata)
 export interface IDataContext {
     tecnici: Tecnico[];
     veicoli: Veicolo[];
@@ -40,31 +35,18 @@ export interface IDataContext {
     deleteData: (collectionName: CollectionName, id: string) => Promise<void>;
 }
 
-// 2. CREAZIONE DEL CONTESTO
+// 2. CREAZIONE DEL CONTESTO (esportato)
 export const DataContext = createContext<IDataContext | undefined>(undefined);
 
-// 3. HOOK PERSONALIZZATO PER L'ACCESSO AL CONTESTO
-export const useData = () => {
-    const context = useContext(DataContext);
-    if (context === undefined) {
-        throw new Error('useData deve essere utilizzato all\'interno di un DataProvider');
-    }
-    return context;
-};
+// L'hook `useData` è stato spostato in `src/hooks/useData.ts`
 
-// =========================================================================
-// FINE SEZIONE UNITA
-// =========================================================================
-
-
-// Collezioni che necessitano di ordinamento alfabetico
+// --- COLLEZIONI SPECIALI ---
 const SORTABLE_COLLECTIONS: Set<CollectionName> = new Set([
-    'clienti', 'navi', 'luoghi', 'ditte', 'categorie', 'tipiGiornata', 'tecnici', 'users', 'qualifiche'
+    'clienti', 'navi', 'luoghi', 'ditte', 'categorie', 'tipiGiornata', 'tecnici_data', 'users', 'qualifiche'
 ]);
 
-// Collezioni da caricare per tutti gli utenti autenticati
 const ALL_COLLECTIONS: CollectionName[] = [
-    'tecnici', 'veicoli', 'navi', 'luoghi', 'ditte', 'categorie',
+    'tecnici_data', 'veicoli', 'navi', 'luoghi', 'ditte', 'categorie',
     'tipiGiornata', 'rapportini', 'clienti', 'documenti', 'users', 'qualifiche'
 ];
 
@@ -74,7 +56,7 @@ const parseDates = (data: any): any => {
     if (Array.isArray(data)) {
         return data.map(item => parseDates(item));
     }
-    if (typeof data === 'object') {
+    if (typeof data === 'object' && data !== null) {
         const newObj: { [key: string]: any } = {};
         for (const key in data) {
             if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -102,14 +84,13 @@ const createMap = <T extends BaseEntity>(data: T[]): Map<string, T> => {
     return new Map(data.map(item => [item.id, item]));
 };
 
-
 // --- PROVIDER COMPONENT ---
 interface DataProviderProps {
     children: ReactNode;
 }
 
 export const DataProvider = ({ children }: DataProviderProps) => {
-    const { user, loading: authLoading } = useAuth();
+    const { currentUser, loading: authLoading } = useAuth(); // usiamo currentUser per chiarezza
     const [error, setError] = useState<string | null>(null);
 
     const [tecnici, setTecnici] = useState<Tecnico[]>([]);
@@ -126,13 +107,13 @@ export const DataProvider = ({ children }: DataProviderProps) => {
     const [qualifiche, setQualifiche] = useState<Qualifica[]>([]);
 
     const stateSetters = useMemo(() => ({
-        tecnici: setTecnici, veicoli: setVeicoli, navi: setNavi, luoghi: setLuoghi, ditte: setDitte,
+        tecnici_data: setTecnici, veicoli: setVeicoli, navi: setNavi, luoghi: setLuoghi, ditte: setDitte,
         categorie: setCategorie, tipiGiornata: setTipiGiornata, rapportini: setRapportini,
         clienti: setClienti, documenti: setDocumenti, users: setWebAppUsers, qualifiche: setQualifiche
     }), []);
 
     useEffect(() => {
-        if (!user) {
+        if (!currentUser) { // La sottoscrizione dipende da un utente valido
             Object.values(stateSetters).forEach(setter => setter([]));
             return;
         }
@@ -162,29 +143,27 @@ export const DataProvider = ({ children }: DataProviderProps) => {
             unsubscribes.forEach(unsub => unsub());
         };
 
-    }, [user, stateSetters]);
-
-    const loading = authLoading;
+    }, [currentUser, stateSetters]);
 
     const addData = useCallback(async (collectionName: CollectionName, data: any) => {
-        if (!user) throw new Error("Utente non autenticato per l'operazione di aggiunta.");
+        if (!currentUser) throw new Error("Utente non autenticato per l'operazione di aggiunta.");
         const docRef = await addDoc(collection(db, collectionName), {
             ...data,
             createdAt: serverTimestamp(),
             lastModified: serverTimestamp(),
-            createdBy: user.uid,
+            createdBy: currentUser.id, // Usiamo l'ID del profilo tecnico
         });
         return docRef.id;
-    }, [user]);
+    }, [currentUser]);
 
     const updateData = useCallback(async (collectionName: CollectionName, id: string, data: any) => {
-        if (!user) throw new Error("Utente non autenticato per l'operazione di aggiornamento.");
+        if (!currentUser) throw new Error("Utente non autenticato per l'operazione di aggiornamento.");
         await updateDoc(doc(db, collectionName, id), {
             ...data,
             lastModified: serverTimestamp(),
-            updatedBy: user.uid,
+            updatedBy: currentUser.id, // Usiamo l'ID del profilo tecnico
         });
-    }, [user]);
+    }, [currentUser]);
 
     const deleteData = useCallback(async (collectionName: CollectionName, id: string) => {
         await deleteDoc(doc(db, collectionName, id));
@@ -201,12 +180,13 @@ export const DataProvider = ({ children }: DataProviderProps) => {
     const qualificheMap = useMemo(() => createMap(qualifiche), [qualifiche]);
 
     const value: IDataContext = useMemo(() => ({
-        loading, error,
+        loading: authLoading, // Il caricamento dei dati dipende dal caricamento dell'autenticazione
+        error,
         tecnici, veicoli, navi, luoghi, ditte, categorie, tipiGiornata, rapportini, clienti, documenti, webAppUsers, qualifiche,
         tecniciMap, veicoliMap, naviMap, luoghiMap, ditteMap, categorieMap, tipiGiornataMap, webAppUsersMap, qualificheMap,
         addData, updateData, deleteData
     }), [
-        loading, error,
+        authLoading, error,
         tecnici, veicoli, navi, luoghi, ditte, categorie, tipiGiornata, rapportini, clienti, documenti, webAppUsers, qualifiche,
         tecniciMap, veicoliMap, naviMap, luoghiMap, ditteMap, categorieMap, tipiGiornataMap, webAppUsersMap, qualificheMap,
         addData, updateData, deleteData

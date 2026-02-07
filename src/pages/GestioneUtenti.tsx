@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { useAuth } from '@/contexts/AuthContext'; // Uso il nostro hook!
+import { useAuth } from '@/hooks/useAuth'; // CORRETTO
 import {
     Box, Typography, Alert, CircularProgress, Select, MenuItem, FormControl, SelectChangeEvent
 } from '@mui/material';
-// CORREZIONE: Separato l'import di itIT
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { itIT } from '@mui/x-data-grid/locales';
 import type { UserRole } from '@/contexts/AuthContext';
@@ -19,7 +18,7 @@ interface AppUser {
 }
 
 const GestioneUtenti = () => {
-    const { isAdmin } = useAuth(); // Controllo se l'utente corrente è admin
+    const { isAdmin } = useAuth(); 
     const [users, setUsers] = useState<AppUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -80,7 +79,7 @@ const GestioneUtenti = () => {
                     <Select
                         value={params.value as UserRole}
                         onChange={(e: SelectChangeEvent<UserRole>) => handleRoleChange(params.row.id, e.target.value as UserRole)}
-                        disabled={!isAdmin} // Disabilitato se non sei admin
+                        disabled={!isAdmin} 
                         sx={{
                            fontSize: 'inherit',
                            fontWeight: 'inherit',
