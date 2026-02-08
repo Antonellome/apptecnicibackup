@@ -111,7 +111,7 @@ const HomePage = () => {
       {/* Griglia per le altre azioni */}
       <Grid container spacing={3}>
         {menuItems.map((item) => (
-          <Grid item xs={12} sm={6} key={item.text}>
+          <Grid xs={12} sm={6} key={item.text}>
             <Card sx={{
               borderRadius: '20px',
               backgroundColor: theme.palette.background.paper,

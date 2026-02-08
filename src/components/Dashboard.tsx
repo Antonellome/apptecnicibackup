@@ -12,58 +12,46 @@ const Dashboard = () => {
         {/* Prima Card: Grafico Rapportini Settimanali */}
         <Grid
           sx={{ height: '400px' }}
-          size={{
-            xs: 12,
-            sm: 6,
-            md: 3
-          }}>
+          xs={12}
+          sm={6}
+          md={3}>
           <RapportiniChartWidget />
         </Grid>
 
         {/* Seconda Card: Assenze di Oggi */}
         <Grid
           sx={{ height: '400px' }}
-          size={{
-            xs: 12,
-            sm: 6,
-            md: 3
-          }}>
+          xs={12}
+          sm={6}
+          md={3}>
           <AssenzeWidget />
         </Grid>
 
         {/* Altre Cards */}
         <Grid
-          size={{
-            xs: 12,
-            sm: 6,
-            md: 3
-          }}>
+          xs={12}
+          sm={6}
+          md={3}>
           <StyledCard>
             <Typography variant="h6" align="center">3</Typography>
           </StyledCard>
         </Grid>
         <Grid
-          size={{
-            xs: 12,
-            sm: 6,
-            md: 3
-          }}>
+          xs={12}
+          sm={6}
+          md={3}>
           <StyledCard>
             <Typography variant="h6" align="center">4</Typography>
           </StyledCard>
         </Grid>
         <Grid
-          size={{
-            xs: 12,
-            md: 6
-          }}>
+          xs={12}
+          md={6}>
           <ScadenzeWidget />
         </Grid>
         <Grid
-          size={{
-            xs: 12,
-            md: 6
-          }}>
+          xs={12}
+          md={6}>
           <NotificheWidget />
         </Grid>
       </Grid>
