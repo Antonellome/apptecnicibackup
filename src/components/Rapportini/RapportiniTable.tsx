@@ -5,7 +5,7 @@ import { Box, Typography, Alert, CircularProgress, IconButton, Tooltip } from '@
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { Edit, Delete, Visibility } from '@mui/icons-material';
-import { Timestamp } from 'firebase/firestore';
+import type { Timestamp } from 'firebase/firestore';
 import { useData } from '@/contexts/DataContext.tsx'; // CORREZIONE
 import type { Rapportino } from '@/models/definitions';
 import dayjs from 'dayjs';

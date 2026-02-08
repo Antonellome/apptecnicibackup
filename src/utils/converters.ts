@@ -1,5 +1,5 @@
-import { FirestoreDataConverter, QueryDocumentSnapshot, SnapshotOptions, DocumentData } from 'firebase/firestore';
-import { Tecnico, Veicolo, Documento } from '@/models/definitions';
+import type { FirestoreDataConverter, QueryDocumentSnapshot, SnapshotOptions, DocumentData } from 'firebase/firestore';
+import type { Tecnico, Veicolo, Documento } from '@/models/definitions';
 
 const createConverter = <T extends { id: string, [key: string]: any }>(defaults: Omit<T, 'id'>): FirestoreDataConverter<T> => ({
     toFirestore(modelObject: T): DocumentData {

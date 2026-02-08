@@ -1308,3 +1308,85 @@
 [debug] [2026-02-07T19:40:09.958Z] No OAuth tokens found
 [debug] [2026-02-07T19:40:09.959Z] No OAuth tokens found
 [debug] [2026-02-07T19:40:09.959Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:05.084Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:05.108Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-08T22:01:13.327Z] Running auto auth
+[debug] [2026-02-08T22:01:13.330Z] Running auto auth
+[debug] [2026-02-08T22:01:13.442Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:13.448Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-08T22:01:13.537Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:13.538Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-08T22:01:14.213Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-08T22:01:14.213Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[debug] [2026-02-08T22:01:14.246Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:14.287Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:14.290Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:14.291Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-02-08T22:01:14.291Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-08T22:01:14.299Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [none]
+[debug] [2026-02-08T22:01:14.299Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-08T22:01:14.302Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [none]
+[debug] [2026-02-08T22:01:14.303Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-08T22:01:14.506Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-08T22:01:14.507Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[debug] [2026-02-08T22:01:14.508Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:14.546Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:14.549Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:14.549Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-02-08T22:01:14.550Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-08T22:01:14.558Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [none]
+[debug] [2026-02-08T22:01:14.558Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-08T22:01:14.562Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [none]
+[debug] [2026-02-08T22:01:14.563Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com  x-goog-user-project=riso-project-app
+[debug] [2026-02-08T22:01:15.155Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com 403
+[debug] [2026-02-08T22:01:15.156Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [omitted]
+[debug] [2026-02-08T22:01:15.227Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com 200
+[debug] [2026-02-08T22:01:15.237Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [omitted]
+[debug] [2026-02-08T22:01:15.251Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-02-08T22:01:15.252Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [omitted]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:15.301Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-08T22:01:15.302Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-08T22:01:15.302Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:15.303Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-08T22:01:15.334Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com 403
+[debug] [2026-02-08T22:01:15.341Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseio.com [omitted]
+[debug] [2026-02-08T22:01:15.386Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-02-08T22:01:15.396Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebasedataconnect.googleapis.com [omitted]
+[debug] [2026-02-08T22:01:15.416Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com 200
+[debug] [2026-02-08T22:01:15.416Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/riso-project-app/services/firebaseapphosting.googleapis.com [omitted]
+[debug] [2026-02-08T22:01:15.540Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-08T22:01:15.544Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:15.556Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-08T22:01:15.556Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:15.612Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-08T22:01:15.612Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-08T22:01:15.612Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:15.615Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:15.629Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-08T22:01:15.630Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-08T22:01:15.630Z] No OAuth tokens found
+[debug] [2026-02-08T22:01:15.630Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo [none]
+[debug] [2026-02-08T22:01:15.759Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-08T22:01:15.759Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:15.761Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-08T22:01:15.762Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)
+[debug] [2026-02-08T22:01:16.215Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo 200
+[debug] [2026-02-08T22:01:16.215Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/riso-project-app/billingInfo {"name":"projects/riso-project-app/billingInfo","projectId":"riso-project-app","billingAccountName":"billingAccounts/01B444-94B518-9F0B34","billingEnabled":true}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-08T22:01:16.217Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-08T22:01:16.217Z] > authorizing via signed-in user (antonio.scuderi@gmail.com)

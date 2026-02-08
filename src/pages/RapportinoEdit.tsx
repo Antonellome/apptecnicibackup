@@ -10,7 +10,7 @@ import { createRapportinoSchema, type RapportinoSchema } from '@/models/rapporti
 import { 
     TextField, Button, Grid, CircularProgress, Typography, Paper, Box, 
     Autocomplete, IconButton, Divider, Switch, FormControlLabel, Select, 
-    MenuItem, InputLabel, FormControl, FormHelperText, Stack
+    MenuItem, InputLabel, FormControl, Stack
 } from '@mui/material';
 import { DatePicker, TimePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -21,11 +21,10 @@ import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAlert } from '@/contexts/AlertContext';
-import { Tecnico, Nave, Luogo, TipoGiornata, Veicolo, Cliente, Rapportino } from '@/models/definitions';
+import type { Tecnico, Nave, Luogo, TipoGiornata, Veicolo, Cliente, Rapportino } from '@/models/definitions';
 
 dayjs.locale('it');
 
-// Questo hook centralizza il caricamento di tutti i dati anagrafici
 const useAnagraficheData = () => {
     const [options, setOptions] = useState<{ 
         tecnici: Tecnico[], navi: Nave[], luoghi: Luogo[], tipiGiornata: TipoGiornata[], veicoli: Veicolo[], clienti: Cliente[] 
@@ -36,29 +35,25 @@ const useAnagraficheData = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const collectionMapping = {
-                    tecnici: collection(db, 'tecnici'),
-                    navi: collection(db, 'navi'),
-                    luoghi: collection(db, 'luoghi'),
-                    tipiGiornata: collection(db, 'tipiGiornata'),
-                    veicoli: collection(db, 'veicoli'),
-                    clienti: collection(db, 'clienti'),
+                const collections = { 
+                    tecnici: collection(db, 'tecnici'), navi: collection(db, 'navi'), 
+                    luoghi: collection(db, 'luoghi'), tipiGiornata: collection(db, 'tipiGiornata'), 
+                    veicoli: collection(db, 'veicoli'), clienti: collection(db, 'clienti') 
                 };
-
-                const results = await Promise.all(Object.values(collectionMapping).map(coll => getDocs(coll)));
+                const keys = Object.keys(collections) as (keyof typeof collections)[];
+                const results = await Promise.all(Object.values(collections).map(coll => getDocs(coll)));
                 
-                const data = Object.keys(collectionMapping).reduce((acc, key, index) => {
-                    acc[key] = results[index].docs.map(d => ({ id: d.id, ...d.data() }));
+                const data = keys.reduce((acc, key, index) => {
+                    acc[key] = results[index].docs.map(d => ({ id: d.id, ...d.data() })) as any;
                     return acc;
-                }, {} as any);
+                }, {} as { [K in keyof typeof collections]: any[] });
 
-                // Sort data for consistent dropdowns
                 data.tecnici.sort((a,b) => (a.cognome || '').localeCompare(b.cognome));
                 data.navi.sort((a,b) => (a.nome || '').localeCompare(b.nome));
                 data.luoghi.sort((a,b) => (a.nome || '').localeCompare(b.nome));
                 data.clienti.sort((a,b) => (a.nome || '').localeCompare(b.nome));
 
-                setOptions(data);
+                setOptions(data as any);
             } catch (err) {
                 console.error("Errore caricamento anagrafiche:", err);
                 setError("Impossibile caricare i dati necessari.");
@@ -83,30 +78,25 @@ const RapportinoEdit: React.FC = () => {
 
   const rapportinoSchema = useMemo(() => createRapportinoSchema(tipiGiornata), [tipiGiornata]);
 
-  const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<RapportinoSchema>({
+  const { control, handleSubmit, reset, watch, formState: { errors } } = useForm<RapportinoSchema>({
     resolver: zodResolver(rapportinoSchema),
-    defaultValues: { data: new Date() }, // Impostiamo solo la data di default
+    defaultValues: { data: new Date() },
   });
 
   useEffect(() => {
-    if (id && tipiGiornata.length > 0) { // Solo se stiamo modificando e le opzioni sono caricate
+    if (id && tipiGiornata.length > 0) {
       setLoadingRapportino(true);
       const docRef = doc(db, 'rapportini', id);
       getDoc(docRef).then(docSnap => {
         if (docSnap.exists()) {
           const data = docSnap.data() as Rapportino;
-
-          // Funzione per estrarre l'ID da un DocumentReference o restituire null
           const getRefId = (ref: unknown) => ref instanceof DocumentReference ? ref.id : null;
 
           reset({
             ...data,
-            // Conversione dei tipi da Firestore al formato del form
             data: data.data instanceof Timestamp ? data.data.toDate() : new Date(),
             oraInizio: data.oraInizio instanceof Timestamp ? data.oraInizio.toDate() : null,
             oraFine: data.oraFine instanceof Timestamp ? data.oraFine.toDate() : null,
-            
-            // Estrazione degli ID dalle referenze
             tecnicoScriventeId: getRefId(data.tecnicoScriventeId),
             giornataId: getRefId(data.giornataId),
             naveId: getRefId(data.naveId),
@@ -137,12 +127,9 @@ const RapportinoEdit: React.FC = () => {
 
         const saveData: any = {
             ...data,
-            // Conversione dei tipi dal form a Firestore
             data: Timestamp.fromDate(data.data || new Date()),
             oraInizio: data.oraInizio ? Timestamp.fromDate(data.oraInizio) : null,
             oraFine: data.oraFine ? Timestamp.fromDate(data.oraFine) : null,
-            
-            // Creazione delle referenze
             tecnicoScriventeId: createRef('tecnici', data.tecnicoScriventeId),
             giornataId: createRef('tipiGiornata', data.giornataId),
             naveId: createRef('navi', data.naveId),
@@ -152,10 +139,7 @@ const RapportinoEdit: React.FC = () => {
             tecniciAggiuntiIds: (data.tecniciAggiuntiIds || []).map(tId => createRef('tecnici', tId)),
         };
 
-        // Rimuoviamo i campi nulli che non vogliamo in Firestore
-        Object.keys(saveData).forEach(key => {
-            if (saveData[key] === null) delete saveData[key];
-        });
+        Object.keys(saveData).forEach(key => { if (saveData[key] === null) delete saveData[key]; });
 
       await updateDoc(doc(db, 'rapportini', id), saveData);
       showAlert('Rapportino aggiornato con successo!', 'success');
@@ -183,14 +167,10 @@ const RapportinoEdit: React.FC = () => {
 
   const watchGiornataId = watch('giornataId');
   const watchInserimentoManuale = watch('inserimentoManualeOre');
-
-  const isGiornataLavorativa = useMemo(() => {
-    const tipo = tipiGiornata.find(t => t.id === watchGiornataId);
-    return tipo ? tipo.lavorativa : false;
-  }, [watchGiornataId, tipiGiornata]);
+  const isGiornataLavorativa = useMemo(() => tipiGiornata.find(t => t.id === watchGiornataId)?.lavorativa || false, [watchGiornataId, tipiGiornata]);
   
   if (loadingOptions || loadingRapportino) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>;
-  if (optionsError) return <Typography color="error">{optionsError}</Typography>;
+  if (optionsError) return <Typography color="error" sx={{p:3}}>{optionsError}</Typography>;
 
   return (
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="it">
@@ -198,25 +178,41 @@ const RapportinoEdit: React.FC = () => {
              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
                 <IconButton onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
                 <Typography variant="h4" component="h1">Modifica Rapportino</Typography>
-                <Box />
+                <Box sx={{width: 40}} />
             </Stack>
             
             <form onSubmit={handleSubmit(onSubmit)}>
               <Stack spacing={3}>
                 <Grid container spacing={2}>
-                    <Grid item xs={12} sm={4}><Controller name="data" control={control} render={({ field }) => <DatePicker label="Data" value={dayjs(field.value)} onChange={(date) => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.data, helperText: errors.data?.message} }} />} /></Grid>
-                    <Grid item xs={12} sm={8}><Controller name="tecnicoScriventeId" control={control} render={({ field }) => <Autocomplete<Tecnico> disabled options={tecnici} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={tecnici.find(t => t.id === field.value) || null} renderInput={params => <TextField {...params} label="Tecnico" />} />} /></Grid>
-                    <Grid item xs={12}><Controller name="giornataId" control={control} render={({ field }) => <Autocomplete<TipoGiornata> options={tipiGiornata} getOptionLabel={o => o.nome} value={tipiGiornata.find(t => t.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Tipo Giornata" required error={!!errors.giornataId} helperText={errors.giornataId?.message} />} />} /></Grid>
+                    <Grid xs={12} sm={4}><Controller name="data" control={control} render={({ field }) => <DatePicker label="Data" value={dayjs(field.value)} onChange={(date) => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.data, helperText: errors.data?.message} }} />} /></Grid>
+                    <Grid xs={12} sm={8}><Controller name="tecnicoScriventeId" control={control} render={({ field }) => <Autocomplete<Tecnico> disabled options={tecnici} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={tecnici.find(t => t.id === field.value) || null} renderInput={params => <TextField {...params} label="Tecnico" />} />} /></Grid>
+                    <Grid xs={12}><Controller name="giornataId" control={control} render={({ field }) => <Autocomplete<TipoGiornata> options={tipiGiornata} getOptionLabel={o => o.nome} value={tipiGiornata.find(t => t.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Tipo Giornata" required error={!!errors.giornataId} helperText={errors.giornataId?.message} />} />} /></Grid>
                 </Grid>
                 
                 {isGiornataLavorativa && (
                 <>
                     <Divider>Riferimenti</Divider>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}><Controller name="clienteId" control={control} render={({ field }) => <Autocomplete<Cliente> options={clienti} getOptionLabel={o => o.nome} value={clienti.find(c => c.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} renderInput={params => <TextField {...params} label="Cliente" error={!!errors.clienteId} helperText={errors.clienteId?.message} />} />} /></Grid>
-                        <Grid item xs={12} sm={6}><Controller name="naveId" control={control} render={({ field }) => <Autocomplete<Nave> options={navi} getOptionLabel={o => o.nome} value={navi.find(n => n.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} renderInput={params => <TextField {...params} label="Nave" error={!!errors.naveId} helperText={errors.naveId?.message} />} />} /></Grid>
-                        <Grid item xs={12} sm={6}><Controller name="luogoId" control={control} render={({ field }) => <Autocomplete<Luogo> options={luoghi} getOptionLabel={o => o.nome} value={luoghi.find(l => l.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} renderInput={params => <TextField {...params} label="Luogo" error={!!errors.luogoId} helperText={errors.luogoId?.message} />} /></Grid>
-                        <Grid item xs={12} sm={6}><Controller name="veicoloId" control={control} render={({ field }) => <Autocomplete<Veicolo> options={veicoli} getOptionLabel={o => o.nome} value={veicoli.find(v => v.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} renderInput={params => <TextField {...params} label="Veicolo" />} />} /></Grid>
+                        <Grid xs={12} sm={6}>
+                            <Controller name="clienteId" control={control} render={({ field }) => (
+                                <Autocomplete<Cliente> options={clienti} getOptionLabel={o => o.nome} value={clienti.find(c => c.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Cliente" error={!!errors.clienteId} helperText={errors.clienteId?.message} />} />
+                            )} />
+                        </Grid>
+                        <Grid xs={12} sm={6}>
+                            <Controller name="naveId" control={control} render={({ field }) => (
+                                <Autocomplete<Nave> options={navi} getOptionLabel={o => o.nome} value={navi.find(n => n.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Nave" error={!!errors.naveId} helperText={errors.naveId?.message} />} />
+                            )} />
+                        </Grid>
+                        <Grid xs={12} sm={6}>
+                            <Controller name="luogoId" control={control} render={({ field }) => (
+                                <Autocomplete<Luogo> options={luoghi} getOptionLabel={o => o.nome} value={luoghi.find(l => l.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Luogo" error={!!errors.luogoId} helperText={errors.luogoId?.message} />} />
+                            )} />
+                        </Grid>
+                        <Grid xs={12} sm={6}>
+                             <Controller name="veicoloId" control={control} render={({ field }) => (
+                                <Autocomplete<Veicolo> options={veicoli} getOptionLabel={o => o.nome} value={veicoli.find(v => v.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Veicolo" />} />
+                            )} />
+                        </Grid>
                     </Grid>
                     
                     <Divider>Ore</Divider>
@@ -224,10 +220,10 @@ const RapportinoEdit: React.FC = () => {
                     {watchInserimentoManuale ? (
                         <Controller name="oreLavorate" control={control} render={({ field }) => <TextField {...field} type="number" label="Ore Lavorate" fullWidth error={!!errors.oreLavorate} helperText={errors.oreLavorate?.message} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />} />
                     ) : (
-                        <Grid container spacing={2}>
-                            <Grid item xs={6} sm={4}><Controller name="oraInizio" control={control} render={({ field }) => <TimePicker label="Inizio" value={dayjs(field.value)} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraInizio, helperText: errors.oraInizio?.message} }} />}/></Grid>
-                            <Grid item xs={6} sm={4}><Controller name="oraFine" control={control} render={({ field }) => <TimePicker label="Fine" value={dayjs(field.value)} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraFine, helperText: errors.oraFine?.message} }} />}/></Grid>
-                            <Grid item xs={12} sm={4}><Controller name="pausa" control={control} render={({ field }) => <FormControl fullWidth><InputLabel>Pausa</InputLabel><Select {...field} label="Pausa"><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl>} /></Grid>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid xs={6} sm={4}><Controller name="oraInizio" control={control} render={({ field }) => <TimePicker label="Inizio" value={field.value ? dayjs(field.value): null} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraInizio, helperText: errors.oraInizio?.message} }} />}/></Grid>
+                            <Grid xs={6} sm={4}><Controller name="oraFine" control={control} render={({ field }) => <TimePicker label="Fine" value={field.value ? dayjs(field.value) : null} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraFine, helperText: errors.oraFine?.message} }} />}/></Grid>
+                            <Grid xs={12} sm={4}><Controller name="pausa" control={control} render={({ field }) => <FormControl fullWidth><InputLabel>Pausa</InputLabel><Select {...field} label="Pausa"><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl>} /></Grid>
                         </Grid>
                     )}
                     

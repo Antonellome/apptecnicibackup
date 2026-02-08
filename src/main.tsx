@@ -5,7 +5,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import App from './App';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
-import { AlertProvider } from './contexts/AlertContext';
+import { AlertProvider } from './contexts/AlertProvider';
 
 import './styles.css';
 

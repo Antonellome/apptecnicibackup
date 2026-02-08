@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, getDocs, getDoc, DocumentReference, DocumentData, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, getDoc } from 'firebase/firestore';
+import type { DocumentReference, DocumentData, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -13,7 +14,7 @@ import dayjs, { Dayjs as DayjsType } from 'dayjs';
 import 'dayjs/locale/it';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import { Rapportino, Tecnico, Cliente, Nave, Luogo } from '@/models/definitions';
+import type { Rapportino, Tecnico, Cliente, Nave, Luogo } from '@/models/definitions';
 
 dayjs.locale('it');
 

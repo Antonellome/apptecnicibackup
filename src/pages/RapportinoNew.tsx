@@ -1,273 +1,216 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, Controller } from 'react-hook-form';
-import {
-  Box,
-  Button,
-  FormControl,
-  FormControlLabel,
-  FormHelperText,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  Switch,
-  TextField,
-  Typography,
-  CircularProgress,
-  Divider,
-  Stack,
-  Autocomplete,
-} from '@mui/material';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useContext, useEffect, useMemo, useState } from 'react';
-import { collection, addDoc, doc, Timestamp } from "firebase/firestore"; 
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
+import { collection, getDocs, addDoc, Timestamp, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/firebase';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { createRapportinoSchema, type RapportinoSchema } from '@/models/rapportino.schema';
+import { 
+    TextField, Button, Grid, CircularProgress, Typography, Paper, Box, 
+    Autocomplete, IconButton, Divider, Switch, FormControlLabel, Select, 
+    MenuItem, InputLabel, FormControl, Stack
+} from '@mui/material';
+import { DatePicker, TimePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs from 'dayjs';
+import 'dayjs/locale/it';
 
-import { db } from '../firebase';
-import { AuthContext } from '@/contexts/AuthContext';
-import MenuBar from '../components/MenuBar';
-import {
-  createRapportinoSchema,
-  type RapportinoSchema,
-} from '../models/rapportino.schema.ts';
-import type {
-  TipoGiornata,
-  Tecnico,
-  Nave,
-  Luogo,
-  Veicolo,
-  Cliente,
-} from '../models/definitions';
-import { useNewReportData } from '../hooks/useNewReportData';
+import SaveIcon from '@mui/icons-material/Save';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useAlert } from '@/contexts/AlertContext';
+import { useAuth } from '@/hooks/useAuth';
+import type { Tecnico, Nave, Luogo, TipoGiornata, Veicolo, Cliente } from '@/models/definitions';
 
-interface ReportFormProps {
-  tipiGiornata: TipoGiornata[];
-  tecnici: Tecnico[];
-  navi: Nave[];
-  luoghi: Luogo[];
-  veicoli: Veicolo[];
-  clienti: Cliente[];
-}
+dayjs.locale('it');
 
-const TIPI_GIORNATA_LAVORATIVA = ['Ordinaria', 'Straordinario', 'Lavoro'];
+const useAnagraficheData = () => {
+    const [options, setOptions] = useState<{ 
+        tecnici: Tecnico[], navi: Nave[], luoghi: Luogo[], tipiGiornata: TipoGiornata[], veicoli: Veicolo[], clienti: Cliente[] 
+    }>({ tecnici: [], navi: [], luoghi: [], tipiGiornata: [], veicoli: [], clienti: [] });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-const ReportForm = ({ tipiGiornata, tecnici, navi, luoghi, veicoli, clienti }: ReportFormProps) => {
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const collections = { 
+                    tecnici: collection(db, 'tecnici'), navi: collection(db, 'navi'), 
+                    luoghi: collection(db, 'luoghi'), tipiGiornata: collection(db, 'tipiGiornata'), 
+                    veicoli: collection(db, 'veicoli'), clienti: collection(db, 'clienti') 
+                };
+                const keys = Object.keys(collections) as (keyof typeof collections)[];
+                const results = await Promise.all(Object.values(collections).map(coll => getDocs(coll)));
+                
+                const data = keys.reduce((acc, key, index) => {
+                    acc[key] = results[index].docs.map(d => ({ id: d.id, ...d.data() })) as any;
+                    return acc;
+                }, {} as { [K in keyof typeof collections]: any[] });
+
+                data.tecnici.sort((a,b) => (a.cognome || '').localeCompare(b.cognome));
+                data.navi.sort((a,b) => (a.nome || '').localeCompare(b.nome));
+                data.luoghi.sort((a,b) => (a.nome || '').localeCompare(b.nome));
+                data.clienti.sort((a,b) => (a.nome || '').localeCompare(b.nome));
+
+                setOptions(data as any);
+            } catch (err) {
+                console.error("Errore caricamento anagrafiche:", err);
+                setError("Impossibile caricare i dati necessari.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    return { ...options, loading, error };
+};
+
+
+const RapportinoNew: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
-  const rapportinoSchema = useMemo(() => createRapportinoSchema(tipiGiornata), [tipiGiornata]);
+  const { showAlert } = useAlert();
+  const { currentUser } = useAuth(); // Usa l'utente corrente per pre-compilare il tecnico
   
+  const { tecnici, navi, luoghi, tipiGiornata, veicoli, clienti, loading, error } = useAnagraficheData();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const firstLavorativaId = useMemo(() => 
-    tipiGiornata.find(t => TIPI_GIORNATA_LAVORATIVA.includes(t.nome))?.id || 
-    (tipiGiornata.length > 0 ? tipiGiornata[0].id : ''), 
-    [tipiGiornata]
-  );
+  const rapportinoSchema = useMemo(() => createRapportinoSchema(tipiGiornata), [tipiGiornata]);
 
-  const { control, handleSubmit, watch, formState: { errors }, reset } = useForm<RapportinoSchema>({
+  const { control, handleSubmit, reset, watch, formState: { errors } } = useForm<RapportinoSchema>({
     resolver: zodResolver(rapportinoSchema),
     defaultValues: {
-        tecnicoScriventeId: undefined,
-        tecniciAggiuntiIds: [],
-        data: new Date(),
-        giornataId: firstLavorativaId || '',
-        inserimentoManualeOre: false,
-        oraInizio: new Date(),
-        oraFine: new Date(),
-        pausa: 60,
-        oreLavorate: 8,
-        naveId: null,
-        luogoId: null,
-        veicoloId: null,
-        clienteId: null,
-        breveDescrizione: '',
-        lavoroEseguito: '',
-        materialiImpiegati: '',
-    }
+      data: new Date(),
+      pausa: 30, // Imposta 30 minuti di pausa di default
+      inserimentoManualeOre: false,
+      tecnicoScriventeId: currentUser?.id || '',
+      tecniciAggiuntiIds: [],
+    },
   });
 
   useEffect(() => {
-    if (user && firstLavorativaId) {
-      const defaultStartTime = new Date();
-      defaultStartTime.setHours(7, 30, 0, 0);
+      // Se l'utente loggato cambia, aggiorniamo il valore di default del form
+      if(currentUser?.id) {
+          reset({ ...watch(), tecnicoScriventeId: currentUser.id })
+      }
+  }, [currentUser, reset, watch])
 
-      const defaultEndTime = new Date();
-      defaultEndTime.setHours(16, 30, 0, 0);
-
-      reset({
-        tecnicoScriventeId: user.uid, 
-        tecniciAggiuntiIds: [],
-        data: new Date(),
-        giornataId: firstLavorativaId,
-        inserimentoManualeOre: false,
-        oraInizio: defaultStartTime,
-        oraFine: defaultEndTime,
-        pausa: 60,
-        oreLavorate: 8,
-        naveId: null,
-        luogoId: null,
-        veicoloId: null,
-        clienteId: null,
-      });
-    }
-  }, [user, firstLavorativaId, reset]);
-
-  const inserimentoManuale = watch('inserimentoManualeOre');
-  const giornataId = watch('giornataId');
-  const giornataSelezionata = useMemo(() => tipiGiornata.find(g => g.id === giornataId), [giornataId, tipiGiornata]);
-  const isLavorativa = useMemo(() => giornataSelezionata ? TIPI_GIORNATA_LAVORATIVA.includes(giornataSelezionata.nome) : false, [giornataSelezionata]);
 
   const onSubmit = async (data: RapportinoSchema) => {
     setIsSubmitting(true);
-    setSubmitError(null);
     try {
-      const {
-        tecnicoScriventeId, 
-        tecniciAggiuntiIds, 
-        giornataId,
-        naveId, 
-        luogoId, 
-        veicoloId, 
-        clienteId,
-        data: dataInput,
-        oraInizio,
-        oraFine,
-        ...rest 
-      } = data;
+        const createRef = (collectionName: string, docId: string | null | undefined) => docId ? doc(db, collectionName, docId) : null;
+        
+        const saveData: any = {
+            ...data,
+            data: Timestamp.fromDate(data.data || new Date()),
+            oraInizio: data.oraInizio ? Timestamp.fromDate(data.oraInizio) : null,
+            oraFine: data.oraFine ? Timestamp.fromDate(data.oraFine) : null,
+            tecnicoScriventeId: createRef('tecnici', data.tecnicoScriventeId),
+            giornataId: createRef('tipiGiornata', data.giornataId),
+            naveId: createRef('navi', data.naveId),
+            luogoId: createRef('luoghi', data.luogoId),
+            veicoloId: createRef('veicoli', data.veicoloId),
+            clienteId: createRef('clienti', data.clienteId),
+            tecniciAggiuntiIds: (data.tecniciAggiuntiIds || []).map(tId => createRef('tecnici', tId)),
+            createdAt: serverTimestamp(),
+            createdBy: currentUser?.id ? doc(db, 'tecnici', currentUser.id) : null,
+        };
 
-      // Prepare the document with correct Firestore types
-      const docData: any = {
-        ...rest,
-        // References
-        tecnicoScriventeId: doc(db, "tecnici", tecnicoScriventeId),
-        giornataId: doc(db, "tipiGiornata", giornataId),
-        // Timestamps
-        data: Timestamp.fromDate(new Date(dataInput)),
-      };
+        Object.keys(saveData).forEach(key => { if (saveData[key] === null) delete saveData[key]; });
 
-      if (oraInizio) docData.oraInizio = Timestamp.fromDate(new Date(oraInizio));
-      if (oraFine) docData.oraFine = Timestamp.fromDate(new Date(oraFine));
-
-      if (naveId) docData.naveId = doc(db, "navi", naveId);
-      if (luogoId) docData.luogoId = doc(db, "luoghi", luogoId);
-      if (veicoloId) docData.veicoloId = doc(db, "veicoli", veicoloId);
-      if (clienteId) docData.clienteId = doc(db, "clienti", clienteId);
-      if (tecniciAggiuntiIds && tecniciAggiuntiIds.length > 0) {
-        docData.tecniciAggiuntiIds = tecniciAggiuntiIds.map(id => doc(db, "tecnici", id));
-      }
-
-      await addDoc(collection(db, "rapportini"), docData);
-      alert('Report salvato con successo!');
+      await addDoc(collection(db, 'rapportini'), saveData);
+      showAlert('Rapportino creato con successo!', 'success');
       navigate('/');
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : 'Errore sconosciuto';
-      console.error("Detailed Save Error: ", e);
-      setSubmitError(`Errore nel salvataggio: ${errorMessage}`);
-      alert(`Errore nel salvataggio del report. Riprova. Dettagli: ${errorMessage}`);
+    } catch (error) {
+      console.error("Errore salvataggio: ", error);
+      showAlert(error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
   };
-
-  if (!user) return <Typography>Caricamento utente...</Typography>;
+  
+  const watchGiornataId = watch('giornataId');
+  const watchInserimentoManuale = watch('inserimentoManualeOre');
+  const isGiornataLavorativa = useMemo(() => tipiGiornata.find(t => t.id === watchGiornataId)?.lavorativa || false, [watchGiornataId, tipiGiornata]);
+  
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>;
+  if (error) return <Typography color="error" sx={{p:3}}>{error}</Typography>;
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <Stack spacing={3}>
-              <Typography variant="h5" gutterBottom component="h2">Dettagli Principali</Typography>
-              <TextField label="Tecnico Scrivente" fullWidth disabled value={user ? `${user.nome} ${user.cognome}` : 'Caricamento...'} InputLabelProps={{ shrink: true }}/>
-              <Controller name="data" control={control} render={({ field }) => (<TextField {...field} type="date" label="Data" fullWidth error={!!errors.data} helperText={errors.data?.message} InputLabelProps={{ shrink: true }} value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : (field.value || '')} /> )}/>
-              <Controller name="giornataId" control={control} render={({ field }) => ( <FormControl fullWidth error={!!errors.giornataId}> <InputLabel>Tipo Giornata</InputLabel> <Select {...field} label="Tipo Giornata"> {tipiGiornata.map((g) => ( <MenuItem key={g.id} value={g.id}>{g.nome}</MenuItem> ))} </Select> <FormHelperText>{errors.giornataId?.message}</FormHelperText> </FormControl> )}/>
-              
-              {isLavorativa && (
-              <>
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="h5" component="h2" gutterBottom>Dettagli Lavoro</Typography>
-                  <Controller name="clienteId" control={control} render={({ field }) => ( <Autocomplete options={clienti} getOptionLabel={(option) => option.nome} isOptionEqualToValue={(option, value) => option.id === value.id} onChange={(_, data) => field.onChange(data ? data.id : null)} renderInput={(params) => <TextField {...params} label="Cliente" error={!!errors.clienteId} helperText={errors.clienteId?.message} />} /> )}/>
-                  <Controller name="naveId" control={control} render={({ field }) => ( <FormControl fullWidth error={!!errors.naveId}> <InputLabel>Nave</InputLabel> <Select {...field} label="Nave" value={field.value || ''}> <MenuItem value=""><em>Nessuna</em></MenuItem> {navi.map((n) => ( <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem> ))} </Select> <FormHelperText>{errors.naveId?.message}</FormHelperText> </FormControl> )}/>
-                  <Controller name="luogoId" control={control} render={({ field }) => ( <FormControl fullWidth error={!!errors.luogoId}> <InputLabel>Luogo</InputLabel> <Select {...field} label="Luogo" value={field.value || ''}> <MenuItem value=""><em>Nessuno</em></MenuItem> {luoghi.map((l) => ( <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem> ))} </Select> <FormHelperText>{errors.luogoId?.message}</FormHelperText> </FormControl> )}/>
-                  <Controller name="breveDescrizione" control={control} render={({ field }) => ( <TextField {...field} label="Breve Descrizione Attività" fullWidth multiline rows={2} error={!!errors.breveDescrizione} helperText={errors.breveDescrizione?.message} /> )}/>
-              </>
-              )}
-
-              {isLavorativa && (
-                  <>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="h5" component="h2" gutterBottom>Dettagli Orari</Typography>
-                    <Controller name="inserimentoManualeOre" control={control} render={({ field }) => ( <FormControlLabel control={<Switch {...field} checked={!!field.value} />} label="Inserisci ore manualmente" /> )}/>
-
-                    {inserimentoManuale ? (
-                        <Controller name="oreLavorate" control={control} render={({ field }) => ( <TextField {...field} type="number" label="Ore Lavorate" fullWidth error={!!errors.oreLavorate} helperText={errors.oreLavorate?.message} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} value={field.value || ''}/> )}/>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="it">
+          <Paper sx={{ p: { xs: 2, md: 4 }, m: { xs: 1, md: 2 } }}>
+             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+                <IconButton onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
+                <Typography variant="h4" component="h1">Nuovo Rapportino</Typography>
+                <Box sx={{width: 40}} />
+            </Stack>
+            
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <Stack spacing={3}>
+                <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}><Controller name="data" control={control} render={({ field }) => <DatePicker label="Data" value={dayjs(field.value)} onChange={(date) => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.data, helperText: errors.data?.message} }} />} /></Grid>
+                    <Grid item xs={12} sm={8}><Controller name="tecnicoScriventeId" control={control} render={({ field }) => <Autocomplete<Tecnico> options={tecnici} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={tecnici.find(t => t.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Tecnico" required error={!!errors.tecnicoScriventeId} helperText={errors.tecnicoScriventeId?.message} />} />} /></Grid>
+                    <Grid item xs={12}><Controller name="giornataId" control={control} render={({ field }) => <Autocomplete<TipoGiornata> options={tipiGiornata} getOptionLabel={o => o.nome} value={tipiGiornata.find(t => t.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Tipo Giornata" required error={!!errors.giornataId} helperText={errors.giornataId?.message} />} />} /></Grid>
+                </Grid>
+                
+                {isGiornataLavorativa && (
+                <>
+                    <Divider>Riferimenti</Divider>
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                            <Controller name="clienteId" control={control} render={({ field }) => (
+                                <Autocomplete<Cliente> options={clienti} getOptionLabel={o => o.nome} value={clienti.find(c => c.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Cliente" error={!!errors.clienteId} helperText={errors.clienteId?.message} />} />
+                            )} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <Controller name="naveId" control={control} render={({ field }) => (
+                                <Autocomplete<Nave> options={navi} getOptionLabel={o => o.nome} value={navi.find(n => n.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Nave" error={!!errors.naveId} helperText={errors.naveId?.message} />} />
+                            )} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <Controller name="luogoId" control={control} render={({ field }) => (
+                                <Autocomplete<Luogo> options={luoghi} getOptionLabel={o => o.nome} value={luoghi.find(l => l.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Luogo" error={!!errors.luogoId} helperText={errors.luogoId?.message} />} />
+                            )} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                             <Controller name="veicoloId" control={control} render={({ field }) => (
+                                <Autocomplete<Veicolo> options={veicoli} getOptionLabel={o => o.nome} value={veicoli.find(v => v.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Veicolo" />} />
+                            )} />
+                        </Grid>
+                    </Grid>
+                    
+                    <Divider>Ore</Divider>
+                    <FormControlLabel control={<Controller name="inserimentoManualeOre" control={control} render={({ field }) => <Switch {...field} checked={!!field.value} />} />} label="Inserisci ore manuali" />
+                    {watchInserimentoManuale ? (
+                        <Controller name="oreLavorate" control={control} render={({ field }) => <TextField {...field} type="number" label="Ore Lavorate" fullWidth error={!!errors.oreLavorate} helperText={errors.oreLavorate?.message} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />} />
                     ) : (
-                        <Stack spacing={3}>
-                          <Controller name="oraInizio" control={control} render={({ field }) => <TimePicker label="Ora Inizio" {...field} renderInput={(params) => <TextField {...params} fullWidth error={!!errors.oraInizio} helperText={errors.oraInizio?.message} />} />} />
-                          <Controller name="oraFine" control={control} render={({ field }) => <TimePicker label="Ora Fine" {...field} renderInput={(params) => <TextField {...params} fullWidth error={!!errors.oraFine} helperText={errors.oraFine?.message} />} />} />
-                          <Controller name="pausa" control={control} render={({ field }) => ( <FormControl fullWidth error={!!errors.pausa}> <InputLabel>Pausa (minuti)</InputLabel> <Select {...field} label="Pausa (minuti)"> <MenuItem value={0}>0</MenuItem> <MenuItem value={30}>30</MenuItem> <MenuItem value={60}>60</MenuItem> </Select> <FormHelperText>{errors.pausa?.message}</FormHelperText> </FormControl> )}/>
-                        </Stack>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={6} sm={4}><Controller name="oraInizio" control={control} render={({ field }) => <TimePicker label="Inizio" value={field.value ? dayjs(field.value): null} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraInizio, helperText: errors.oraInizio?.message} }} />}/></Grid>
+                            <Grid item xs={6} sm={4}><Controller name="oraFine" control={control} render={({ field }) => <TimePicker label="Fine" value={field.value ? dayjs(field.value) : null} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraFine, helperText: errors.oraFine?.message} }} />}/></Grid>
+                            <Grid item xs={12} sm={4}><Controller name="pausa" control={control} render={({ field }) => <FormControl fullWidth><InputLabel>Pausa</InputLabel><Select {...field} label="Pausa"><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl>} /></Grid>
+                        </Grid>
                     )}
+                    
+                    <Divider>Dettagli</Divider>
+                    <Controller name="breveDescrizione" control={control} render={({ field }) => <TextField {...field} label="Breve Descrizione" fullWidth multiline rows={2} required={isGiornataLavorativa} error={!!errors.breveDescrizione} helperText={errors.breveDescrizione?.message} />} />
+                    <Controller name="lavoroEseguito" control={control} render={({ field }) => <TextField {...field} label="Lavoro Eseguito" fullWidth multiline rows={4} required={isGiornataLavorativa} error={!!errors.lavoroEseguito} helperText={errors.lavoroEseguito?.message} />} />
+                    <Controller name="materialiImpiegati" control={control} render={({ field }) => <TextField {...field} label="Materiali Impiegati" fullWidth multiline rows={2} />} />
+
+                    <Divider>Altri Tecnici</Divider>
+                    <Controller name="tecniciAggiuntiIds" control={control} render={({ field }) => <Autocomplete<Tecnico, true> multiple options={tecnici} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={tecnici.filter(t => (field.value || []).includes(t.id))} onChange={(_, val) => field.onChange(val.map(v => v.id))} isOptionEqualToValue={(o, v) => o.id === v.id} renderInput={params => <TextField {...params} label="Altri tecnici presenti" />} />} />
                 </>
-              )}
-              
-              {isLavorativa && (
-              <>
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="h5" component="h2" gutterBottom>Descrizione Dettagliata Attività</Typography>
-                  <Controller name="lavoroEseguito" control={control} render={({ field }) => ( <TextField {...field} label="Lavoro Eseguito (resoconto dettagliato)" fullWidth multiline rows={4} error={!!errors.lavoroEseguito} helperText={errors.lavoroEseguito?.message} /> )}/>
-                  <Controller name="materialiImpiegati" control={control} render={({ field }) => ( <TextField {...field} label="Materiali Impiegati (opzionale)" fullWidth multiline rows={2} error={!!errors.materialiImpiegati} helperText={errors.materialiImpiegati?.message} /> )}/>
-              </>
-              )}
-
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="h5" component="h2" gutterBottom>Personale e Mezzi</Typography>
-              <Controller name="tecniciAggiuntiIds" control={control} render={({ field }) => ( <FormControl fullWidth error={!!errors.tecniciAggiuntiIds}> <InputLabel>Altri Tecnici</InputLabel> <Select {...field} multiple label="Altri Tecnici" renderValue={(selected) => (selected as string[]).map((id) => { const tecnico = tecnici.find((t) => t.id === id); return tecnico ? tecnico.nome : id; }).join(', ') }> {tecnici.filter((t) => t.id !== user?.uid).map((t) => ( <MenuItem key={t.id} value={t.id}>{t.nome} {t.cognome}</MenuItem>))} </Select> <FormHelperText>{errors.tecniciAggiuntiIds?.message}</FormHelperText> </FormControl> )}/>
-              <Controller name="veicoloId" control={control} render={({ field }) => ( <FormControl fullWidth error={!!errors.veicoloId}> <InputLabel>Veicolo</InputLabel> <Select {...field} label="Veicolo" value={field.value || ''}> <MenuItem value=""><em>Nessuno</em></MenuItem> {veicoli.map((v) => ( <MenuItem key={v.id} value={v.id}>{v.nome} ({v.targa})</MenuItem> ))} </Select> <FormHelperText>{errors.veicoloId?.message}</FormHelperText> </FormControl> )}/>
-
-              <Box sx={{ mt: 4 }}>
-                <Button type="submit" variant="contained" fullWidth disabled={isSubmitting} sx={{ p: 1.5, fontWeight: 'bold', fontSize: '1.1rem'}}>
-                  {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Salva Report'}
-                </Button>
-              </Box>
-              {submitError && (
-                <Typography color="error" textAlign="center" sx={{ mt: 2 }}>
-                  {submitError}
-                </Typography>
-              )}
-          </Stack>
-        </form>
-      </Paper>
-    </LocalizationProvider>
+                )}
+                
+                <Stack direction="row" justifyContent="end" sx={{ mt: 3 }}>
+                    <Button type="submit" variant="contained" color="primary" startIcon={<SaveIcon />} disabled={isSubmitting}>
+                        {isSubmitting ? <CircularProgress size={24}/> : 'Salva Rapportino'}
+                    </Button>
+                </Stack>
+              </Stack>
+            </form>
+          </Paper>
+      </LocalizationProvider>
   );
 };
 
-const NewReportPage = () => {
-  const { tipiGiornata, tecnici, navi, luoghi, veicoli, clienti, loading, error } = useNewReportData();
-
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <MenuBar title="Nuovo Report" />
-      <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
-        {loading && <CircularProgress />}
-        {error && <Typography color="error">Errore: {error.message}</Typography>}
-        {!loading && !error && (
-          <ReportForm 
-            tipiGiornata={tipiGiornata}
-            tecnici={tecnici}
-            navi={navi}
-            luoghi={luoghi}
-            veicoli={veicoli}
-            clienti={clienti}
-          />
-        )}
-      </Box>
-      <Typography variant="body2" color="text.secondary" align="center" sx={{ p: 1, mt: 'auto' }}>
-        by &quot;AS&quot;
-      </Typography>
-    </Box>
-  );
-};
-
-export default NewReportPage;
+export default RapportinoNew;

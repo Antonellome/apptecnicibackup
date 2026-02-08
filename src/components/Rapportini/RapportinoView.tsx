@@ -14,11 +14,7 @@ interface RapportinoViewProps {
 }
 
 const DetailItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
-  <Grid
-    size={{
-      xs: 12,
-      sm: 6
-    }}>
+  <Grid xs={12} sm={6}>
     <Typography variant="caption" color="text.secondary" component="div">{label.toUpperCase()}</Typography>
     <Typography variant="body1" sx={{ minHeight: '24px' }}>{value || 'N/D'}</Typography>
   </Grid>
@@ -49,7 +45,7 @@ const RapportinoView = forwardRef<HTMLDivElement, RapportinoViewProps>((props, r
       <DialogContent>
         <Box ref={ref} sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
           <Grid container spacing={3}>
-            <Grid size={12}>
+            <Grid xs={12}>
               <Paper elevation={0} sx={{ p: 2, borderLeft: `4px solid ${theme.palette.primary.main}`, backgroundColor: theme.palette.action.hover }}>
                 <Grid container spacing={2}>
                   <DetailItem label="Cliente" value={cliente?.nome} />
@@ -60,41 +56,29 @@ const RapportinoView = forwardRef<HTMLDivElement, RapportinoViewProps>((props, r
               </Paper>
             </Grid>
 
-            <Grid size={12}>
+            <Grid xs={12}>
               <Typography variant="h6">Descrizione Attività</Typography>
               <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-wrap' }}>{descrizione || 'Nessuna descrizione.'}</Typography>
             </Grid>
 
-            <Grid size={12}><Divider /></Grid>
+            <Grid xs={12}><Divider /></Grid>
 
-            <Grid
-              size={{
-                xs: 12,
-                md: 6
-              }}>
+            <Grid xs={12} md={6}>
               <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
                 <Typography variant="h6" gutterBottom>Lavori Eseguiti</Typography>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{lavoriEseguiti || 'Nessuno.'}</Typography>
               </Paper>
             </Grid>
-            <Grid
-              size={{
-                xs: 12,
-                md: 6
-              }}>
+            <Grid xs={12} md={6}>
               <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
                 <Typography variant="h6" gutterBottom>Materiali Impiegati</Typography>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{materialiImpiegati || 'Nessuno.'}</Typography>
               </Paper>
             </Grid>
 
-            <Grid size={12}><Divider /></Grid>
+            <Grid xs={12}><Divider /></Grid>
 
-            <Grid
-              size={{
-                xs: 12,
-                md: 6
-              }}>
+            <Grid xs={12} md={6}>
               <Typography variant="h6" gutterBottom>Dettagli Orario</Typography>
                 {oreLavorate ? (
                     <DetailItem label="Ore Totali" value={`${oreLavorate} ore`} />
@@ -107,11 +91,7 @@ const RapportinoView = forwardRef<HTMLDivElement, RapportinoViewProps>((props, r
                 )}
             </Grid>
 
-            <Grid
-              size={{
-                xs: 12,
-                md: 6
-              }}>
+            <Grid xs={12} md={6}>
               <Typography variant="h6" gutterBottom>Personale e Mezzi</Typography>
                 <DetailItem label="Veicolo" value={veicolo ? `${veicolo.veicolo} (${veicolo.targa})` : 'Nessuno'} />
                 <DetailItem label="Altri Tecnici" value={tecniciAggiunti && tecniciAggiunti.length > 0 ? tecniciAggiunti.map(t => t.nome).join(', ') : 'Nessuno'} />

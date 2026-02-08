@@ -1,6 +1,7 @@
 import React, { useState, useCallback, ReactNode } from 'react';
 import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Button, Snackbar, Alert as MuiAlert } from '@mui/material';
-import { AlertContext, ConfirmOptions, AlertOptions } from './AlertContext';
+import { AlertContext } from './AlertContext';
+import type { ConfirmOptions, AlertOptions } from './AlertContext';
 
 interface AlertProviderProps {
   children: ReactNode;
