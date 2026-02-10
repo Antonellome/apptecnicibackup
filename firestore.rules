@@ -1,8 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // I tecnici autenticati possono leggere tutti i dati
+    // (necessario per i menu a tendina)
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    // I tecnici autenticati possono scrivere nella collezione 'rapportini'
+    // (necessario per salvare i nuovi report)
+    match /rapportini/{rapportinoId} {
+      allow write: if request.auth != null;
     }
   }
 }

@@ -1,5 +1,7 @@
+
 import { Timestamp, DocumentReference } from 'firebase/firestore';
 
+// --- Interfaccia per il modello Tecnico ---
 export interface Tecnico {
   id: string;
   nome: string;
@@ -10,6 +12,7 @@ export interface Tecnico {
   attivo: boolean;
 }
 
+// --- Interfacce per dati di base (usate negli Autocomplete) ---
 export interface Cliente {
   id: string;
   nome: string;
@@ -38,11 +41,12 @@ export interface Veicolo {
     targa: string;
 }
 
+// --- Interfaccia principale per il documento Rapportino ---
 export interface Rapportino {
   id: string;
   data: Timestamp;
-  giornataId: DocumentReference;
-  tecnicoScriventeId: DocumentReference;
+  giornataId: DocumentReference; // Riferimento a TipoGiornata
+  tecnicoScriventeId: DocumentReference; // Riferimento a Tecnico
 
   // Campi opzionali
   tecniciAggiuntiIds?: DocumentReference[];
@@ -62,4 +66,5 @@ export interface Rapportino {
   clienteId?: DocumentReference; 
   
   note?: string; 
+  createdAt: Timestamp; // Aggiunto per tracciare la creazione
 }

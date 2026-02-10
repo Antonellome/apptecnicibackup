@@ -2,14 +2,14 @@
 import React from 'react';
 import { Container, Typography } from '@mui/material';
 
-const RapportiniList: React.FC = () => {
+const NotesPage: React.FC = () => {
   return (
     <Container>
       <Typography variant="h4" component="h1" gutterBottom>
-        Elenco Rapportini
+        Note
       </Typography>
     </Container>
   );
 };
 
-export default RapportiniList;
+export default NotesPage;

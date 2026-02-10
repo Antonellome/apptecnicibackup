@@ -13,6 +13,9 @@ export default defineConfig({
       strict: true,
     }
   },
+  optimizeDeps: {
+    include: ['@mui/material/Unstable_Grid2'],
+  },
   plugins: [
     react(),
     tsconfigPaths(),

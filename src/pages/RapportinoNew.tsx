@@ -1,216 +1,195 @@
-import { useEffect, useState, useMemo } from 'react';
+
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, addDoc, Timestamp, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/firebase';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { createRapportinoSchema, type RapportinoSchema } from '@/models/rapportino.schema';
-import { 
-    TextField, Button, Grid, CircularProgress, Typography, Paper, Box, 
-    Autocomplete, IconButton, Divider, Switch, FormControlLabel, Select, 
-    MenuItem, InputLabel, FormControl, Stack
+import {
+    Typography, TextField, Box,
+    FormControlLabel, Switch, Autocomplete, Button, Card, CardContent, CardHeader, CircularProgress
 } from '@mui/material';
-import { DatePicker, TimePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import dayjs from 'dayjs';
-import 'dayjs/locale/it';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import { useAuth } from '../hooks/useAuth';
+import useFirestoreCollection from '../hooks/useFirestoreCollection';
+import dayjs, { Dayjs } from 'dayjs';
+import { collection, addDoc, Timestamp, doc } from 'firebase/firestore';
+import { db } from '../firebase';
+import type { Rapportino } from '../models/definitions'; 
 
-import SaveIcon from '@mui/icons-material/Save';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { useAlert } from '@/contexts/AlertContext';
-import { useAuth } from '@/hooks/useAuth';
-import type { Tecnico, Nave, Luogo, TipoGiornata, Veicolo, Cliente } from '@/models/definitions';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
+import AccessTimeOutlined from '@mui/icons-material/AccessTimeOutlined';
+import WorkOutline from '@mui/icons-material/WorkOutline';
+import AssignmentIndOutlined from '@mui/icons-material/AssignmentIndOutlined';
+import SaveOutlined from '@mui/icons-material/SaveOutlined';
 
-dayjs.locale('it');
+const SectionCard = ({ title, icon, children }: { title: string, icon: React.ReactNode, children: React.ReactNode }) => (
+    <Card sx={{ mb: 3, overflow: 'visible' }}>
+        <CardHeader avatar={icon} title={<Typography variant="h6" component="div">{title}</Typography>} sx={{ borderBottom: 1, borderColor: 'divider' }} />
+        <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {children}
+            </Box>
+        </CardContent>
+    </Card>
+);
 
-const useAnagraficheData = () => {
-    const [options, setOptions] = useState<{ 
-        tecnici: Tecnico[], navi: Nave[], luoghi: Luogo[], tipiGiornata: TipoGiornata[], veicoli: Veicolo[], clienti: Cliente[] 
-    }>({ tecnici: [], navi: [], luoghi: [], tipiGiornata: [], veicoli: [], clienti: [] });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+const RapportinoNew = () => {
+    const navigate = useNavigate();
+    const { currentUser: tecnicoCorrente } = useAuth();
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const collections = { 
-                    tecnici: collection(db, 'tecnici'), navi: collection(db, 'navi'), 
-                    luoghi: collection(db, 'luoghi'), tipiGiornata: collection(db, 'tipiGiornata'), 
-                    veicoli: collection(db, 'veicoli'), clienti: collection(db, 'clienti') 
-                };
-                const keys = Object.keys(collections) as (keyof typeof collections)[];
-                const results = await Promise.all(Object.values(collections).map(coll => getDocs(coll)));
-                
-                const data = keys.reduce((acc, key, index) => {
-                    acc[key] = results[index].docs.map(d => ({ id: d.id, ...d.data() })) as any;
-                    return acc;
-                }, {} as { [K in keyof typeof collections]: any[] });
+    const { data: tipiGiornata, loading: l_tipiGiornata } = useFirestoreCollection('tipi_giornata_data');
+    const { data: navi, loading: l_navi } = useFirestoreCollection('navi_data');
+    const { data: luoghi, loading: l_luoghi } = useFirestoreCollection('luoghi_data');
+    const { data: veicoli, loading: l_veicoli } = useFirestoreCollection('veicoli_data');
+    const { data: tecnici, loading: l_tecnici } = useFirestoreCollection('tecnici_data');
 
-                data.tecnici.sort((a,b) => (a.cognome || '').localeCompare(b.cognome));
-                data.navi.sort((a,b) => (a.nome || '').localeCompare(b.nome));
-                data.luoghi.sort((a,b) => (a.nome || '').localeCompare(b.nome));
-                data.clienti.sort((a,b) => (a.nome || '').localeCompare(b.nome));
+    const [rapportino, setRapportino] = useState<Partial<Rapportino>>({
+        data: Timestamp.fromDate(dayjs().startOf('day').toDate()),
+        inserimentoManualeOre: false,
+        oreLavorate: 8,
+        pausa: 60, // Default 60 min
+        oraInizio: Timestamp.fromDate(dayjs().hour(7).minute(30).second(0).toDate()),
+        oraFine: Timestamp.fromDate(dayjs().hour(16).minute(30).second(0).toDate()),
+        tecniciAggiunti: [],
+    });
+    const [loading, setLoading] = useState(false);
 
-                setOptions(data as any);
-            } catch (err) {
-                console.error("Errore caricamento anagrafiche:", err);
-                setError("Impossibile caricare i dati necessari.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
+    const handleChange = (field: keyof Rapportino, value: any) => {
+        setRapportino(prev => ({ ...prev, [field]: value }));
+    };
+    
+    const handleDateChange = (date: Dayjs | null) => {
+        if (date) handleChange("data", Timestamp.fromDate(date.toDate()));
+    };
+    
+    const handleTimeChange = (field: keyof Rapportino, time: Dayjs | null) => {
+        if (time) {
+             const newDate = dayjs(rapportino.data?.toDate()).hour(time.hour()).minute(time.minute()).second(0);
+             handleChange(field, Timestamp.fromDate(newDate.toDate()));
+        }
+    };
 
-    return { ...options, loading, error };
-};
+    const handleOreLavorateChange = (time: Dayjs | null) => {
+        if (time) {
+            const hours = time.hour();
+            const minutes = time.minute();
+            const totalHours = hours + minutes / 60;
+            handleChange('oreLavorate', totalHours);
+        }
+    };
 
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!tecnicoCorrente) return alert("Utente non autenticato.");
+        if (!rapportino.giornataId) return alert("Il Tipo Giornata è obbligatorio.");
 
-const RapportinoNew: React.FC = () => {
-  const navigate = useNavigate();
-  const { showAlert } = useAlert();
-  const { currentUser } = useAuth(); // Usa l'utente corrente per pre-compilare il tecnico
-  
-  const { tecnici, navi, luoghi, tipiGiornata, veicoli, clienti, loading, error } = useAnagraficheData();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+        setLoading(true);
+        try {
+            const rapportinoToSave: Omit<Rapportino, 'id'> = {
+                ...(rapportino as Partial<Omit<Rapportino, 'id'>>),
+                data: rapportino.data!,
+                tecnicoScriventeRef: doc(db, 'tecnici_data', tecnicoCorrente.id),
+                giornataRef: doc(db, 'tipi_giornata_data', rapportino.giornataId.id),
+                naveRef: rapportino.naveId ? doc(db, 'navi_data', rapportino.naveId.id) : null,
+                luogoRef: rapportino.luogoId ? doc(db, 'luoghi_data', rapportino.luogoId.id) : null,
+                veicoloRef: rapportino.veicoloId ? doc(db, 'veicoli_data', rapportino.veicoloId.id) : null,
+                tecniciAggiuntiRefs: rapportino.tecniciAggiunti?.map(t => doc(db, 'tecnici_data', t.id)) || [],
+                createdAt: Timestamp.now(),
+            };
 
-  const rapportinoSchema = useMemo(() => createRapportinoSchema(tipiGiornata), [tipiGiornata]);
+            delete (rapportinoToSave as any).giornataId;
+            delete (rapportinoToSave as any).naveId;
+            delete (rapportinoToSave as any).luogoId;
+            delete (rapportinoToSave as any).veicoloId;
+            delete (rapportinoToSave as any).tecniciAggiunti;
 
-  const { control, handleSubmit, reset, watch, formState: { errors } } = useForm<RapportinoSchema>({
-    resolver: zodResolver(rapportinoSchema),
-    defaultValues: {
-      data: new Date(),
-      pausa: 30, // Imposta 30 minuti di pausa di default
-      inserimentoManualeOre: false,
-      tecnicoScriventeId: currentUser?.id || '',
-      tecniciAggiuntiIds: [],
-    },
-  });
+            await addDoc(collection(db, 'rapportini'), rapportinoToSave);
+            alert("Report salvato con successo!");
+            navigate('/');
+        } catch (error) {
+            console.error("Errore salvataggio: ", error);
+            alert(`Errore: ${error}`);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  useEffect(() => {
-      // Se l'utente loggato cambia, aggiorniamo il valore di default del form
-      if(currentUser?.id) {
-          reset({ ...watch(), tecnicoScriventeId: currentUser.id })
-      }
-  }, [currentUser, reset, watch])
+    const altriTecniciOptions = tecnici.filter(t => t.id !== tecnicoCorrente?.id);
 
+    const oreLavorateValue = rapportino.oreLavorate || 8;
+    const oreLavorateHours = Math.floor(oreLavorateValue);
+    const oreLavorateMinutes = Math.round((oreLavorateValue % 1) * 60);
+    const oreLavorateAsDayjs = dayjs().startOf('day').hour(oreLavorateHours).minute(oreLavorateMinutes);
 
-  const onSubmit = async (data: RapportinoSchema) => {
-    setIsSubmitting(true);
-    try {
-        const createRef = (collectionName: string, docId: string | null | undefined) => docId ? doc(db, collectionName, docId) : null;
-        
-        const saveData: any = {
-            ...data,
-            data: Timestamp.fromDate(data.data || new Date()),
-            oraInizio: data.oraInizio ? Timestamp.fromDate(data.oraInizio) : null,
-            oraFine: data.oraFine ? Timestamp.fromDate(data.oraFine) : null,
-            tecnicoScriventeId: createRef('tecnici', data.tecnicoScriventeId),
-            giornataId: createRef('tipiGiornata', data.giornataId),
-            naveId: createRef('navi', data.naveId),
-            luogoId: createRef('luoghi', data.luogoId),
-            veicoloId: createRef('veicoli', data.veicoloId),
-            clienteId: createRef('clienti', data.clienteId),
-            tecniciAggiuntiIds: (data.tecniciAggiuntiIds || []).map(tId => createRef('tecnici', tId)),
-            createdAt: serverTimestamp(),
-            createdBy: currentUser?.id ? doc(db, 'tecnici', currentUser.id) : null,
-        };
+    return (
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <Box component="form" noValidate autoComplete="off" sx={{ maxWidth: 700, margin: 'auto' }} onSubmit={handleSubmit}>
+                <Typography variant="h4" component="h1" sx={{ mb: 3, textAlign: 'center' }}>Creazione Nuovo Report</Typography>
 
-        Object.keys(saveData).forEach(key => { if (saveData[key] === null) delete saveData[key]; });
+                <SectionCard title="Dati Principali" icon={<InfoOutlined color="primary" />}>
+                    <DatePicker label="Data" value={dayjs(rapportino.data?.toDate())} onChange={handleDateChange} sx={{ width: '100%' }} format="DD/MM/YYYY" />
+                    <TextField label="Tecnico Scrivente" value={tecnicoCorrente ? `${tecnicoCorrente.nome} ${tecnicoCorrente.cognome}` : ''} InputProps={{ readOnly: true }} variant="outlined" fullWidth />
+                </SectionCard>
 
-      await addDoc(collection(db, 'rapportini'), saveData);
-      showAlert('Rapportino creato con successo!', 'success');
-      navigate('/');
-    } catch (error) {
-      console.error("Errore salvataggio: ", error);
-      showAlert(error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
-    } finally {
-        setIsSubmitting(false);
-    }
-  };
-  
-  const watchGiornataId = watch('giornataId');
-  const watchInserimentoManuale = watch('inserimentoManualeOre');
-  const isGiornataLavorativa = useMemo(() => tipiGiornata.find(t => t.id === watchGiornataId)?.lavorativa || false, [watchGiornataId, tipiGiornata]);
-  
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>;
-  if (error) return <Typography color="error" sx={{p:3}}>{error}</Typography>;
-
-  return (
-      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="it">
-          <Paper sx={{ p: { xs: 2, md: 4 }, m: { xs: 1, md: 2 } }}>
-             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-                <IconButton onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
-                <Typography variant="h4" component="h1">Nuovo Rapportino</Typography>
-                <Box sx={{width: 40}} />
-            </Stack>
-            
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <Stack spacing={3}>
-                <Grid container spacing={2}>
-                    <Grid item xs={12} sm={4}><Controller name="data" control={control} render={({ field }) => <DatePicker label="Data" value={dayjs(field.value)} onChange={(date) => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.data, helperText: errors.data?.message} }} />} /></Grid>
-                    <Grid item xs={12} sm={8}><Controller name="tecnicoScriventeId" control={control} render={({ field }) => <Autocomplete<Tecnico> options={tecnici} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={tecnici.find(t => t.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Tecnico" required error={!!errors.tecnicoScriventeId} helperText={errors.tecnicoScriventeId?.message} />} />} /></Grid>
-                    <Grid item xs={12}><Controller name="giornataId" control={control} render={({ field }) => <Autocomplete<TipoGiornata> options={tipiGiornata} getOptionLabel={o => o.nome} value={tipiGiornata.find(t => t.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Tipo Giornata" required error={!!errors.giornataId} helperText={errors.giornataId?.message} />} />} /></Grid>
-                </Grid>
-                
-                {isGiornataLavorativa && (
-                <>
-                    <Divider>Riferimenti</Divider>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                            <Controller name="clienteId" control={control} render={({ field }) => (
-                                <Autocomplete<Cliente> options={clienti} getOptionLabel={o => o.nome} value={clienti.find(c => c.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Cliente" error={!!errors.clienteId} helperText={errors.clienteId?.message} />} />
-                            )} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <Controller name="naveId" control={control} render={({ field }) => (
-                                <Autocomplete<Nave> options={navi} getOptionLabel={o => o.nome} value={navi.find(n => n.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Nave" error={!!errors.naveId} helperText={errors.naveId?.message} />} />
-                            )} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <Controller name="luogoId" control={control} render={({ field }) => (
-                                <Autocomplete<Luogo> options={luoghi} getOptionLabel={o => o.nome} value={luoghi.find(l => l.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Luogo" error={!!errors.luogoId} helperText={errors.luogoId?.message} />} />
-                            )} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                             <Controller name="veicoloId" control={control} render={({ field }) => (
-                                <Autocomplete<Veicolo> options={veicoli} getOptionLabel={o => o.nome} value={veicoli.find(v => v.id === field.value) || null} onChange={(_, val) => field.onChange(val?.id || null)} isOptionEqualToValue={(o,v) => o.id === v.id} renderInput={params => <TextField {...params} label="Veicolo" />} />
-                            )} />
-                        </Grid>
-                    </Grid>
-                    
-                    <Divider>Ore</Divider>
-                    <FormControlLabel control={<Controller name="inserimentoManualeOre" control={control} render={({ field }) => <Switch {...field} checked={!!field.value} />} />} label="Inserisci ore manuali" />
-                    {watchInserimentoManuale ? (
-                        <Controller name="oreLavorate" control={control} render={({ field }) => <TextField {...field} type="number" label="Ore Lavorate" fullWidth error={!!errors.oreLavorate} helperText={errors.oreLavorate?.message} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />} />
+                <SectionCard title="Calcolo Ore" icon={<AccessTimeOutlined color="primary" />}>
+                    <FormControlLabel control={<Switch checked={rapportino.inserimentoManualeOre} onChange={(e) => handleChange('inserimentoManualeOre', e.target.checked)} />} label="Inserimento manuale ore" />
+                    {!rapportino.inserimentoManualeOre ? (
+                        <>
+                            <TimePicker label="Ora Inizio" value={rapportino.oraInizio ? dayjs(rapportino.oraInizio.toDate()) : null} onChange={(t) => handleTimeChange('oraInizio', t)} sx={{ width: '100%' }} ampm={false} />
+                            <TimePicker label="Ora Fine" value={rapportino.oraFine ? dayjs(rapportino.oraFine.toDate()) : null} onChange={(t) => handleTimeChange('oraFine', t)} sx={{ width: '100%' }} ampm={false} />
+                            <TextField label="Pausa (minuti)" type="number" value={rapportino.pausa || ''} onChange={(e) => handleChange('pausa', parseInt(e.target.value))} fullWidth variant="outlined"/>
+                        </>
                     ) : (
-                        <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={6} sm={4}><Controller name="oraInizio" control={control} render={({ field }) => <TimePicker label="Inizio" value={field.value ? dayjs(field.value): null} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraInizio, helperText: errors.oraInizio?.message} }} />}/></Grid>
-                            <Grid item xs={6} sm={4}><Controller name="oraFine" control={control} render={({ field }) => <TimePicker label="Fine" value={field.value ? dayjs(field.value) : null} onChange={date => field.onChange(date?.toDate())} sx={{ width: '100%' }} slotProps={{ textField: { error: !!errors.oraFine, helperText: errors.oraFine?.message} }} />}/></Grid>
-                            <Grid item xs={12} sm={4}><Controller name="pausa" control={control} render={({ field }) => <FormControl fullWidth><InputLabel>Pausa</InputLabel><Select {...field} label="Pausa"><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl>} /></Grid>
-                        </Grid>
+                        <TimePicker
+                            label="Ore Lavorate"
+                            value={oreLavorateAsDayjs}
+                            onChange={handleOreLavorateChange}
+                            ampm={false}
+                            sx={{ width: '100%' }}
+                        />
                     )}
-                    
-                    <Divider>Dettagli</Divider>
-                    <Controller name="breveDescrizione" control={control} render={({ field }) => <TextField {...field} label="Breve Descrizione" fullWidth multiline rows={2} required={isGiornataLavorativa} error={!!errors.breveDescrizione} helperText={errors.breveDescrizione?.message} />} />
-                    <Controller name="lavoroEseguito" control={control} render={({ field }) => <TextField {...field} label="Lavoro Eseguito" fullWidth multiline rows={4} required={isGiornataLavorativa} error={!!errors.lavoroEseguito} helperText={errors.lavoroEseguito?.message} />} />
-                    <Controller name="materialiImpiegati" control={control} render={({ field }) => <TextField {...field} label="Materiali Impiegati" fullWidth multiline rows={2} />} />
+                </SectionCard>
 
-                    <Divider>Altri Tecnici</Divider>
-                    <Controller name="tecniciAggiuntiIds" control={control} render={({ field }) => <Autocomplete<Tecnico, true> multiple options={tecnici} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={tecnici.filter(t => (field.value || []).includes(t.id))} onChange={(_, val) => field.onChange(val.map(v => v.id))} isOptionEqualToValue={(o, v) => o.id === v.id} renderInput={params => <TextField {...params} label="Altri tecnici presenti" />} />} />
-                </>
-                )}
-                
-                <Stack direction="row" justifyContent="end" sx={{ mt: 3 }}>
-                    <Button type="submit" variant="contained" color="primary" startIcon={<SaveIcon />} disabled={isSubmitting}>
-                        {isSubmitting ? <CircularProgress size={24}/> : 'Salva Rapportino'}
+                <SectionCard title="Riferimenti" icon={<AssignmentIndOutlined color="primary" />}>
+                    <Autocomplete options={tipiGiornata} value={rapportino.giornataId || null} onChange={(_, val) => handleChange('giornataId', val)} getOptionLabel={(o) => o.nome || ''} loading={l_tipiGiornata} renderInput={(p) => <TextField {...p} label="Tipo Giornata" variant="outlined" required />} />
+                    <Autocomplete options={veicoli} value={rapportino.veicoloId || null} onChange={(_, val) => handleChange('veicoloId', val)} getOptionLabel={(o) => o.nome || ''} loading={l_veicoli} renderInput={(p) => <TextField {...p} label="Veicolo" variant="outlined" />} />
+                    <Autocomplete options={navi} value={rapportino.naveId || null} onChange={(_, val) => handleChange('naveId', val)} getOptionLabel={(o) => o.nome || ''} loading={l_navi} renderInput={(p) => <TextField {...p} label="Nave" variant="outlined" />} />
+                    <Autocomplete options={luoghi} value={rapportino.luogoId || null} onChange={(_, val) => handleChange('luogoId', val)} getOptionLabel={(o) => o.nome || ''} loading={l_luoghi} renderInput={(p) => <TextField {...p} label="Luogo" variant="outlined" />} />
+                </SectionCard>
+
+                <SectionCard title="Dettagli Intervento" icon={<WorkOutline color="primary" />}>
+                    <TextField label="Breve Descrizione" value={rapportino.descrizioneBreve || ''} onChange={(e) => handleChange('descrizioneBreve', e.target.value)} fullWidth variant="outlined" />
+                    <TextField label="Lavoro Eseguito" value={rapportino.lavoroEseguito || ''} onChange={(e) => handleChange('lavoroEseguito', e.target.value)} multiline rows={4} fullWidth variant="outlined" />
+                    <TextField label="Materiali Impiegati" value={rapportino.materialiImpiegati || ''} onChange={(e) => handleChange('materialiImpiegati', e.target.value)} multiline rows={2} fullWidth variant="outlined" />
+                </SectionCard>
+
+                <SectionCard title="Altri Tecnici Coinvolti" icon={<AssignmentIndOutlined color="primary" />}>
+                    <Autocomplete
+                        multiple
+                        options={altriTecniciOptions}
+                        value={rapportino.tecniciAggiunti || []}
+                        onChange={(_, newValue) => handleChange('tecniciAggiunti', newValue)}
+                        getOptionLabel={(option) => `${option.nome} ${option.cognome}`}
+                        loading={l_tecnici}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                variant="outlined"
+                                label="Aggiungi tecnici"
+                                placeholder="Seleziona..."
+                            />
+                        )}
+                    />
+                </SectionCard>
+
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, mb: 4 }}>
+                    <Button type="submit" variant="contained" color="primary" size="large" startIcon={loading ? <CircularProgress size={24} color="inherit" /> : <SaveOutlined />} disabled={loading}>
+                        {loading ? 'Salvataggio in corso...' : 'Salva Report'}
                     </Button>
-                </Stack>
-              </Stack>
-            </form>
-          </Paper>
-      </LocalizationProvider>
-  );
+                </Box>
+            </Box>
+        </LocalizationProvider>
+    );
 };
 
 export default RapportinoNew;

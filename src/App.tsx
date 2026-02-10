@@ -1,25 +1,45 @@
+
 import { Routes, Route } from 'react-router-dom';
+import { Container, Box } from '@mui/material';
+
 import PrivateRoute from './components/PrivateRoute';
-import HomePage from './pages/HomePage';
+import CustomAppBar from './components/AppBar';
 import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
 import RapportinoNew from './pages/RapportinoNew';
-import RapportiniList from './pages/RapportiniList';
-import RapportinoEdit from './pages/RapportinoEdit';
-import MonthlyReportPage from './pages/MonthlyReportPage';
-import AttendancesPage from './pages/AttendancesPage';
-import SettingsPage from './pages/SettingsPage';
 
 const App = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<PrivateRoute><HomePage /></PrivateRoute>} />
-      <Route path="/rapportini" element={<PrivateRoute><RapportiniList /></PrivateRoute>} />
-      <Route path="/rapportini/nuovo" element={<PrivateRoute><RapportinoNew /></PrivateRoute>} />
-      <Route path="/rapportini/:id" element={<PrivateRoute><RapportinoEdit /></PrivateRoute>} />
-      <Route path="/monthly-report" element={<PrivateRoute><MonthlyReportPage /></PrivateRoute>} />
-      <Route path="/attendances" element={<PrivateRoute><AttendancesPage /></PrivateRoute>} />
-      <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
+      
+      <Route 
+        path="/*" 
+        element={
+          <PrivateRoute>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+              <CustomAppBar />
+              {/* --- MODIFICA PER SCORRIMENTO --- */}
+              <Container 
+                component="main" 
+                maxWidth="lg" 
+                sx={{
+                  flexGrow: 1, 
+                  py: 3, 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  overflowY: 'auto' // Abilita lo scorrimento verticale se necessario
+                }}
+              >
+                <Routes>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/rapportini/nuovo" element={<RapportinoNew />} />
+                </Routes>
+              </Container>
+            </Box>
+          </PrivateRoute>
+        }
+      />
     </Routes>
   );
 };
