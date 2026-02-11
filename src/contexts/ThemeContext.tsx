@@ -1,12 +1,14 @@
-import React, { createContext, useState, useMemo, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useMemo, ReactNode } from 'react';
 import { ThemeProvider as MUIThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
-import { getTheme } from '@/theme';
+// CORREZIONE: Importo 'appThemes' che è l'export corretto, al posto di 'getTheme'
+import { appThemes } from '@/theme';
 
 // 1. TIPI E INTERFACCE
 export type ThemeMode = 'light' | 'dark';
 
 export interface ThemeContextInterface {
+  // La funzione per cambiare tema al momento non avrà effetto
   toggleTheme: () => void;
   mode: ThemeMode;
 }
@@ -15,37 +17,24 @@ export interface ThemeContextInterface {
 export const ThemeContext = createContext<ThemeContextInterface | undefined>(undefined);
 
 // 3. PROVIDER COMPONENT
-const getInitialMode = (): ThemeMode => {
-  if (typeof window !== 'undefined') {
-    const savedMode = localStorage.getItem('themeMode');
-    if (savedMode === 'light' || savedMode === 'dark') {
-      return savedMode;
-    }
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return prefersDark ? 'dark' : 'light';
-  }
-  return 'light'; // Default per l'ambiente server-side
-};
-
 interface ThemeProviderProps {
   children: ReactNode;
 }
 
 export const ThemeProvider = ({ children }: ThemeProviderProps) => {
-  const [mode, setMode] = useState<ThemeMode>(getInitialMode);
+  // Poiché il blueprint definisce solo un tema scuro, forzo la modalità 'dark'
+  const [mode] = useState<ThemeMode>('dark');
 
-  const toggleTheme = useCallback(() => {
-    setMode((prevMode) => {
-      const newMode = prevMode === 'light' ? 'dark' : 'light';
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('themeMode', newMode);
-      }
-      return newMode;
-    });
-  }, []);
+  // La funzione toggle non fa nulla, dato che non c'è un altro tema a cui passare
+  const toggleTheme = () => {
+    console.log("Cambio tema non abilitato: solo il tema scuro è definito.");
+  };
 
-  const theme = useMemo(() => getTheme(mode), [mode]);
-  const contextValue = useMemo(() => ({ toggleTheme, mode }), [mode, toggleTheme]);
+  // CORREZIONE: Uso l'oggetto appThemes importato per selezionare il tema.
+  // Visto che abbiamo solo il tema scuro, uso direttamente appThemes.dark.
+  const theme = useMemo(() => appThemes.dark, []);
+
+  const contextValue = useMemo(() => ({ toggleTheme, mode }), [mode]);
 
   return (
     <ThemeContext.Provider value={contextValue}>

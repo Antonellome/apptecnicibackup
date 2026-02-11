@@ -1,3 +1,4 @@
+
 import { Routes, Route } from 'react-router-dom';
 import { Container, Box } from '@mui/material';
 
@@ -5,9 +6,8 @@ import PrivateRoute from './components/PrivateRoute';
 import CustomAppBar from './components/AppBar';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-// Rimosso il vecchio import
-// import RapportinoNew from './pages/RapportinoNew'; 
-import RapportinoEdit from './pages/RapportinoEdit'; // Import del nuovo componente corretto
+import RapportinoEdit from './pages/RapportinoEdit';
+import ReportPage from './pages/ReportPage'; // Import della nuova pagina
 
 const App = () => {
   return (
@@ -22,18 +22,18 @@ const App = () => {
               <CustomAppBar />
               <Container 
                 component="main" 
-                maxWidth="xl" // Aumentato a xl per dare più spazio al form complesso
+                maxWidth="xl"
                 sx={{
                   flexGrow: 1, 
                   py: 3, 
-                  display: 'flex', 
+                  display: 'flex',
                   flexDirection: 'column',
                   overflowY: 'auto'
                 }}
               >
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
-                  {/* Nuove rotte per la pagina di creazione e modifica */}
+                  <Route path="/rapportini" element={<ReportPage />} /> {/* Rotta per la lista dei report */}
                   <Route path="/rapportino/nuovo" element={<RapportinoEdit />} />
                   <Route path="/rapportino/modifica/:id" element={<RapportinoEdit />} />
                 </Routes>

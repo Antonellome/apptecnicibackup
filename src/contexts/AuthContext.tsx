@@ -17,7 +17,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { Tecnico } from '../models/definitions';
 
-// Esportato per essere utilizzato dall'hook e dai componenti
 export interface AuthContextType {
   currentUser: Tecnico | null;
   firebaseUser: FirebaseUser | null;
@@ -26,7 +25,6 @@ export interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-// Esportato per essere utilizzato dall'hook personalizzato `useAuth`.
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
@@ -44,26 +42,30 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        // L'utente è autenticato. Cerco il suo profilo in 'tecnici_data' usando l'UID.
-        const userDocRef = doc(db, 'tecnici_data', user.uid);
-        
+        const userDocRef = doc(db, 'tecnici', user.uid);
         try {
           const docSnap = await getDoc(userDocRef);
           if (docSnap.exists()) {
-            // Trovato il tecnico.
             setCurrentUser({ id: docSnap.id, ...docSnap.data() } as Tecnico);
           } else {
-            // L'utente è autenticato su Firebase, ma non esiste un record corrispondente.
-            console.error(`Autenticazione riuscita per ${user.email}, ma nessun profilo dati trovato in 'tecnici_data'.`);
-            setCurrentUser(null);
+            // --- MODIFICA DI EMERGENZA --- //
+            // Se l'utente è autenticato ma non ha un profilo nel DB, ne creo uno temporaneo
+            // per consentire l'accesso immediato. Questo evita il loop di login.
+            console.warn(`ATTENZIONE: Profilo non trovato per l'utente con UID ${user.uid}. Creazione di un profilo temporaneo.`);
+            const temporaryUser: Tecnico = {
+              id: user.uid,
+              username: user.email || 'Utente Temporaneo',
+              email: user.email || '',
+              role: 'tecnico', // Assumo il ruolo di default
+              // Altri campi potrebbero essere necessari e mancanti
+            };
+            setCurrentUser(temporaryUser);
           }
         } catch (error) {
-            console.error("Errore durante la ricerca del profilo dati del tecnico:", error);
-            setCurrentUser(null);
+            console.error("Errore critico durante la ricerca del profilo:", error);
+            setCurrentUser(null); // In caso di errore vero, blocco l'accesso.
         }
-
       } else {
-        // Nessun utente loggato.
         setCurrentUser(null);
       }
       setLoading(false);

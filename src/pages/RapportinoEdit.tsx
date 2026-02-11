@@ -22,7 +22,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 // import { useAlert } from '../contexts/AlertContext'; // Commentato come opzionale
 import { Tecnico, Nave, Luogo, TipoGiornata, Veicolo, Rapportino } from '../models/definitions';
-import { useAuth } from '../contexts/AuthContext'; // Aggiunto per ottenere l'utente attuale
+import { useAuth } from '../hooks/useAuth'; // CORRETTO: Aggiunto per ottenere l'utente attuale
 
 // Imposta la lingua per dayjs
 dayjs.locale('it');
@@ -201,6 +201,7 @@ const RapportinoEdit: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly = false
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="it">
         <Box sx={{ maxWidth: 1200, margin: 'auto', p: { xs: 1, sm: 2, md: 3 } }}>
             <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 } }}>
+              <>
                 <Grid container justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                     <Grid item>
                         <Typography variant="h4" component="h1">{isNew ? 'Nuovo Rapportino' : 'Modifica Rapportino'}</Typography>
@@ -291,8 +292,10 @@ const RapportinoEdit: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly = false
 
                         {/* SEZIONE TECNICI AGGIUNTI */}
                         <Grid item xs={12}>
-                            <Typography variant="h6" gutterBottom>Altri Tecnici</Typography>
-                             <Controller name="tecniciAggiuntiIds" control={control} render={({ field, fieldState }) => <Autocomplete multiple options={options.tecnici} getOptionLabel={(o) => `${o.nome} ${o.cognome}`} value={options.tecnici.filter(t => field.value?.includes(t.id)) || []} onChange={(_, nv) => field.onChange(nv.map(item => item.id))} filterSelectedOptions renderInput={(params) => <TextField {...params} label="Aggiungi tecnici (opzionale)" error={!!fieldState.error} helperText={fieldState.error?.message} />} />} />
+                            <Box>
+                                <Typography variant="h6" gutterBottom>Altri Tecnici</Typography>
+                                <Controller name="tecniciAggiuntiIds" control={control} render={({ field, fieldState }) => <Autocomplete multiple options={options.tecnici} getOptionLabel={(o) => `${o.nome} ${o.cognome}`} value={options.tecnici.filter(t => field.value?.includes(t.id)) || []} onChange={(_, nv) => field.onChange(nv.map(item => item.id))} filterSelectedOptions renderInput={(params) => <TextField {...params} label="Aggiungi tecnici (opzionale)" error={!!fieldState.error} helperText={fieldState.error?.message} />} />} />
+                            </Box>
                         </Grid>
 
 
@@ -303,6 +306,7 @@ const RapportinoEdit: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly = false
                         </Grid>
                     </Grid>
                 </form>
+              </>
             </Paper>
         </Box>
       </LocalizationProvider>
