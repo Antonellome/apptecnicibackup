@@ -12,7 +12,7 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@hookform/resolvers": "^5.2.2",
+    "@hookform/resolvers": "^3.10.0",
     "@mui/icons-material": "^7.3.7",
     "@mui/material": "^7.3.7",
     "@mui/x-data-grid": "^8.26.0",

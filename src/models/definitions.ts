@@ -1,70 +1,58 @@
+import { Timestamp } from 'firebase/firestore';
 
-import { Timestamp, DocumentReference } from 'firebase/firestore';
-
-// --- Interfaccia per il modello Tecnico ---
-export interface Tecnico {
-  id: string;
-  nome: string;
-  cognome: string;
-  email: string;
-  qualifica: string;
-  livello: string;
-  attivo: boolean;
-}
-
-// --- Interfacce per dati di base (usate negli Autocomplete) ---
-export interface Cliente {
-  id: string;
-  nome: string;
-}
-
-export interface Nave {
-  id: string;
-  nome: string;
-}
-
-export interface Luogo {
-  id: string;
-  nome: string;
-}
-
-export interface TipoGiornata {
+// Definisce la struttura base con un ID
+interface BaseDocument {
     id: string;
-    nome: string;
-    lavorativa: boolean;
-    pagata: boolean;
 }
 
-export interface Veicolo {
-    id: string;
+export interface Tecnico extends BaseDocument {
     nome: string;
+    cognome: string;
+    attivo: boolean;
+}
+
+export interface Nave extends BaseDocument {
+    nome: string;
+    clienteId?: string; // O un riferimento a Cliente
+}
+
+export interface Luogo extends BaseDocument {
+    nome: string;
+}
+
+export interface Veicolo extends BaseDocument {
+    marca: string;
+    modello: string;
     targa: string;
 }
 
-// --- Interfaccia principale per il documento Rapportino ---
-export interface Rapportino {
-  id: string;
-  data: Timestamp;
-  giornataId: DocumentReference; // Riferimento a TipoGiornata
-  tecnicoScriventeId: DocumentReference; // Riferimento a Tecnico
+export interface TipoGiornata extends BaseDocument {
+    nome: string;
+    lavorativa: boolean;
+}
 
-  // Campi opzionali
-  tecniciAggiuntiIds?: DocumentReference[];
-  inserimentoManualeOre?: boolean;
-  oraInizio?: Timestamp;
-  oraFine?: Timestamp;
-  pausa?: number;
-  oreLavorate?: number;
-  
-  breveDescrizione?: string;
-  lavoroEseguito?: string;
-  materialiImpiegati?: string;
-  
-  naveId?: DocumentReference;
-  luogoId?: DocumentReference;
-  veicoloId?: DocumentReference;
-  clienteId?: DocumentReference; 
-  
-  note?: string; 
-  createdAt: Timestamp; // Aggiunto per tracciare la creazione
+// Struttura del rapportino come salvato in Firestore
+export interface Rapportino extends BaseDocument {
+    data: Timestamp;
+    tecnicoScriventeId: string;
+    tecniciAggiuntiIds?: string[];
+    naveId: string | null;
+    luogoId: string | null;
+    giornataId: string;
+    veicoloId: string | null;
+    
+    // Logica ore
+    inserimentoManualeOre: boolean;
+    oraInizio: Timestamp | null;
+    oraFine: Timestamp | null;
+    pausa: number; // in minuti
+    oreLavorate: number;
+
+    // Dettagli
+    breveDescrizione: string;
+    lavoroEseguito: string;
+    materialiImpiegati?: string;
+    
+    // Relazioni (opzionali)
+    clienteId?: string;
 }

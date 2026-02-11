@@ -1,89 +1,59 @@
-// --- FORZANDO AGGIORNAMENTO CACHE --- 
 import { z } from 'zod';
-import type { TipoGiornata } from './definitions'; // Percorso corretto
+import dayjs from 'dayjs';
+import { TipoGiornata } from './definitions';
 
-// La funzione che crea lo schema di validazione dinamicamente
+// Funzione che crea lo schema dinamicamente in base ai tipi di giornata
 export const createRapportinoSchema = (tipiGiornata: TipoGiornata[]) => {
-
-  return z.object({
-    // --- SEZIONE TECNICI ---
-    tecnicoScriventeId: z.string({ required_error: 'Il tecnico scrivente è obbligatorio.' }),
-    tecniciAggiuntiIds: z.array(z.string()).optional(),
-
-    // --- SEZIONE TEMPO ---
-    inserimentoManualeOre: z.boolean().default(false),
-    data: z.coerce.date({ required_error: 'La data è obbligatoria.', invalid_type_error: "Formato data non valido" }),
-    oraInizio: z.any().nullable().optional(),
-    oraFine: z.any().nullable().optional(),
-    pausa: z.number().min(0, "La pausa non può essere negativa.").optional(),
-    oreLavorate: z.number().min(0, 'Le ore non possono essere negative.').optional(),
-
-    // --- SEZIONE DETTAGLI INTERVENTO ---
-    breveDescrizione: z.string().optional(),
-    lavoroEseguito: z.string().optional(),
-    materialiImpiegati: z.string().optional(),
     
-    // --- SEZIONE RIFERIMENTI ---
-    naveId: z.string().nullable().optional(),
-    luogoId: z.string().nullable().optional(),
-    giornataId: z.string({ required_error: 'Il tipo di giornata è obbligatorio.' }),
-    veicoloId: z.string().nullable().optional(),
-    clienteId: z.string().nullable().optional(),
+    // Trova il tipo di giornata che è considerato "lavorativa"
+    const isLavorativa = (giornataId: string) => {
+        const tipo = tipiGiornata.find(t => t.id === giornataId);
+        return tipo ? tipo.lavorativa : false;
+    };
 
-  })
-  .superRefine((data, ctx) => {
-    // Trova il tipo di giornata selezionato
-    const tipoGiornataSelezionato = tipiGiornata.find(t => t.id === data.giornataId);
+    return z.object({
+        data: z.instanceof(dayjs.Dayjs, { message: "Data richiesta" }),
+        tecnicoScriventeId: z.string().min(1, "Il tecnico responsabile è obbligatorio"),
+        
+        giornataId: z.string().min(1, "Il tipo di giornata è obbligatorio"),
+        
+        inserimentoManualeOre: z.boolean(),
+        oraInizio: z.any().nullable(),
+        oraFine: z.any().nullable(),
+        pausa: z.number().nullable(),
+        oreLavorate: z.number().min(0, "Le ore non possono essere negative"),
 
-    // Se la giornata è di tipo "lavorativa", applica le validazioni obbligatorie
-    if (tipoGiornataSelezionato && tipoGiornataSelezionato.lavorativa) {
-
-      // 1. Nave o Luogo devono essere presenti
-      if (!data.naveId && !data.luogoId) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['naveId'], // Associa l'errore a uno dei campi
-          message: 'Per le giornate lavorative, specificare almeno una Nave o un Luogo.',
-        });
-         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['luogoId'], // E anche all'altro
-          message: 'Per le giornate lavorative, specificare almeno una Nave o un Luogo.',
-        });
-      }
-
-      // 2. Descrizione e Lavoro Eseguito sono obbligatori
-      if (!data.breveDescrizione || data.breveDescrizione.trim() === '') {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['breveDescrizione'],
-          message: 'La descrizione è obbligatoria per le giornate lavorative.',
-        });
-      }
-      if (!data.lavoroEseguito || data.lavoroEseguito.trim() === '') {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['lavoroEseguito'],
-          message: 'Il campo Lavori Eseguiti è obbligatorio per le giornate lavorative.',
-        });
-      }
-
-      // 3. Logica delle ore
-      if (data.inserimentoManualeOre) {
-        if (!data.oreLavorate || data.oreLavorate <= 0) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['oreLavorate'], message: 'Inserire un valore maggiore di zero.' });
+        naveId: z.string().nullable(),
+        luogoId: z.string().nullable(),
+        
+        breveDescrizione: z.string().max(100, "Descrizione troppo lunga"),
+        lavoroEseguito: z.string(),
+        
+        // Campi opzionali
+        tecniciAggiuntiIds: z.array(z.string()).optional(),
+        veicoloId: z.string().nullable().optional(),
+        materialiImpiegati: z.string().optional(),
+    })
+    .refine(data => {
+        // Se la giornata è lavorativa, nave o luogo sono obbligatori
+        if (isLavorativa(data.giornataId)) {
+            return data.naveId || data.luogoId;
         }
-      } else {
-        if (!data.oraInizio) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['oraInizio'], message: 'Obbligatorio per il calcolo automatico.' });
+        return true;
+    }, {
+        message: "Per una giornata lavorativa, specificare almeno Nave o Luogo",
+        path: ["naveId"], // O path: ["luogoId"]
+    })
+    .refine(data => {
+        // Se la giornata è lavorativa, la descrizione e il lavoro eseguito sono obbligatori
+        if (isLavorativa(data.giornataId)) {
+            return data.breveDescrizione.length > 0 && data.lavoroEseguito.length > 0;
         }
-        if (!data.oraFine) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['oraFine'], message: 'Obbligatorio per il calcolo automatico.' });
-        }
-      }
-    } 
-
-  });
+        return true;
+    }, {
+        message: "Campo obbligatorio per giornate lavorative",
+        path: ["lavoroEseguito"], // O path: ["breveDescrizione"]
+    });
 };
 
 export type RapportinoSchema = z.infer<ReturnType<typeof createRapportinoSchema>>;
