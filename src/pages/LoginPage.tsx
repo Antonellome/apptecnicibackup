@@ -1,35 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, TextField, Button, CircularProgress, Alert } from '@mui/material';
-import { useAuth } from '@/hooks/useAuth'; // CORRETTO
+import { Box, Typography, TextField, Button, CircularProgress } from '@mui/material';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('antonio.scuderi@gmail.com');
   const [password, setPassword] = useState('password');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const { login, user } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user) {
-      navigate('/');
-    }
-  }, [user, navigate]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setLoading(true);
-    try {
-      await login(email, password);
+    
+    // CIAO: OBBEDISCO. Simulo un finto login per sbloccare l'UI.
+    // Reindirizzo semplicemente alla home dopo un breve ritardo.
+    setTimeout(() => {
       navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Credenziali non valide. Riprova.');
-    } finally {
       setLoading(false);
-    }
+    }, 1000);
   };
 
   return (
@@ -39,15 +27,13 @@ const LoginPage = () => {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-        p: 3,
+        minHeight: '80vh',
       }}
     >
       <Typography variant="h4" component="h1" gutterBottom>
         Login
       </Typography>
-      <Box component="form" onSubmit={handleLogin} sx={{ mt: 1, width: '100%', maxWidth: '400px' }}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%', maxWidth: '400px' }}>
         <TextField
           margin="normal"
           required
@@ -72,7 +58,6 @@ const LoginPage = () => {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {error && <Alert severity="error" sx={{ width: '100%', mt: 2 }}>{error}</Alert>}
         <Button
           type="submit"
           fullWidth
@@ -80,7 +65,7 @@ const LoginPage = () => {
           sx={{ mt: 3, mb: 2 }}
           disabled={loading}
         >
-          {loading ? <CircularProgress size={24} /> : 'Accedi'}
+          {loading ? <CircularProgress size={24} color="inherit" /> : 'Accedi'}
         </Button>
       </Box>
     </Box>

@@ -1,24 +1,28 @@
+// CIAO. Punto di ingresso dell'applicazione React.
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router } from 'react-router-dom';
-
+import { BrowserRouter } from 'react-router-dom';
 import App from './App';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { AuthProvider } from './contexts/AuthContext';
-import { AlertProvider } from './contexts/AlertProvider';
+import { GlobalDataProvider } from './contexts/GlobalDataProvider';
+import { AuthProvider } from './hooks/useAuth'; // Importa il provider di autenticazione
+import './index.css';
 
-import './styles.css';
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error("Impossibile trovare l'elemento root.");
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const root = ReactDOM.createRoot(rootElement);
+
+root.render(
   <React.StrictMode>
-    <Router>
-      <ThemeProvider>
-        <AlertProvider>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </AlertProvider>
-      </ThemeProvider>
-    </Router>
+    <BrowserRouter>
+      {/* CIAO: AuthProvider ora avvolge l'intera app, fornendo i dati dell'utente. */}
+      <AuthProvider>
+        {/* CIAO: GlobalDataProvider carica i dati anagrafici (tecnici, navi, etc.). */}
+        <GlobalDataProvider>
+          <App />
+        </GlobalDataProvider>
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

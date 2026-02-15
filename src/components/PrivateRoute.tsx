@@ -3,7 +3,6 @@ import { useAuth } from '../hooks/useAuth';
 import { Box, CircularProgress } from '@mui/material';
 
 const PrivateRoute = ({ children }: { children: JSX.Element }) => {
-  // L'ERRORE ERA QUI. Deve usare currentUser, non user.
   const { currentUser, loading } = useAuth();
 
   if (loading) {
@@ -14,7 +13,6 @@ const PrivateRoute = ({ children }: { children: JSX.Element }) => {
     );
   }
 
-  // Ora il controllo è corretto.
   return currentUser ? children : <Navigate to="/login" />;
 };
 

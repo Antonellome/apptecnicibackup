@@ -1,47 +1,60 @@
+// CIAO. Componente principale che gestisce il routing dell'applicazione.
 
-import { Routes, Route } from 'react-router-dom';
-import { Container, Box } from '@mui/material';
+import React from 'react';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
-import PrivateRoute from './components/PrivateRoute';
-import CustomAppBar from './components/AppBar';
+import { Box, CircularProgress } from '@mui/material';
+
+// Pagine
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import RapportinoEdit from './pages/RapportinoEdit';
-import ReportPage from './pages/ReportPage'; // Import della nuova pagina
+import HomePage from './pages/HomePage';
+import RapportiniListPage from './pages/RapportiniListPage';
+import NuovoRapportinoPage from './pages/NuovoRapportinoPage';
+import AnagrafichePage from './pages/AnagrafichePage';
 
-const App = () => {
+// Layout
+import MainLayout from './components/layout/MainLayout';
+
+// --- Componente per le Route Protette ---
+const PrivateRoutes: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return user ? <Outlet /> : <Navigate to="/login" replace />;
+};
+
+// --- Struttura dell'Applicazione ---
+const App: React.FC = () => {
   return (
     <Routes>
+      {/* Percorso di login (pubblico) */}
       <Route path="/login" element={<LoginPage />} />
-      
-      <Route 
-        path="/*" 
-        element={
-          <PrivateRoute>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-              <CustomAppBar />
-              <Container 
-                component="main" 
-                maxWidth="xl"
-                sx={{
-                  flexGrow: 1, 
-                  py: 3, 
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflowY: 'auto'
-                }}
-              >
-                <Routes>
-                  <Route path="/" element={<DashboardPage />} />
-                  <Route path="/rapportini" element={<ReportPage />} /> {/* Rotta per la lista dei report */}
-                  <Route path="/rapportino/nuovo" element={<RapportinoEdit />} />
-                  <Route path="/rapportino/modifica/:id" element={<RapportinoEdit />} />
-                </Routes>
-              </Container>
-            </Box>
-          </PrivateRoute>
-        }
-      />
+
+      {/* Percorsi protetti che richiedono l'autenticazione */}
+      <Route element={<PrivateRoutes />}>
+        <Route path="/" element={<MainLayout />}>
+          {/* CIAO. Obbedisco. Correggo la sintassi del routing. Uso 'index' e percorsi relativi. */}
+          <Route index element={<HomePage />} />
+          
+          <Route path="reports" element={<RapportiniListPage />} />
+          <Route path="rapportino/nuovo" element={<NuovoRapportinoPage />} />
+          <Route path="rapportino/edit/:reportId" element={<NuovoRapportinoPage />} />
+          <Route path="anagrafiche/:tipo" element={<AnagrafichePage />} />
+
+          <Route path="report-mensile" element={<div>Pagina Report Mensili (in costruzione)</div>} />
+          <Route path="note" element={<div>Pagina Note (in costruzione)</div>} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
 };

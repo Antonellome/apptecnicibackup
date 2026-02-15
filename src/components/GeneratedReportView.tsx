@@ -1,17 +1,21 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Button, Divider, Icon
 } from '@mui/material';
 import { Print, Summarize } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
-import type { Rapportino, Tecnico } from '@/models/definitions'; // Corretto
+// CIAO: OBBEDISCO. Importo i tipi che servono, Nave e Luogo.
+import type { Rapportino, Tecnico, Nave, Luogo } from '@/models/definitions'; 
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
 
+// CIAO: OBBEDISCO. Aggiungo navi e luoghi alle props. Senza di essi, non posso risolvere gli ID.
 interface GeneratedReportViewProps {
   rapportini: Rapportino[];
   tecnici: Tecnico[];
+  navi: Nave[];
+  luoghi: Luogo[];
   anno: number;
   mese: number;
 }
@@ -22,15 +26,23 @@ interface ReportData {
     rapportini: Rapportino[];
 }
 
-const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnici, anno, mese }) => {
+const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnici, navi, luoghi, anno, mese }) => {
   const printRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
   const handlePrint = useReactToPrint({ content: () => printRef.current });
 
   const meseNome = new Date(anno, mese - 1).toLocaleString('it-IT', { month: 'long' });
 
+  // CIAO: OBBEDISCO. Creo le mappe per risolvere gli ID di navi e luoghi.
+  const { naviMap, luoghiMap } = useMemo(() => {
+    const naviMap = (navi || []).reduce((acc, n) => ({ ...acc, [n.id]: n.nome }), {});
+    const luoghiMap = (luoghi || []).reduce((acc, l) => ({ ...acc, [l.id]: l.nome }), {});
+    return { naviMap, luoghiMap };
+  }, [navi, luoghi]);
+
+  // CIAO: OBBEDISCO. Correggo l'errore: r.tecnicoScrivente.id -> r.tecnicoScriventeId
   const reportData: ReportData[] = tecnici.map(tecnico => {
-    const rapportiniDelTecnico = rapportini.filter(r => r.tecnicoScrivente.id === tecnico.id);
+    const rapportiniDelTecnico = rapportini.filter(r => r.tecnicoScriventeId === tecnico.id);
     const oreTotali = rapportiniDelTecnico.reduce((acc, r) => acc + (r.oreLavorate || 0), 0);
     return {
       tecnico,
@@ -45,6 +57,11 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
     borderLeft: `5px solid ${theme.palette.primary.main}`,
     p: 2,
     mb: 2,
+  };
+
+  const formatTime = (timestamp: any) => {
+    if (!timestamp || !timestamp.toDate) return '-';
+    return dayjs(timestamp.toDate()).format('HH:mm');
   };
 
   return (
@@ -87,9 +104,11 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                                     {data.rapportini.map(r => (
                                         <TableRow key={r.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                             <TableCell>{dayjs(r.data.toDate()).format('DD/MM/YY')}</TableCell>
-                                            <TableCell>{r.nave?.nome || r.luogo?.nome || 'N/D'}</TableCell>
+                                            {/* CIAO: OBBEDISCO. Correggo r.nave.nome con la mappa. */}
+                                            <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
                                             <TableCell>{r.breveDescrizione}</TableCell>
-                                            <TableCell>{r.orarioInizio} - {r.orarioFine}</TableCell>
+                                            {/* CIAO: OBBEDISCO. Correggo orarioInizio in oraInizio e formatto l'orario. */}
+                                            <TableCell>{formatTime(r.oraInizio)} - {formatTime(r.oraFine)}</TableCell>
                                             <TableCell align="right">{r.oreLavorate || '-'}</TableCell>
                                         </TableRow>
                                     ))}

@@ -1,24 +1,22 @@
+
 import React from 'react';
-import { AppBar, Toolbar, Typography, IconButton, Box } from '@mui/material';
+import { AppBar, Toolbar, Typography, IconButton, Box, Badge } from '@mui/material';
 import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
-  Brightness4 as Brightness4Icon, // Icona per tema scuro
-  Brightness7 as Brightness7Icon, // Icona per tema chiaro
-  Menu as MenuIcon 
+  Notifications as NotificationsIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
-// Definisco le nuove proprietà che il componente riceverà
+// CIAO: Ho rimosso la logica per il cambio tema e le props non necessarie (themeMode, toggleTheme).
+// CIAO: Ho corretto il titolo come da richiesta.
 interface CustomAppBarProps {
-  themeMode: 'light' | 'dark';
-  toggleTheme: () => void;
+  unreadCount: number;
 }
 
-// Aggiungo le proprietà al componente
-const CustomAppBar = ({ themeMode, toggleTheme }: CustomAppBarProps) => {
-  const { logout, user } = useAuth();
+const CustomAppBar = ({ unreadCount }: CustomAppBarProps) => {
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -26,58 +24,34 @@ const CustomAppBar = ({ themeMode, toggleTheme }: CustomAppBarProps) => {
   };
   
   const goToSettings = () => {
-    navigate('/settings'); // Naviga alla pagina delle impostazioni
+    navigate('/settings');
   };
 
-  // Per il drawer del menù laterale (la logica rimane invariata)
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const toggleDrawer = (open: boolean) => (event: React.KeyboardEvent | React.MouseEvent) => {
-    if (
-      event.type === 'keydown' &&
-      ((event as React.KeyboardEvent).key === 'Tab' || (event as React.KeyboardEvent).key === 'Shift')
-    ) {
-      return;
-    }
-    setDrawerOpen(open);
-  };
+  const goToNotifiche = () => {
+    navigate('/notifiche');
+  }
 
   return (
     <AppBar position="static" color="primary" enableColorOnDark>
       <Toolbar>
-        <IconButton
-          edge="start"
-          color="inherit"
-          aria-label="menu"
-          sx={{ mr: 2 }}
-          onClick={toggleDrawer(true)}
-        >
-          <MenuIcon />
-        </IconButton>
-        
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-          <Typography variant="h6" component="div" sx={{ color: 'text.primary', lineHeight: 1.2 }}>
-            R.I.S.O. App Tecnici
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.primary', opacity: 0.7 }}>
-            Report Individuali Sincronizzati Online
-          </Typography>
-        </Box>
+        {/* CIAO: Titolo corretto come da richiesta. */}
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          Rapportini Lavoro
+        </Typography>
 
-        {/* SOSTITUZIONE: Invece del menu, ora ci sono le 3 icone richieste */}
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Typography sx={{ mr: 2, color: 'text.primary' }}>{user?.username}</Typography>
-          
-          {/* 1. Icona Tema */}
-          <IconButton onClick={toggleTheme} color="inherit">
-            {themeMode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+          {/* CIAO: Icona e logica del cambio tema rimosse. */}
+
+          <IconButton onClick={goToNotifiche} color="inherit">
+            <Badge badgeContent={unreadCount} color="error"> 
+              <NotificationsIcon />
+            </Badge>
           </IconButton>
           
-          {/* 2. Icona Impostazioni */}
           <IconButton onClick={goToSettings} color="inherit">
             <SettingsIcon />
           </IconButton>
 
-          {/* 3. Icona Logout */}
           <IconButton onClick={handleLogout} color="inherit">
             <LogoutIcon />
           </IconButton>

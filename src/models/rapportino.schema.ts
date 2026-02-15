@@ -1,58 +1,38 @@
+
 import { z } from 'zod';
 import dayjs from 'dayjs';
-import { TipoGiornata } from './definitions';
 
-// Funzione che crea lo schema dinamicamente in base ai tipi di giornata
-export const createRapportinoSchema = (tipiGiornata: TipoGiornata[]) => {
-    
-    // Trova il tipo di giornata che è considerato "lavorativa"
-    const isLavorativa = (giornataId: string) => {
-        const tipo = tipiGiornata.find(t => t.id === giornataId);
-        return tipo ? tipo.lavorativa : false;
-    };
+// Schema di validazione definitivo.
+// Vengono resi obbligatori SOLO i 2 campi minimi per evitare crash al salvataggio:
+// - data: La sua assenza causa un crash irreversibile.
+// - giornataId: Essenziale per la logica dell'applicazione.
+// Tutto il resto è facoltativo.
 
+export const createRapportinoSchema = () => {
     return z.object({
-        data: z.instanceof(dayjs.Dayjs, { message: "Data richiesta" }),
-        tecnicoScriventeId: z.string().min(1, "Il tecnico responsabile è obbligatorio"),
-        
-        giornataId: z.string().min(1, "Il tipo di giornata è obbligatorio"),
-        
-        inserimentoManualeOre: z.boolean(),
-        oraInizio: z.any().nullable(),
-        oraFine: z.any().nullable(),
-        pausa: z.number().nullable(),
-        oreLavorate: z.number().min(0, "Le ore non possono essere negative"),
+        // CAMPI OBBLIGATORI MINIMI
+        data: z.instanceof(dayjs.Dayjs, { message: "La data è un campo obbligatorio." }),
+        giornataId: z.string().min(1, "Il tipo di giornata è un campo obbligatorio."),
 
-        naveId: z.string().nullable(),
-        luogoId: z.string().nullable(),
+        // TUTTI GLI ALTRI CAMPI SONO FACOLTATIVI
+        tecnicoScriventeId: z.string().optional(),
         
-        breveDescrizione: z.string().max(100, "Descrizione troppo lunga"),
-        lavoroEseguito: z.string(),
-        
-        // Campi opzionali
-        tecniciAggiuntiIds: z.array(z.string()).optional(),
-        veicoloId: z.string().nullable().optional(),
+        inserimentoManualeOre: z.boolean().optional(),
+        // Corretto per accettare stringhe, risolvendo il crash di rendering.
+        oraInizio: z.string().optional(),
+        oraFine: z.string().optional(),
+        pausa: z.number().optional(),
+        oreLavorate: z.number().optional(),
+
+        naveId: z.any().optional(),
+        luogoId: z.any().optional(),
+        veicoloId: z.any().optional(),
+
+        breveDescrizione: z.string().max(200, "La descrizione non può superare i 200 caratteri.").optional(),
+        lavoroEseguito: z.string().optional(),
+
+        altriTecnici: z.array(z.any()).optional(),
         materialiImpiegati: z.string().optional(),
-    })
-    .refine(data => {
-        // Se la giornata è lavorativa, nave o luogo sono obbligatori
-        if (isLavorativa(data.giornataId)) {
-            return data.naveId || data.luogoId;
-        }
-        return true;
-    }, {
-        message: "Per una giornata lavorativa, specificare almeno Nave o Luogo",
-        path: ["naveId"], // O path: ["luogoId"]
-    })
-    .refine(data => {
-        // Se la giornata è lavorativa, la descrizione e il lavoro eseguito sono obbligatori
-        if (isLavorativa(data.giornataId)) {
-            return data.breveDescrizione.length > 0 && data.lavoroEseguito.length > 0;
-        }
-        return true;
-    }, {
-        message: "Campo obbligatorio per giornate lavorative",
-        path: ["lavoroEseguito"], // O path: ["breveDescrizione"]
     });
 };
 

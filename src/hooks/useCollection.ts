@@ -1,29 +1,45 @@
 
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, QuerySnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../utils/firebase';
 
-export const useCollection = <T extends { id: string }>(collectionName: string): { data: T[] | null; loading: boolean; } => {
+interface UseCollectionReturn<T> {
+  data: T[] | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+export const useCollection = <T extends { id: string }>(collectionName: string): UseCollectionReturn<T> => {
     const [data, setData] = useState<T[] | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
         const collectionRef = collection(db, collectionName);
 
-        // Usa onSnapshot per l'aggiornamento in tempo reale
-        const unsubscribe = onSnapshot(collectionRef, (snapshot: QuerySnapshot) => {
-            const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
-            setData(items);
-            setLoading(false);
-        }, (error) => {
-            console.error(`Errore nel caricamento della collezione ${collectionName}:`, error);
-            setLoading(false);
-        });
+        const unsubscribe = onSnapshot(collectionRef, 
+            (snapshot: QuerySnapshot) => {
+                try {
+                    const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
+                    setData(items);
+                    setError(null);
+                } catch (e: any) {
+                    console.error(`Errore nella mappatura della collezione ${collectionName}:`, e);
+                    setError(e);
+                } finally {
+                    setLoading(false);
+                }
+            }, 
+            (err: Error) => {
+                console.error(`Errore nel caricamento della collezione ${collectionName}:`, err);
+                setError(err);
+                setLoading(false);
+            }
+        );
 
-        // Funzione di pulizia per annullare l'iscrizione quando il componente viene smontato
         return () => unsubscribe();
 
     }, [collectionName]);
 
-    return { data, loading };
+    return { data, loading, error };
 };

@@ -29,7 +29,7 @@ const TIPI_GIORNATA_GIUSTIFICATIVI = ['ferie', 'permesso', '104', 'malattia'];
 const Presenze = () => {
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
   const navigate = useNavigate();
-  const { tecnici, rapportini, loading } = useData();
+  const { tecnici, rapportini, tipiGiornata, loading } = useData();
 
   const rapportiniDelGiorno = useMemo(() => {
       if (!selectedDate) return [];
@@ -42,6 +42,7 @@ const Presenze = () => {
     }
 
     const presentiMap = new Map<string, { tecnico: Tecnico, giornata: string, tipo: 'operativo' | 'giustificato' }>();
+    const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t.nome]));
 
     for (const rapportino of rapportiniDelGiorno) {
         const tecniciNelRapportinoRefs = [
@@ -54,12 +55,13 @@ const Presenze = () => {
                 continue; 
             }
             
-            const giornataLower = rapportino.giornata.toString().toLowerCase();
+            const nomeGiornata = tipiGiornataMap.get(rapportino.giornataId) || '';
+            const giornataLower = nomeGiornata.toLowerCase();
             const tipo = TIPI_GIORNATA_GIUSTIFICATIVI.includes(giornataLower) ? 'giustificato' : 'operativo';
             
             const tecnicoCompleto = tecnici.find(t => t.id === tecnicoRef.id);
             if (tecnicoCompleto) {
-                presentiMap.set(tecnicoRef.id, { tecnico: tecnicoCompleto, giornata: rapportino.giornata.toString(), tipo });
+                presentiMap.set(tecnicoRef.id, { tecnico: tecnicoCompleto, giornata: nomeGiornata, tipo });
             }
         }
     }
@@ -86,7 +88,7 @@ const Presenze = () => {
 
     return { operativi, assentiGiustificati, mancantiAttivi, assentiNonAttivi };
 
-  }, [tecnici, rapportiniDelGiorno, loading]);
+  }, [tecnici, rapportiniDelGiorno, tipiGiornata, loading]);
   
   const handleCreaRapportino = (tecnico: Tecnico) => {
       if (!selectedDate) return;
@@ -123,10 +125,10 @@ const Presenze = () => {
 
                 <Grid container spacing={3}>
                     <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
+                        item
+                        xs={12}
+                        md={6}
+                        >
                         <Typography variant="h6" gutterBottom>Mancanti (Attivi) ({mancantiAttivi.length})</Typography>
                         <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -143,10 +145,10 @@ const Presenze = () => {
                     </Grid>
 
                     <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
+                        item
+                        xs={12}
+                        md={6}
+                        >
                         <Typography variant="h6" gutterBottom>Assenti (Non Attivi) ({assentiNonAttivi.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -162,10 +164,10 @@ const Presenze = () => {
                     </Grid>
 
                      <Grid
-                         size={{
-                             xs: 12,
-                             md: 6
-                         }}>
+                         item
+                         xs={12}
+                         md={6}
+                         >
                         <Typography variant="h6" gutterBottom>Operativi ({operativi.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -182,10 +184,10 @@ const Presenze = () => {
                     </Grid>
                     
                     <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
+                        item
+                        xs={12}
+                        md={6}
+                        >
                         <Typography variant="h6" gutterBottom>Assenti Giustificati ({assentiGiustificati.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -209,11 +211,11 @@ const Presenze = () => {
 
 const KPIBox = ({ title, count, icon }: { title: string, count: number, icon: React.ReactNode }) => (
     <Grid
-        size={{
-            xs: 12,
-            sm: 6,
-            md: 3
-        }}>
+        item
+        xs={12}
+        sm={6}
+        md={3}
+        >
         <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
             {icon}
             <Typography variant="h4">{count}</Typography>

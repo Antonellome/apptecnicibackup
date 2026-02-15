@@ -1,79 +1,85 @@
-# R.I.S.O. - Blueprint Definitivo (Aggiornamento Utente)
+# R.I.S.O. - Blueprint Applicazione Tecnici
 
-**Nota: Questo è l'ultimo e unico aggiornamento descrittivo dell'app tecnici da prendere in considerazione, come da richiesta utente.**
-
----
-
-*Citazione dalla richiesta utente:*
-> "hai fatto un lavoro di merda, non hai seguito le mie richieste e mi ritrovo nuovamente con un'app inutile. ricominciamo."
+Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.O." (Report Individuali Sincronizzati Online) per tecnici.
 
 ---
 
-## Specifiche dell'Applicazione
+## Specifiche Funzionali
 
-1.  **Dashboard/Home:** Deve essere costituita da 4 tab in griglia 2x2 di uguale dimensioni. Devono essere:
-    *   Nuovo report
-    *   Report
-    *   Report mensili
-    *   Note
+### 1. Dashboard/Home
+- **Layout:** Griglia 2x2 con 4 tab di uguali dimensioni.
+- **Tab:**
+    - Nuovo report
+    - Report
+    - Report mensili
+    - Note
+- **Header:** Cornice blu con messaggio di benvenuto e email del tecnico.
+- **Footer:** Cornice blu con la firma "by AS".
 
-2.  **App Bar (in alto):** Mantenere un'appbar con:
-    *   Titolo: "R.I.S.O. App Tecnici"
-    *   Sottotitolo: "Report Individuali Sincronizzati Online"
-    *   Nome del tecnico loggato.
+### 2. App Bar (Globale)
+- **Titolo:** "R.I.S.O. App Tecnici"
+- **Sottotitolo:** "Report Individuali Sincronizzati Online"
+- **Icone (destra):**
+    - Switch Tema (chiaro/scuro)
+    - Notifiche (icona a campanella con badge contatore)
+    - Impostazioni
+    - Logout
 
-3.  **Icone (in alto a destra):**
-    *   Icona tema chiaro/scuro
-    *   Impostazioni
-    *   Logout
+### 3. Pagina Login
+- Titolo e sottotitolo dell'applicazione.
 
-4.  **Pagina Login:**
-    *   Titolo e sottotitolo.
+### 4. Form "Nuovo Report"
+- **Dati Principali:**
+    - Data (selezionabile)
+    - Tecnico loggato (non modificabile)
+- **Calcolo Ore (Switch):**
+    - Opzione 1: Ore inizio-fine-pausa (con default 7:30-16:30-60 min). Selettori per orari, non testo libero.
+    - Opzione 2: Ore lavorate totali (con default 8).
+- **Riferimenti (da database):**
+    - Tipo giornata
+    - Veicolo
+    - Nave
+    - Luogo
+- **Dettagli Intervento:**
+    - Breve descrizione
+    - Lavoro eseguito
+    - Materiali impiegati
+- **Collaboratori:**
+    - Sezione per aggiungere altri tecnici.
 
-5.  **Form "Nuovo Report":** Deve avere tutti i campi presi da database con:
-    *   **(Dati Principali):**
-        *   Data
-        *   Tecnico loggato non modificabile (tecnico scrivente)
-    *   **(Calcolo Ore):**
-        *   Switch di selezione:
-            *   Ore inizio-fine-pausa (default 7:30-16:30-60)
-            *   Ore lavorate (default 8)
-    *   **(Riferimenti):**
-        *   Tipo giornata
-        *   Veicolo
-        *   Nave
-        *   Luogo
-    *   **(Dettagli Intervento):**
-        *   Breve descrizione
-        *   Lavoro eseguito
-        *   Materiali impiegati
-    *   **(Altri Tecnici):**
-        *   Aggiungi tecnici
-    *   **Nota:** Tutti i campi orari da scegliere da selettore, no campo testo.
+### 5. Pagina Report
+- Lista di tutti i report inviati.
+- Funzionalità di ricerca intelligente per data, nave, luogo, etc.
 
-6.  **Pagina Report:**
-    *   Lista dei report.
-    *   Campo di ricerca intelligente per data, nave, luogo.
+### 6. Pagina Report Mensili
+- Selezione del mese e anno per generare il report.
+- Il report deve contenere tutti i campi del form "Nuovo Report" ad esclusione di: lavoro eseguito, materiali, veicolo, tecnici aggiunti.
+- Sezione per il calcolo dei guadagni mensili basato su:
+    - Costi delle giornate
+    - Costo orario
+    - I valori per i costi devono essere configurabili nella pagina "Impostazioni".
 
-7.  **Pagina Report Mensili:**
-    *   Creazione della lista report mensile (scelta del mese).
-    *   Campi da inserire: tutti quelli del form tranne lavoro eseguito, materiali, veicolo, tecnici aggiunti.
-    *   Una sezione per il calcolo dei guadagni mensili in base alle giornate e ore lavorate.
-    *   I costi delle giornate e ore da prelevare in locale da una sezione in "Impostazioni".
+### 7. Pagina Note
+- Visualizzazione note in entrata e in uscita.
+- Funzionalità per creare una nuova nota con titolo e corpo.
+- Integrazione con app "master" per invio e ricezione.
 
-8.  **Pagina Note:**
-    *   Visualizzazione delle note in arrivo e in uscita.
-    *   Creazione con titolo e corpo della nota.
-    *   Dati da prelevare dal database per i formati variabili ecc.
-    *   Dovrà inviare e ricevere note dall'app master.
+### 8. Pagina Impostazioni
+- Visualizzazione informazioni del tecnico.
+- Sezione per configurare i costi orari e i costi per tipo di giornata (usati nei Report Mensili).
+- Opzione per salvare dati e report in locale.
 
-9.  **Pagina Impostazioni:**
-    *   Info del tecnico.
-    *   Dettagli costi orari settabili per giornate e costo orario per i calcoli personali.
-    *   Sezione per il salvataggio in locale dei dati e dei report mensili se possibile.
+### 9. Pagina Notifiche
+- Elenco di tutte le notifiche in ordine cronologico inverso (dalla più recente).
+- Le notifiche non lette devono avere uno stile differente (es. sfondo evidenziato).
+- All'apertura della pagina, le notifiche visualizzate vengono marcate come "lette" e il contatore nel badge dell'AppBar si azzera.
 
-10. **Colori dell'App:**
-    *   Sfondo dell'app: nero o blu notte (come l'attuale).
-    *   Testi: blu (come attualmente) e bianco.
-    *   Icone: bianche.
-    *   Colore supplementare: un grigio.
+---
+
+## Specifiche Tecniche e di Stile
+
+- **Color Palette:**
+    - Sfondo: Nero o blu notte.
+    - Testi: Blu e bianco.
+    - Icone: Bianche.
+    - Colore supplementare: Grigio.
