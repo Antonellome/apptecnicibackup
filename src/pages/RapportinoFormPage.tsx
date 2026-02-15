@@ -149,7 +149,11 @@ const RapportinoFormPage: React.FC = () => {
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
-                        <Grid item xs={12} sm={4}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 4
+                            }}>
                             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
                                 <DatePicker
                                     label="Data"
@@ -160,7 +164,11 @@ const RapportinoFormPage: React.FC = () => {
                             </LocalizationProvider>
                         </Grid>
 
-                        <Grid item xs={12} sm={8}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 8
+                            }}>
                             <FormControl fullWidth required>
                                 <InputLabel>Tipo Giornata</InputLabel>
                                 <Select

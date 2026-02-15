@@ -82,7 +82,14 @@ const MainLayout: React.FC = () => {
             {/* CIAO: L'area principale dove verranno renderizzate le pagine. */}
             <Box
                 component="main"
-                sx={{ flexGrow: 1, pt: '64px', /* CIAO: Altezza AppBar */ width: '100%' }}
+                sx={{
+                    flexGrow: 1,
+                    pt: '64px', /* CIAO: Altezza AppBar */
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                }}
             >
                 <Outlet />
             </Box>

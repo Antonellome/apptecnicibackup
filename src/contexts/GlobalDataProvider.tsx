@@ -36,7 +36,10 @@ const subscribeToCollection = <T,>(
   let initialLoad = true;
 
   return onSnapshot(collRef, snapshot => {
-    const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as T);
+    const data = snapshot.docs.map(doc => (({
+      ...doc.data(),
+      id: doc.id
+    }) as T));
     setData(data);
     if (initialLoad) {
       onLoad();

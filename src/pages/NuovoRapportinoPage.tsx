@@ -148,7 +148,11 @@ const RapportinoFormPage: React.FC = () => {
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
                         {/* Data, Tipo Giornata, Ore... */}
-                        <Grid item xs={12} sm={4}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 4
+                            }}>
                             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
                                 <DatePicker
                                     label="Data"
@@ -159,7 +163,11 @@ const RapportinoFormPage: React.FC = () => {
                             </LocalizationProvider>
                         </Grid>
 
-                        <Grid item xs={12} sm={5}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 5
+                            }}>
                             <FormControl fullWidth required>
                                 <InputLabel>Tipo Giornata</InputLabel>
                                 <Select
@@ -173,15 +181,27 @@ const RapportinoFormPage: React.FC = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={6} sm={1.5}>
+                        <Grid
+                            size={{
+                                xs: 6,
+                                sm: 1.5
+                            }}>
                             <TextField label="Ore Lavoro" type="number" value={oreLavorate} onChange={e => setOreLavorate(Number(e.target.value))} fullWidth required />
                         </Grid>
-                        <Grid item xs={6} sm={1.5}>
+                        <Grid
+                            size={{
+                                xs: 6,
+                                sm: 1.5
+                            }}>
                              <TextField label="Ore Viaggio" type="number" value={oreViaggio} onChange={e => setOreViaggio(Number(e.target.value))} fullWidth required />
                         </Grid>
 
                         {/* Sezione Luoghi e Mezzi */}
-                        <Grid item xs={12} sm={6}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6
+                            }}>
                              <FormControl fullWidth>
                                 <InputLabel>Nave</InputLabel>
                                 <Select value={naveId} onChange={e => setNaveId(e.target.value)}>
@@ -189,7 +209,11 @@ const RapportinoFormPage: React.FC = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6
+                            }}>
                             <FormControl fullWidth>
                                 <InputLabel>Luogo</InputLabel>
                                 <Select value={luogoId} onChange={e => setLuogoId(e.target.value)}>
@@ -199,13 +223,25 @@ const RapportinoFormPage: React.FC = () => {
                         </Grid>
 
                          {/* Sezione Viaggio e Km */}
-                        <Grid item xs={12} sm={6}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6
+                            }}>
                             <TextField label="Sede di Partenza" value={sedePartenza} onChange={e => setSedePartenza(e.target.value)} fullWidth />
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6
+                            }}>
                             <TextField label="Sede di Arrivo" value={sedeArrivo} onChange={e => setSedeArrivo(e.target.value)} fullWidth />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 4
+                            }}>
                              <FormControl fullWidth>
                                 <InputLabel>Veicolo</InputLabel>
                                 <Select value={veicoloId} onChange={e => setVeicoloId(e.target.value)}>
@@ -213,26 +249,34 @@ const RapportinoFormPage: React.FC = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={6} sm={4}>
+                        <Grid
+                            size={{
+                                xs: 6,
+                                sm: 4
+                            }}>
                             <TextField label="Km Inizio" type="number" value={kmInizio} onChange={e => setKmInizio(e.target.value === '' ? '' : Number(e.target.value))} fullWidth />
                         </Grid>
-                        <Grid item xs={6} sm={4}>
+                        <Grid
+                            size={{
+                                xs: 6,
+                                sm: 4
+                            }}>
                             <TextField label="Km Fine" type="number" value={kmFine} onChange={e => setKmFine(e.target.value === '' ? '' : Number(e.target.value))} fullWidth />
                         </Grid>
 
                         {/* Descrizioni */}
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <TextField label="Breve Descrizione Attività" value={breveDescrizione} onChange={e => setBreveDescrizione(e.target.value)} fullWidth />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <TextField label="Descrizione Dettagliata Lavoro" value={descrizioneLavoro} onChange={e => setDescrizioneLavoro(e.target.value)} multiline rows={4} fullWidth />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <TextField label="Materiali Utilizzati" value={materiali} onChange={e => setMateriali(e.target.value)} multiline rows={2} fullWidth />
                         </Grid>
                         
                         {/* Altri Tecnici */}
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                              <Autocomplete
                                 multiple
                                 options={tecnici.filter(t => t.id !== tecnicoScriventeId)}

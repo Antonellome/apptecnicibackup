@@ -143,21 +143,29 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                         <DialogTitle>{rapportino ? 'Modifica Rapportino' : 'Nuovo Rapportino'}</DialogTitle>
                         <DialogContent>
                             <Grid container spacing={2} sx={{pt: 1}}>
-                                <Grid item xs={12}><Typography variant="subtitle1" gutterBottom>Dati Principali</Typography></Grid>
-                                <Grid item xs={12} sm={4}>
+                                <Grid size={12}><Typography variant="subtitle1" gutterBottom>Dati Principali</Typography></Grid>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 4
+                                    }}>
                                     <DatePicker label="Data" value={values.data} onChange={(newValue) => setFieldValue('data', newValue)} sx={{width: '100%'}} />
                                 </Grid>
-                                <Grid item xs={12} sm={8}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 8
+                                    }}>
                                     <TextField label="Tecnico Scrivente" fullWidth disabled value={currentTecnico ? `${currentTecnico.cognome} ${currentTecnico.nome}` : ''} />
                                 </Grid>
 
-                                <Grid item xs={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Calcolo Ore</Typography></Grid>
-                                <Grid item xs={12}>
+                                <Grid size={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Calcolo Ore</Typography></Grid>
+                                <Grid size={12}>
                                     <FormControlLabel control={<Switch checked={values.inserimentoManualeOre} onChange={(e) => setFieldValue('inserimentoManualeOre', e.target.checked)} />} label="Totale ore manuale" />
                                 </Grid>
                                 
                                 {values.inserimentoManualeOre ? (
-                                    <Grid item xs={12}>
+                                    <Grid size={12}>
                                         <Field name="oreLavorate" component={FormikTextField} select label="Ore Lavorate" fullWidth required>
                                             {[...Array(16).keys()].map(i => (
                                                 <MenuItem key={i + 1} value={i + 1}>{formatOreLavorate(i + 1)}</MenuItem>
@@ -166,9 +174,21 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                                     </Grid>
                                 ) : (
                                     <>
-                                        <Grid item xs={12} sm={3}><Field as={TextField} type="time" name="oraInizio" label="Inizio" fullWidth InputLabelProps={{ shrink: true }} /></Grid>
-                                        <Grid item xs={12} sm={3}><Field as={TextField} type="time" name="oraFine" label="Fine" fullWidth InputLabelProps={{ shrink: true }} /></Grid>
-                                        <Grid item xs={12} sm={3}>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                sm: 3
+                                            }}><Field as={TextField} type="time" name="oraInizio" label="Inizio" fullWidth InputLabelProps={{ shrink: true }} /></Grid>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                sm: 3
+                                            }}><Field as={TextField} type="time" name="oraFine" label="Fine" fullWidth InputLabelProps={{ shrink: true }} /></Grid>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                sm: 3
+                                            }}>
                                             <Field name="pausa" component={FormikTextField} select label="Pausa (min)" fullWidth>
                                                 <MenuItem value={0}>0</MenuItem>
                                                 <MenuItem value={30}>30</MenuItem>
@@ -177,41 +197,61 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                                                 <MenuItem value={120}>120</MenuItem>
                                             </Field>
                                         </Grid>
-                                        <Grid item xs={12} sm={3}>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                sm: 3
+                                            }}>
                                             <TextField label="Totale Ore" fullWidth disabled value={formatOreLavorate(values.oreLavorate)} InputProps={{ readOnly: true }} />
                                         </Grid>
                                     </>
                                 )}
                                 
-                                <Grid item xs={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Riferimenti</Typography></Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid size={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Riferimenti</Typography></Grid>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 6
+                                    }}>
                                     <Field name="giornataId" component={FormikTextField} select label="Tipo Giornata" fullWidth required>
                                         {tipiGiornata?.map(option => <MenuItem key={option.id} value={option.id}>{option.nome}</MenuItem>) || []}
                                     </Field>
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 6
+                                    }}>
                                     <Autocomplete options={veicoli || []} getOptionLabel={(option) => option.nome} value={values.veicoloId as any} onChange={(_, newValue) => setFieldValue('veicoloId', newValue)} renderInput={(params) => <TextField {...params} label="Veicolo" error={touched.veicoloId && !!errors.veicoloId} />} isOptionEqualToValue={(option, value) => option.id === value.id} />
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 6
+                                    }}>
                                     <Autocomplete options={navi || []} getOptionLabel={(option) => option.nome} value={values.naveId as any} onChange={(_, newValue) => setFieldValue('naveId', newValue)} renderInput={(params) => <TextField {...params} label="Nave" error={touched.naveId && !!errors.naveId} />} isOptionEqualToValue={(option, value) => option.id === value.id}/>
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 6
+                                    }}>
                                     <Autocomplete options={luoghi || []} getOptionLabel={(option) => option.nome} value={values.luogoId as any} onChange={(_, newValue) => setFieldValue('luogoId', newValue)} renderInput={(params) => <TextField {...params} label="Luogo" error={touched.luogoId && !!errors.luogoId} />} isOptionEqualToValue={(option, value) => option.id === value.id}/>
                                 </Grid>
 
-                                <Grid item xs={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Dettagli Intervento</Typography></Grid>
-                                <Grid item xs={12}>
+                                <Grid size={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Dettagli Intervento</Typography></Grid>
+                                <Grid size={12}>
                                     <Field name="breveDescrizione" component={FormikTextField} label="Breve Descrizione Intervento" multiline rows={2} fullWidth />
                                 </Grid>
-                                <Grid item xs={12}>
+                                <Grid size={12}>
                                     <Field name="lavoroEseguito" component={FormikTextField} label="Lavoro Eseguito" multiline rows={4} fullWidth />
                                 </Grid>
-                                <Grid item xs={12}>
+                                <Grid size={12}>
                                     <Field name="materialiImpiegati" component={FormikTextField} label="Materiali Impiegati" multiline rows={3} fullWidth />
                                 </Grid>
                                 
-                                <Grid item xs={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Altri Tecnici</Typography></Grid>
-                                <Grid item xs={12}>
+                                <Grid size={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Altri Tecnici</Typography></Grid>
+                                <Grid size={12}>
                                     <Autocomplete
                                         multiple
                                         options={altriTecniciOptions}
