@@ -9,31 +9,45 @@ export interface BaseEntity {
     id: string;
 }
 
-// Estensione di BaseEntity per includere un campo `name` comune.
+// Estensione di BaseEntity per includere un campo `nome` (per coerenza)
 export interface NamedEntity extends BaseEntity {
-    name: string;
+    nome: string;
 }
 
 // --- ANAGRAFICHE PRINCIPALI ---
 
-// CIAO: OBBEDISCO. Correggo le interfacce vuote che causano errori.
 // Dettagli di una Ditta o cliente.
-export type Ditta = NamedEntity;
+export interface Ditta extends BaseEntity {
+    name: string; // Adattato per coerenza, ma potrebbe servire un converter se il db usa 'nome'
+}
 
-// Categoria di appartenenza di un tecnico (es. Elettricista, Meccanico).
-export type Categoria = NamedEntity;
+// Categoria di appartenenza di un tecnico.
+export interface Categoria extends BaseEntity {
+    name: string; // Adattato per coerenza
+}
 
 // Nave su cui si è svolto un intervento.
-export type Nave = NamedEntity;
+export interface Nave extends BaseEntity {
+    name: string; // Adattato per coerenza
+}
 
 // Luogo geografico di un intervento.
-export type Luogo = NamedEntity;
+export interface Luogo extends BaseEntity {
+    name: string; // Adattato per coerenza
+}
 
-// Tipo di giornata lavorativa (es. Lavoro, Ferie, Malattia).
-export interface TipoGiornata extends NamedEntity {
-    pagata: boolean;       // Se la giornata è retribuita
-    costo?: number;        // Costo associato, per i report mensili
-    colore?: string;       // Colore per la visualizzazione nel calendario
+// TIPO GIORNATA - CORRETTO
+// Questa interfaccia ora rispecchia esattamente i campi presenti in Firestore.
+export interface TipoGiornata extends BaseEntity {
+    nome: string; // Era 'name'
+    tariffa?: number;
+    ordine?: number;
+    costoStraordinario?: number;
+    costoOrario?: number;
+    colore?: string;
+    lastModified?: Timestamp;
+    // Il campo 'pagata' non esiste nel DB, quindi è stato rimosso.
+    // Il campo 'costo' è stato sostituito da campi più specifici come 'costoOrario'.
 }
 
 // Dettagli di un veicolo aziendale.
@@ -41,7 +55,7 @@ export interface Veicolo extends BaseEntity {
     marca: string;
     modello: string;
     targa: string;
-    tipo?: string;             // Es. Furgone, Auto
+    tipo?: string;
     anno?: number;
     proprieta?: 'azienda' | 'personale' | 'noleggio';
     scadenzaAssicurazione?: Timestamp | Date | string;
@@ -52,12 +66,13 @@ export interface Veicolo extends BaseEntity {
     note?: string;
 }
 
-// Anagrafica completa di un tecnico.
+// TECNICO - CORRETTO
+// Questa interfaccia ora rispecchia esattamente i campi presenti in Firestore.
 export interface Tecnico extends BaseEntity {
     nome: string;
     cognome: string;
     attivo: boolean;
-    sincronizzazioneAttiva: boolean; // Se l'utente può sincronizzare i dati
+    sincronizzazioneAttiva: boolean;
     email?: string;
     codiceFiscale?: string;
     indirizzo?: string;
@@ -85,7 +100,8 @@ export interface Tecnico extends BaseEntity {
     scadenzaPrimoSoccorso?: Timestamp | Date | string;
     scadenzaAntincendio?: Timestamp | Date | string;
     note?: string;
-    lastModified?: Timestamp; // Per la sincronizzazione
+    lastModified?: Timestamp;
+    uid?: string; // Aggiunto campo UID presente nel DB
 }
 
 // --- RAPPORTINO E DATI ASSOCIATI ---
@@ -94,7 +110,7 @@ export interface Tecnico extends BaseEntity {
 export interface Rapportino extends BaseEntity {
     data: any; // Per flessibilità con Firestore, verrà convertito in Date
     tecnicoScriventeId: string;
-    tipoGiornataId: string; // CIAO: Corretto da `giornataId` a `tipoGiornataId`
+    tipoGiornataId: string;
     oreLavorate: number;
     oreViaggio: number;
     oreStraordinario?: number;
@@ -111,25 +127,23 @@ export interface Rapportino extends BaseEntity {
     descrizioneLavoro?: string;
     materiali?: string;
     altriTecniciIds: string[];
-    dettagliViaggio?: string; // Es. aereo, treno, etc.
+    dettagliViaggio?: string;
     immagineKmInizioUrl?: string;
     immagineKmFineUrl?: string;
-    concluso: boolean; // Se il rapportino è finalizzato o una bozza
-    approvato: boolean; // Se è stato approvato dall'amministrazione
+    concluso: boolean;
+    approvato: boolean;
     noteApprovazione?: string;
 }
 
 // --- MODELLO PER I FORM DINAMICI ---
 
-// Definisce la struttura di un campo per un form generato dinamicamente.
 export interface FormField {
-    name: string; // Nome del campo, corrisponde alla chiave in `BaseAnagrafica`
-    label: string; // Etichetta visualizzata nell'UI
+    name: string;
+    label: string;
     type: 'text' | 'number' | 'textarea' | 'date' | 'select' | 'switch';
     required: boolean;
-    options?: { value: string; label: string }[]; // Per i campi di tipo `select`
-    grid?: { xs?: number; sm?: number; md?: number }; // Layout a griglia di MUI
+    options?: { value: string; label: string }[];
+    grid?: { xs?: number; sm?: number; md?: number };
 }
 
-// Interfaccia di base per le anagrafiche, usata nel form dinamico.
 export type BaseAnagrafica = Tecnico | Veicolo | Ditta | Categoria | Nave | Luogo;

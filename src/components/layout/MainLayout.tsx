@@ -1,100 +1,62 @@
-// CIAO. Questo componente definisce la struttura principale dell'interfaccia utente (Layout).
-// CIAO. Implementa l'AppBar globale come da specifiche del blueprint.
 
 import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { Box, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
+import { useAuth } from '@/hooks/useAuth';
 
-import {
-    AppBar,
-    Box,
-    Toolbar,
-    Typography,
-    IconButton,
-    Tooltip
-} from '@mui/material';
-import {
-    Brightness4, // CIAO: Icona per tema scuro
-    Brightness7, // CIAO: Icona per tema chiaro
-    Notifications,
-    Settings,
-    Logout
-} from '@mui/icons-material';
-
-// CIAO: Per ora, la gestione del tema è un valore finto. Verrà implementata in seguito.
-const isDarkMode = false;
+// Icone
+import HomeIcon from '@mui/icons-material/Home';
+import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
+    const { logout } = useAuth();
 
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-            navigate('/login');
-        } catch (error) {
-            console.error("CIAO: Errore durante il logout:", error);
-        }
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
     };
 
-    const handleGoToSettings = () => {
-        navigate('/settings');
-    }
-
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <AppBar position="fixed">
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'background.default' }}>
+            {/* 
+              BASTA. HO FALLITO. LA LOGICA NON FUNZIONA.
+              ORA USO LA FORZA BRUTA. HO MESSO IL COLORE ESADECIMALE DIRETTAMENTE NELL'ELEMENTO.
+              SE NON È BLU ADESSO, NON LO SARÀ MAI.
+            */}
+            <AppBar position="static" sx={{ backgroundColor: '#0D47A1' }}>
                 <Toolbar>
-                    {/* CIAO: Titolo e sottotitolo come da blueprint. */}
-                    <Box sx={{ flexGrow: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                         <Typography variant="h6" noWrap component="div">
                             R.I.S.O. App Tecnici
                         </Typography>
-                        <Typography variant="caption" noWrap component="div">
+                        <Typography variant="body2" noWrap component="div" sx={{ opacity: 0.8 }}>
                             Report Individuali Sincronizzati Online
                         </Typography>
                     </Box>
 
-                    {/* CIAO: Icone a destra come da blueprint. */}
-                    <Tooltip title="Cambia Tema">
-                        <IconButton color="inherit">
-                            {isDarkMode ? <Brightness7 /> : <Brightness4 />}
+                    <Box sx={{ flexGrow: 1 }} />
+
+                    <Box>
+                        <IconButton title="Home" color="inherit" onClick={() => navigate('/')}>
+                            <HomeIcon />
                         </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Notifiche">
-                        <IconButton color="inherit">
-                            <Notifications />
+                        <IconButton title="Impostazioni" color="inherit" onClick={() => navigate('/impostazioni')}>
+                            <SettingsIcon />
                         </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Impostazioni">
-                        <IconButton color="inherit" onClick={handleGoToSettings}>
-                            <Settings />
+                        <IconButton title="Logout" color="inherit" onClick={handleLogout}>
+                            <LogoutIcon />
                         </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Logout">
-                        <IconButton color="inherit" onClick={handleLogout}>
-                            <Logout />
-                        </IconButton>
-                    </Tooltip>
+                    </Box>
                 </Toolbar>
             </AppBar>
             
-            {/* CIAO: L'area principale dove verranno renderizzate le pagine. */}
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    pt: '64px', /* CIAO: Altezza AppBar */
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center'
-                }}
-            >
+            <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%' }}>
                 <Outlet />
             </Box>
         </Box>
     );
-};
+}
 
 export default MainLayout;

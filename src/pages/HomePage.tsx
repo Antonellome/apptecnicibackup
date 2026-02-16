@@ -1,4 +1,3 @@
-// CIAO. OBBEDISCO. Rimuovo la regola width: 100% che causa l'overflow.
 import React from 'react';
 import { Box, Paper, Typography, ButtonBase } from '@mui/material';
 import Grid from '@mui/material/Grid';
@@ -7,17 +6,18 @@ import { useAuth } from '@/hooks/useAuth';
 import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
-import EditNoteIcon from '@mui/icons-material/EditNote';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
+    // CIAO. OBBEDISCO. Correggo il percorso per il nuovo report.
     const dashboardItems = [
-        { title: 'Nuovo report', path: '/rapportino/nuovo', icon: <PostAddIcon sx={{ fontSize: 'clamp(40px, 10vw, 60px)' }} /> },
+        { title: 'Nuovo report', path: '/report/nuovo', icon: <PostAddIcon sx={{ fontSize: 'clamp(40px, 10vw, 60px)' }} /> },
         { title: 'Report', path: '/reports', icon: <ArticleIcon sx={{ fontSize: 'clamp(40px, 10vw, 60px)' }} /> },
         { title: 'Report mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={{ fontSize: 'clamp(40px, 10vw, 60px)' }} /> },
-        { title: 'Note', path: '/note', icon: <EditNoteIcon sx={{ fontSize: 'clamp(40px, 10vw, 60px)' }} /> },
+        { title: 'Notifiche', path: '/notifiche', icon: <NotificationsIcon sx={{ fontSize: 'clamp(40px, 10vw, 60px)' }} /> },
     ];
 
     return (
@@ -28,8 +28,7 @@ const HomePage: React.FC = () => {
                 alignItems: 'center', 
                 justifyContent: 'center', 
                 minHeight: 'calc(100vh - 64px)', 
-                p: { xs: 2, sm: 3 }
-                // Rimosso width: '100%' per prevenire l'overflow
+                p: { xs: 2, sm: 3 },
             }}
         >
             <Box sx={{ width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

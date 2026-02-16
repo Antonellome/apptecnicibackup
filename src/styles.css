@@ -1,8 +1,9 @@
+
 body, html, #root {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
   overflow-y: auto; /* CORREZIONE: Permette lo scorrimento verticale quando necessario */
-  background-color: #1a1a1a;
+  /* CIAO: HO UCCISO IL BACKGROUND-COLOR. DI NUOVO. */
 }

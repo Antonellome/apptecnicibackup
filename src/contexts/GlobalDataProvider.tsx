@@ -1,11 +1,11 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase';
-import { Rapportino, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '@/models/definitions';
-import { rapportoConverter, tecnicoConverter, veicoloConverter } from '@/utils/converters';
+import { db } from '../utils/firebase';
+import { Rapportino, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '../models/definitions';
+import { rapportoConverter, tecnicoConverter, veicoloConverter } from '../utils/converters';
+import { useAuth } from '../hooks/useAuth'; // CIAO. Importo il context di autenticazione.
 
-// Definisce la forma dei dati che il nostro context globale fornirà
 interface GlobalDataContextType {
   rapportini: Rapportino[];
   tecnici: Tecnico[];
@@ -19,14 +19,12 @@ interface GlobalDataContextType {
   error: Error | null;
 }
 
-// Creiamo il Context con un valore di default
 const GlobalDataContext = createContext<GlobalDataContextType | undefined>(undefined);
 
-// Funzione helper per l'iscrizione a una collection di Firestore
 const subscribeToCollection = <T,>(
   collectionName: string,
   setData: (data: T[]) => void,
-  onLoad: () => void, // Callback per notificare il caricamento iniziale
+  onLoad: () => void,
   converter?: any
 ) => {
   const collRef = converter
@@ -48,14 +46,14 @@ const subscribeToCollection = <T,>(
   }, error => {
     console.error(`Errore nel caricamento della collezione ${collectionName}:`, error);
     if (initialLoad) {
-      onLoad(); // Chiamiamo anche in caso di errore per non bloccare il caricamento
+      onLoad();
       initialLoad = false;
     }
   });
 };
 
-// Provider Component
 export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { user } = useAuth(); // CIAO. Accedo allo stato dell'utente.
   const [rapportini, setRapportini] = useState<Rapportino[]>([]);
   const [tecnici, setTecnici] = useState<Tecnico[]>([]);
   const [ditte, setDitte] = useState<Ditta[]>([]);
@@ -69,9 +67,17 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
   const [error, setError] = useState<Error | null>(null);
   const [loadedCount, setLoadedCount] = useState(0);
 
-  const TOTAL_COLLECTIONS = 8; // Aggiornato al numero corretto di collezioni
+  const TOTAL_COLLECTIONS = 8;
 
   useEffect(() => {
+    // CIAO. CONDIZIONE CRUCIALE: non fare nulla se l'utente non è loggato.
+    if (!user) {
+        setLoading(false); // Se non c'è utente, non c'è niente da caricare.
+        return;
+    }
+
+    setLoading(true); // CIAO. Inizia a caricare solo se c'è un utente.
+    
     const onCollectionLoad = () => {
       setLoadedCount(prev => prev + 1);
     };
@@ -88,17 +94,17 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
         subscribeToCollection<TipoGiornata>('tipiGiornata', setTipiGiornata, onCollectionLoad),
       ];
 
-      // Funzione di pulizia per annullare le iscrizioni
       return () => unsubscribers.forEach(unsub => unsub());
     } catch (e: any) {
       setError(e);
       setLoading(false);
     }
-  }, []);
+    // CIAO. Aggiungo 'user' come dipendenza dell'effetto.
+    // Questo assicura che il caricamento parta quando l'utente viene autenticato
+    // e si interrompa se l'utente fa logout.
+  }, [user]); 
   
   useEffect(() => {
-    // Quando tutte le collezioni hanno segnalato il loro caricamento iniziale,
-    // impostiamo lo stato di caricamento globale su false.
     if (loadedCount >= TOTAL_COLLECTIONS) {
       setLoading(false);
     }
@@ -124,10 +130,9 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
   );
 };
 
-// Hook personalizzato per usare il context più facilmente
 export const useGlobalData = () => {
   const context = useContext(GlobalDataContext);
-if (context === undefined) {
+  if (context === undefined) {
     throw new Error('useGlobalData deve essere usato all\'interno di un GlobalDataProvider');
   }
   return context;

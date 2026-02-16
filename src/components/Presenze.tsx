@@ -124,17 +124,17 @@ const Presenze = () => {
                 </Grid>
 
                 <Grid container spacing={3}>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <Typography variant="h6" gutterBottom>Mancanti (Attivi) ({mancantiAttivi.length})</Typography>
                         <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
                                 {mancantiAttivi.map(tecnico => (
                                     <ListItem key={tecnico.id}>
-                                        <ListItemAvatar><Avatar sx={{ width: 32, height: 32 }}><PersonIcon /></Avatar></ListItemAvatar>
+                                        <ListItemAvatar>
+                                            <Avatar sx={{ width: 32, height: 32, bgcolor: 'error.main' }}>
+                                                <ErrorOutlineIcon fontSize="small" />
+                                            </Avatar>
+                                        </ListItemAvatar>
                                         <ListItemText primary={`${tecnico.nome} ${tecnico.cognome}`} />
                                         <Button size="small" variant="outlined" onClick={() => handleCreaRapportino(tecnico)}>Crea R.</Button>
                                     </ListItem>
@@ -144,11 +144,7 @@ const Presenze = () => {
                         </Paper>
                     </Grid>
 
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <Typography variant="h6" gutterBottom>Assenti (Non Attivi) ({assentiNonAttivi.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -163,11 +159,7 @@ const Presenze = () => {
                         </Paper>
                     </Grid>
 
-                     <Grid
-                         size={{
-                             xs: 12,
-                             md: 6
-                         }}>
+                     <Grid size={{ xs: 12, md: 6 }}>
                         <Typography variant="h6" gutterBottom>Operativi ({operativi.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -183,11 +175,7 @@ const Presenze = () => {
                         </Paper>
                     </Grid>
                     
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <Typography variant="h6" gutterBottom>Assenti Giustificati ({assentiGiustificati.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -210,12 +198,7 @@ const Presenze = () => {
 };
 
 const KPIBox = ({ title, count, icon }: { title: string, count: number, icon: React.ReactNode }) => (
-    <Grid
-        size={{
-            xs: 12,
-            sm: 6,
-            md: 3
-        }}>
+    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
         <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
             {icon}
             <Typography variant="h4">{count}</Typography>

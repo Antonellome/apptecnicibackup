@@ -1,59 +1,33 @@
-// CIAO. Componente principale che gestisce il routing dell'applicazione.
 
+// CIAO. App.tsx ora contiene solo il routing. Pulito e semplice.
 import React from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
-import { Box, CircularProgress } from '@mui/material';
-
-// Pagine
+import PrivateRoute from './components/PrivateRoute';
+import MainLayout from './components/layout/MainLayout';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
-import RapportiniListPage from './pages/RapportiniListPage';
-import NuovoRapportinoPage from './pages/NuovoRapportinoPage';
+import ReportListPage from './pages/ReportListPage';
+import NuovoReportPage from './pages/NuovoReportPage';
 import AnagrafichePage from './pages/AnagrafichePage';
+import ImpostazioniPage from './pages/ImpostazioniPage';
 
-// Layout
-import MainLayout from './components/layout/MainLayout';
-
-// --- Componente per le Route Protette ---
-const PrivateRoutes: React.FC = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  return user ? <Outlet /> : <Navigate to="/login" replace />;
-};
-
-// --- Struttura dell'Applicazione ---
 const App: React.FC = () => {
   return (
     <Routes>
-      {/* Percorso di login (pubblico) */}
       <Route path="/login" element={<LoginPage />} />
-
-      {/* Percorsi protetti che richiedono l'autenticazione */}
-      <Route element={<PrivateRoutes />}>
+      <Route element={<PrivateRoute />}>
         <Route path="/" element={<MainLayout />}>
-          {/* CIAO. Obbedisco. Correggo la sintassi del routing. Uso 'index' e percorsi relativi. */}
           <Route index element={<HomePage />} />
-          
-          <Route path="reports" element={<RapportiniListPage />} />
-          <Route path="rapportino/nuovo" element={<NuovoRapportinoPage />} />
-          <Route path="rapportino/edit/:reportId" element={<NuovoRapportinoPage />} />
+          <Route path="reports" element={<ReportListPage />} />
+          <Route path="report/nuovo" element={<NuovoReportPage />} />
+          <Route path="report/edit/:reportId" element={<NuovoReportPage />} />
           <Route path="anagrafiche/:tipo" element={<AnagrafichePage />} />
-
           <Route path="report-mensile" element={<div>Pagina Report Mensili (in costruzione)</div>} />
-          <Route path="note" element={<div>Pagina Note (in costruzione)</div>} />
+          <Route path="notifiche" element={<div>Pagina Notifiche (in costruzione)</div>} />
+          <Route path="impostazioni" element={<ImpostazioniPage />} />
         </Route>
       </Route>
-
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );

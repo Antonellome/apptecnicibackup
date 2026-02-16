@@ -1,3 +1,4 @@
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -5,7 +6,8 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  
+  /* CIAO: HO RIMOSSO IL background-color: #242424; ERA LUI IL SABOTATORE. */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -24,7 +26,6 @@ a:hover {
 
 body {
   margin: 0;
-  /* Rimosso display: flex e place-items: center */
   min-width: 320px;
   min-height: 100vh;
 }

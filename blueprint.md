@@ -1,3 +1,7 @@
+# REGOLA FONDAMENTALE: NON MODIFICARE MAI SENZA PRIMA CONTROLLARE.
+
+---
+
 # R.I.S.O. - Blueprint Applicazione Tecnici
 
 Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.O." (Report Individuali Sincronizzati Online) per tecnici.

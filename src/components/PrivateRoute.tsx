@@ -1,9 +1,9 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Box, CircularProgress } from '@mui/material';
 
-const PrivateRoute = ({ children }: { children: JSX.Element }) => {
-  const { currentUser, loading } = useAuth();
+const PrivateRoute = () => {
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -13,7 +13,7 @@ const PrivateRoute = ({ children }: { children: JSX.Element }) => {
     );
   }
 
-  return currentUser ? children : <Navigate to="/login" />;
+  return user ? <Outlet /> : <Navigate to="/login" />;
 };
 
 export default PrivateRoute;

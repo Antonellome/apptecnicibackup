@@ -1,6 +1,6 @@
 
 import { collection, doc, Timestamp } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { db } from '@/utils/firebase';
 import type { BaseEntity, Tecnico, Veicolo, Rapportino } from '@/models/definitions';
 
 // --- FACTORY DI CONVERTITORI ---
@@ -10,13 +10,9 @@ import type { BaseEntity, Tecnico, Veicolo, Rapportino } from '@/models/definiti
 const createConverter = <T extends BaseEntity>(defaultValues: Omit<T, 'id'>) => ({
     toFirestore: (data: Partial<T>): T => {
         const firestoreData: any = {};
-        // Assicura che solo i campi definiti nel modello di default vengano considerati.
         for (const key in defaultValues) {
             if (Object.prototype.hasOwnProperty.call(defaultValues, key)) {
                 const value = (data as any)[key];
-                // Se il valore è definito, usalo. Altrimenti, usa il valore di default.
-                // Se il valore di default è \`undefined\`, non verrà incluso nell'oggetto finale,
-                // che è il comportamento corretto per i campi opzionali in Firestore.
                 if (value !== undefined) {
                     firestoreData[key] = value;
                 } else if (defaultValues[key] !== undefined) {
@@ -28,15 +24,15 @@ const createConverter = <T extends BaseEntity>(defaultValues: Omit<T, 'id'>) => 
     },
     fromFirestore: (snapshot: any, options: any): T => {
         const data = snapshot.data(options);
-        // Ritorna un oggetto completo con tutti i campi, usando i valori di default
-        // per quelli mancanti nello snapshot di Firestore.
         return { ...defaultValues, ...data, id: snapshot.id } as T;
     }
 });
 
 // --- ISTANZE DEI CONVERTITORI ---
 
-// Convertitore per i Tecnici
+// CIAO. OBBEDISCO. CORREGGO IL CONVERTER DEL TECNICO.
+// Convertitore per i Tecnici - Aggiornato per includere il campo 'uid'
+// e garantire l'allineamento con l'interfaccia corretta.
 export const tecnicoConverter = createConverter<Tecnico>({
     nome: '',
     cognome: '',
@@ -70,13 +66,14 @@ export const tecnicoConverter = createConverter<Tecnico>({
     scadenzaAntincendio: undefined,
     note: undefined,
     lastModified: undefined,
+    uid: undefined, // <-- ECCO LA CORREZIONE CHIAVE
 });
 
 // Convertitore per i Veicoli
 export const veicoloConverter = createConverter<Veicolo>({
     marca: '',
     modello: '',
-targa: '',
+    targa: '',
     tipo: undefined,
     anno: undefined,
     proprieta: undefined,
@@ -92,7 +89,7 @@ targa: '',
 export const rapportoConverter = createConverter<Rapportino>({
     data: Timestamp.now(),
     tecnicoScriventeId: '',
-    tipoGiornataId: '', // CIAO: Corretto
+    tipoGiornataId: '', 
     oreLavorate: 8,
     oreViaggio: 0,
     oreStraordinario: 0,

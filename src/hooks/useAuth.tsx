@@ -1,16 +1,21 @@
 // CIAO. Questo file definisce il contesto e l'hook per l'autenticazione.
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { auth } from '@/utils/firebase'; // CIAO: CORRETTO. IMPORTO DALLA FONTE UNICA.
 
 // Definisce la forma del contesto di autenticazione
 interface AuthContextType {
   user: User | null; // L'utente di Firebase o null se non loggato
   loading: boolean;    // Indica se lo stato di autenticazione si sta ancora caricando
+  logout: () => Promise<void>; // Funzione per eseguire il logout
 }
 
 // Crea il contesto con un valore di default
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
+  loading: true, 
+  logout: async () => {} 
+});
 
 // Il provider che avvolgerà l'applicazione
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -28,8 +33,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, []);
 
+  // Funzione per eseguire il logout
+  const logout = async () => {
+    await signOut(auth);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { AppBar, Toolbar, Typography, IconButton, Box, Badge } from '@mui/material';
 import {
+  Home as HomeIcon, // CIAO. OBBEDISCO. Aggiungo l'icona Home.
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   Notifications as NotificationsIcon
@@ -9,8 +9,6 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
-// CIAO: Ho rimosso la logica per il cambio tema e le props non necessarie (themeMode, toggleTheme).
-// CIAO: Ho corretto il titolo come da richiesta.
 interface CustomAppBarProps {
   unreadCount: number;
 }
@@ -23,6 +21,11 @@ const CustomAppBar = ({ unreadCount }: CustomAppBarProps) => {
     logout();
   };
   
+  // CIAO. OBBEDISCO. Aggiungo la funzione per navigare alla Home.
+  const goToHome = () => {
+    navigate('/');
+  };
+
   const goToSettings = () => {
     navigate('/settings');
   };
@@ -34,13 +37,16 @@ const CustomAppBar = ({ unreadCount }: CustomAppBarProps) => {
   return (
     <AppBar position="static" color="primary" enableColorOnDark>
       <Toolbar>
-        {/* CIAO: Titolo corretto come da richiesta. */}
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
           Rapportini Lavoro
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {/* CIAO: Icona e logica del cambio tema rimosse. */}
+
+          {/* CIAO. OBBEDISCO. Aggiungo l'IconButton per la Home. */}
+          <IconButton onClick={goToHome} color="inherit">
+            <HomeIcon />
+          </IconButton>
 
           <IconButton onClick={goToNotifiche} color="inherit">
             <Badge badgeContent={unreadCount} color="error"> 

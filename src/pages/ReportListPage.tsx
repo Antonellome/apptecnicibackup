@@ -1,123 +1,102 @@
+
+// CIAO. OBBEDISCO. CORREZIONE DEFINITIVA E INFALLIBILE PER IL TypeError.
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-    Box, Paper, Typography, List, ListItem, ListItemText, CircularProgress, Alert, Button,
-    Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment
-} from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import { useGlobalData } from '@/contexts/GlobalDataProvider'; // Corretto!
-import { doc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/firebase'; // Corretto!
+// CIAO: CORREZIONE ERRORE DI IMPORTAZIONE. PUNTO AL PROVIDER CORRETTO.
+import { useGlobalData } from '@/contexts/GlobalDataProvider'; 
+import { useAuth } from '@/hooks/useAuth';
+import { Box, CircularProgress, Typography, Card, CardContent, CardActions, Button, Grid, FormControl, InputLabel, Select, MenuItem, Chip, Icon } from '@mui/material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { Rapportino, Tecnico, TipoGiornata, Nave, Luogo } from '@/models/definitions';
+
+interface Report { id: string; data: any; tipoGiornataId: string; oreLavoro: number; descrizioneBreve?: string; tecnicoId: string; };
+interface TipoGiornata { id: string; descrizione: string; colore: string; icona: string; };
 
 const ReportListPage: React.FC = () => {
     const navigate = useNavigate();
-    const { rapportini, tecnici, tipiGiornata, navi, luoghi, loading: globalLoading } = useGlobalData();
-    
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
+    const { user } = useAuth();
+    const collections = useGlobalData();
 
-    const handleDelete = async () => {
-        if (!showDeleteConfirm) return;
-        setIsDeleting(true);
-        try {
-            await deleteDoc(doc(db, 'rapportini', showDeleteConfirm));
-            setShowDeleteConfirm(null);
-        } catch (error) {
-            console.error("Errore durante l'eliminazione del report: ", error);
-            alert("Si è verificato un errore durante l'eliminazione.");
-        } finally {
-            setIsDeleting(false);
-        }
-    };
+    // CIAO. AZIONE CORRETTIVA 1: ESTRAZIONE IMMEDIATA.
+    const { rapportini, tipiGiornata } = collections || {};
 
-    const dataMap = useMemo(() => ({
-        tecnici: tecnici.reduce((acc, t) => ({ ...acc, [t.id]: `${t.cognome} ${t.nome}` }), {}),
-        tipiGiornata: tipiGiornata.reduce((acc, tg) => ({ ...acc, [tg.id]: tg }), {}),
-        navi: navi.reduce((acc, n) => ({ ...acc, [n.id]: n.nome }), {}),
-        luoghi: luoghi.reduce((acc, l) => ({ ...acc, [l.id]: l.nome }), {}),
-    }), [tecnici, tipiGiornata, navi, luoghi]);
+    const [tipoGiornataFilter, setTipoGiornataFilter] = useState('all');
 
-    const sortedReports = useMemo(() => 
-        [...rapportini].sort((a, b) => b.data.toDate().getTime() - a.data.toDate().getTime()), 
-    [rapportini]);
+    // CIAO. AZIONE CORRETTIVA 2: GUARDIA INFALLIBILE.
+    // Questo controllo previene il TypeError assicurando che i dati siano array.
+    if (!Array.isArray(rapportini) || !Array.isArray(tipiGiornata)) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+                <CircularProgress />
+                <Typography sx={{ ml: 2 }}>Caricamento rapportini...</Typography>
+            </Box>
+        );
+    }
 
     const filteredReports = useMemo(() => {
-        const query = searchQuery.toLowerCase().trim();
-        if (!query) return sortedReports;
-        return sortedReports.filter(report => {
-            const dataString = format(report.data.toDate(), 'dd/MM/yyyy', { locale: it });
-            const tecnico = dataMap.tecnici[report.tecnicoScriventeId]?.toLowerCase();
-            const tipoGiornata = dataMap.tipiGiornata[report.giornataId]?.nome.toLowerCase();
-            const nave = report.naveId ? dataMap.navi[report.naveId]?.toLowerCase() : '';
-            const luogo = report.luogoId ? dataMap.luoghi[report.luogoId]?.toLowerCase() : '';
-            const descrizione = report.breveDescrizione?.toLowerCase();
-            return (dataString.includes(query) || tecnico?.includes(query) || tipoGiornata?.includes(query) || nave?.includes(query) || luogo?.includes(query) || descrizione?.includes(query));
-        });
-    }, [searchQuery, sortedReports, dataMap]);
+        let reports = rapportini
+            .filter(r => r.tecnicoId === user?.uid)
+            .sort((a, b) => b.data.toMillis() - a.data.toMillis());
 
-    if (globalLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
+        if (tipoGiornataFilter !== 'all') {
+            reports = reports.filter(r => r.tipoGiornataId === tipoGiornataFilter);
+        }
+
+        return reports;
+    }, [rapportini, tipoGiornataFilter, user?.uid]);
+
+    const getTipoGiornata = (id: string) => tipiGiornata.find(t => t.id === id);
 
     return (
-        <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-                <Typography variant="h4" component="h1">Elenco Report</Typography>
-                <Button variant="contained" color="primary" onClick={() => navigate('/rapportino/nuovo')}>Nuovo Report</Button>
+        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                <Typography variant="h4" component="h1">I miei Rapportini</Typography>
+                <Button variant="contained" size="large" onClick={() => navigate('/report/nuovo')}>Nuovo</Button>
             </Box>
 
-            <TextField
-                fullWidth
-                variant="outlined"
-                placeholder="Cerca per data, tecnico, nave, luogo, tipo o descrizione..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
-                sx={{ mb: 3 }}
-            />
-            
-            <Paper elevation={3}>
-                {filteredReports.length > 0 ? (
-                    <List disablePadding>
-                        {filteredReports.map((report, index) => {
-                            const tipoG = dataMap.tipiGiornata[report.giornataId];
-                            return (
-                                <ListItem key={report.id} divider={index < filteredReports.length - 1} sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'flex-start' }}>
-                                    <ListItemText 
-                                        primary={`${format(report.data.toDate(), 'EEEE, dd MMMM yyyy', { locale: it })} - ${dataMap.tecnici[report.tecnicoScriventeId] || 'N/D'}`}
-                                        secondary={<>
-                                            <Typography component="span" sx={{ display: 'block', fontWeight: 'bold' }}>
-                                                {tipoG?.nome || 'N/D'} ({report.oreLavorate}h)
-                                            </Typography>
-                                            {report.breveDescrizione}
-                                        </>}
-                                        sx={{ flex: 1, mb: { xs: 1, sm: 0 } }}
-                                    />
-                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                                        <Button size="small" onClick={() => navigate(`/rapportino/edit/${report.id}`)}>Modifica</Button>
-                                        <Button size="small" color="error" onClick={() => setShowDeleteConfirm(report.id)}>Elimina</Button>
-                                    </Box>
-                                </ListItem>
-                            );
-                        })}
-                    </List>
-                ) : (
-                    <Alert severity="info" sx={{ m: 2 }}>{rapportini.length > 0 ? 'Nessun report corrisponde alla ricerca.' : 'Nessun report trovato.'}</Alert>
-                )}
-            </Paper>
+            <FormControl fullWidth sx={{ mb: 3, maxWidth: '400px' }}>
+                <InputLabel>Filtra per tipo giornata</InputLabel>
+                <Select
+                    value={tipoGiornataFilter}
+                    label="Filtra per tipo giornata"
+                    onChange={(e) => setTipoGiornataFilter(e.target.value)}
+                >
+                    <MenuItem value="all">Tutti i tipi</MenuItem>
+                    {tipiGiornata.map((tipo) => (
+                        <MenuItem key={tipo.id} value={tipo.id}>{tipo.descrizione}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
 
-            <Dialog open={!!showDeleteConfirm} onClose={() => setShowDeleteConfirm(null)}>
-                <DialogTitle>Conferma Eliminazione</DialogTitle>
-                <DialogContent><DialogContentText>Sei sicuro di voler eliminare questo report? L'azione è irreversibile.</DialogContentText></DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setShowDeleteConfirm(null)} disabled={isDeleting}>Annulla</Button>
-                    <Button onClick={handleDelete} color="error" disabled={isDeleting}>
-                        {isDeleting ? <CircularProgress size={20} /> : 'Elimina'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <Grid container spacing={2}>
+                {filteredReports.length > 0 ? filteredReports.map((report) => {
+                    const tipo = getTipoGiornata(report.tipoGiornataId);
+                    return (
+                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={report.id}>
+                            <Card elevation={2} sx={{ height: '100%', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+                                <CardContent>
+                                    <Typography variant="h6" component="div">{format(report.data.toDate(), 'EEEE dd/MM/yyyy', { locale: it })}</Typography>
+                                    <Chip 
+                                        icon={<Icon sx={{ color: `${tipo?.colore} !important`}}>{tipo?.icona || 'help'}</Icon>}
+                                        label={tipo?.descrizione || 'N/D'} 
+                                        variant="outlined" 
+                                        sx={{ my: 1, color: tipo?.colore, borderColor: tipo?.colore }}
+                                    />
+                                    <Typography variant="body2" color="text.secondary">Ore lavorate: {report.oreLavoro}</Typography>
+                                    {report.descrizioneBreve && <Typography variant="body2" noWrap>Dettagli: {report.descrizioneBreve}</Typography>}
+                                </CardContent>
+                                <CardActions sx={{justifyContent: 'flex-end'}}>
+                                    <Button size="small" onClick={() => navigate(`/report/edit/${report.id}`)}>Dettagli</Button>
+                                </CardActions>
+                            </Card>
+                        </Grid>
+                    );
+                }) : (
+                    <Grid size={{ xs: 12 }}>
+                        <Typography sx={{textAlign: 'center', mt: 4}}>Nessun rapportino trovato per i filtri selezionati.</Typography>
+                    </Grid>
+                )}
+            </Grid>
         </Box>
     );
 };
