@@ -1,5 +1,5 @@
 
-// CIAO. OBBEDISCO. RIORDINO I CAMPI COME RICHIESTO.
+// CIAO. OBBEDISCO. REVISIONE FINALE PER LA SINCRONIZZAZIONE DEI REPORT.
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -12,7 +12,7 @@ import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { useGlobalData } from '@/contexts/GlobalDataProvider';
 import { db } from '@/utils/firebase';
-import { doc, getDoc, addDoc, updateDoc, collection, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, addDoc, updateDoc, collection, Timestamp, DocumentData } from 'firebase/firestore';
 
 import { TipoGiornata, Tecnico, Veicolo, Nave, Luogo } from '@/models/definitions';
 
@@ -24,7 +24,7 @@ const generateManualHoursOptions = () => {
     const options = [];
     for (let i = 0.5; i <= 8; i += 0.5) {
         const hours = Math.floor(i);
-        const minutes = (i % 1 !== 0) ? '30' : '00';
+        const minutes = (i % 1 !== 0) ? ':30' : '00';
         options.push({ value: i, label: `${hours}:${minutes}` });
     }
     for (let i = 8.5; i <= 24; i += 0.5) {
@@ -165,16 +165,19 @@ const NuovoReportPage: React.FC = () => {
     };
     
     const handleSubmit = async () => {
-        if (!data || !tipoGiornataId) {
-            alert("Compila i campi obbligatori (Data e Tipo Giornata).");
+        if (!data || !tipoGiornataId || !loggedInTecnicoId) {
+            alert("Compila i campi obbligatori (Data e Tipo Giornata) o utente non valido.");
             return;
         }
         setIsSaving(true);
         try {
+            const partecipantiIds = Array.from(new Set([loggedInTecnicoId, ...altriTecniciIds]));
+
             const rapportinoData: any = {
                 data: Timestamp.fromDate(data),
                 tipoGiornataId,
-                tecnicoId: loggedInTecnicoId,
+                tecnicoId: loggedInTecnicoId, 
+                partecipantiIds: partecipantiIds, 
                 lastModified: Timestamp.now(),
             };
 
@@ -218,7 +221,7 @@ const NuovoReportPage: React.FC = () => {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
-            <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1200, mx: 'auto' }}>
+            <Box sx={{ p: { xs: 2, sm: 3 }, mx: 'auto' }}>
                 <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, maxHeight: '90vh', overflowY: 'auto' }}>
                     <Typography variant="h4" component="h1" gutterBottom>{isEditMode ? 'Dettaglio' : 'Nuovo'} Rapportino</Typography>
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
@@ -257,7 +260,6 @@ const NuovoReportPage: React.FC = () => {
                                     )}
                                 </Grid>
                                 
-                                {/* CIAO. QUESTO È L'ORDINE CORRETTO RICHIESTO. */}
                                 <Autocomplete multiple options={otherTecnicos} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={selectedTecnicos} onChange={(_, nv) => setAltriTecniciIds(nv.map(v => v.id))} renderInput={params => <TextField {...params} label="Altri Tecnici" />} disabled={isReadOnly} />
                                 <FormControl fullWidth><InputLabel>Nave</InputLabel><Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuna</em></MenuItem>{(navi as Nave[]).map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}</Select></FormControl>
                                 <FormControl fullWidth><InputLabel>Luogo</InputLabel><Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{(luoghi as Luogo[]).map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}</Select></FormControl>
