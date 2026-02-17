@@ -213,10 +213,10 @@ const NuovoRapportinoPage: React.FC = () => {
                                 <FormControlLabel control={<Switch checked={isManuale} onChange={e => setIsManuale(e.target.checked)} disabled={isReadOnly} />} label="Inserimento Manuale Ore" />
                                 {!isManuale ? (
                                     <Grid container spacing={2}>
-                                        <Grid item xs={4}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                        <Grid item xs={4}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                        <Grid item xs={4}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0</MenuItem><MenuItem value={30}>30</MenuItem><MenuItem value={60}>60</MenuItem></Select></FormControl></Grid>
-                                        <Grid item xs={12}><TextField label="Totale Ore Calcolato" value={oreLavoroAsNumber.toFixed(2)} fullWidth disabled /></Grid>
+                                        <Grid size={4}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                        <Grid size={4}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                        <Grid size={4}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0</MenuItem><MenuItem value={30}>30</MenuItem><MenuItem value={60}>60</MenuItem></Select></FormControl></Grid>
+                                        <Grid size={12}><TextField label="Totale Ore Calcolato" value={oreLavoroAsNumber.toFixed(2)} fullWidth disabled /></Grid>
                                     </Grid>
                                 ) : (
                                     <FormControl fullWidth required>
@@ -236,8 +236,8 @@ const NuovoRapportinoPage: React.FC = () => {
                             </>
                         )}
                         <Grid container spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
-                            <Grid item><Button variant="outlined" size="large" onClick={() => navigate('/reports')}> {isReadOnly ? 'Indietro' : 'Annulla'}</Button></Grid>
-                            {!isReadOnly && <Grid item><Button variant="contained" color="primary" size="large" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button></Grid>}
+                            <Grid><Button variant="outlined" size="large" onClick={() => navigate('/reports')}> {isReadOnly ? 'Indietro' : 'Annulla'}</Button></Grid>
+                            {!isReadOnly && <Grid><Button variant="contained" color="primary" size="large" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button></Grid>}
                         </Grid>
                     </Box>
                 </Paper>

@@ -1,5 +1,4 @@
 
-// CIAO. App.tsx ora contiene solo il routing. Pulito e semplice.
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
@@ -10,7 +9,8 @@ import HomePage from './pages/HomePage';
 import ReportListPage from './pages/ReportListPage';
 import NuovoReportPage from './pages/NuovoReportPage';
 import AnagrafichePage from './pages/AnagrafichePage';
-import ImpostazioniPage from './pages/ImpostazioniPage';
+import SettingsPage from './pages/SettingsPage'; // Import corretto
+import MonthlyReportPage from './pages/MonthlyReportPage'; // Import corretto
 
 const App: React.FC = () => {
   return (
@@ -23,9 +23,9 @@ const App: React.FC = () => {
           <Route path="report/nuovo" element={<NuovoReportPage />} />
           <Route path="report/edit/:reportId" element={<NuovoReportPage />} />
           <Route path="anagrafiche/:tipo" element={<AnagrafichePage />} />
-          <Route path="report-mensile" element={<div>Pagina Report Mensili (in costruzione)</div>} />
+          <Route path="report-mensile" element={<MonthlyReportPage />} /> {/* Sostituito */}
           <Route path="notifiche" element={<div>Pagina Notifiche (in costruzione)</div>} />
-          <Route path="impostazioni" element={<ImpostazioniPage />} />
+          <Route path="impostazioni" element={<SettingsPage />} /> {/* Sostituito */}
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" />} />

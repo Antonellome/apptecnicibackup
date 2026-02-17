@@ -97,22 +97,59 @@ const ReportListPage: React.FC = () => {
                 <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
                     <Typography variant="h6" gutterBottom>Filtri</Typography>
                     <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} md={6} lg={4}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                md: 6,
+                                lg: 4
+                            }}>
                             <TextField fullWidth label="Cerca testo..." value={searchText} onChange={(e) => setSearchText(e.target.value)} />
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3} lg={2}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6,
+                                md: 3,
+                                lg: 2
+                            }}>
                             <DatePicker label="Filtra per data" value={selectedDate} onChange={setSelectedDate} slotProps={{ textField: { fullWidth: true } }} />
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3} lg={2}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6,
+                                md: 3,
+                                lg: 2
+                            }}>
                             <FormControl fullWidth><InputLabel>Tipo Giornata</InputLabel><Select value={tipoGiornataFilter} label="Tipo Giornata" onChange={(e) => setTipoGiornataFilter(e.target.value)}><MenuItem value="all">Tutti i tipi</MenuItem>{tipiGiornata.map((tipo: TipoGiornata) => (<MenuItem key={tipo.id} value={tipo.id}>{tipo.nome}</MenuItem>))}</Select></FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3} lg={2}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6,
+                                md: 3,
+                                lg: 2
+                            }}>
                             <FormControl fullWidth><InputLabel>Nave</InputLabel><Select value={selectedNave} label="Nave" onChange={(e) => setSelectedNave(e.target.value)}><MenuItem value="all">Tutte le navi</MenuItem>{navi.map((nave: Nave) => (<MenuItem key={nave.id} value={nave.id}>{nave.nome}</MenuItem>))}</Select></FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3} lg={2}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 6,
+                                md: 3,
+                                lg: 2
+                            }}>
                             <FormControl fullWidth><InputLabel>Luogo</InputLabel><Select value={selectedLuogo} label="Luogo" onChange={(e) => setSelectedLuogo(e.target.value)}><MenuItem value="all">Tutti i luoghi</MenuItem>{luoghi.map((luogo: Luogo) => (<MenuItem key={luogo.id} value={luogo.id}>{luogo.nome}</MenuItem>))}</Select></FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3} lg={12} container justifyContent="flex-end">
+                        <Grid
+                            container
+                            justifyContent="flex-end"
+                            size={{
+                                xs: 12,
+                                sm: 6,
+                                md: 3,
+                                lg: 12
+                            }}>
                             <Button onClick={resetFilters}>Azzera Filtri</Button>
                         </Grid>
                     </Grid>
@@ -122,7 +159,13 @@ const ReportListPage: React.FC = () => {
                     {filteredReports.length > 0 ? filteredReports.map((report) => {
                         const tipo = getTipoGiornata(report.tipoGiornataId);
                         return (
-                            <Grid item xs={12} sm={6} md={4} key={report.id}>
+                            <Grid
+                                key={report.id}
+                                size={{
+                                    xs: 12,
+                                    sm: 6,
+                                    md: 4
+                                }}>
                                 <Card elevation={2} sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                     <CardContent>
                                         <Typography variant="h6" component="div">{format(report.data.toDate(), 'EEEE dd/MM/yyyy', { locale: it })}</Typography>
@@ -137,7 +180,7 @@ const ReportListPage: React.FC = () => {
                             </Grid>
                         );
                     }) : (
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <Typography sx={{ textAlign: 'center', mt: 4 }}>Nessun rapportino trovato per i filtri selezionati.</Typography>
                         </Grid>
                     )}

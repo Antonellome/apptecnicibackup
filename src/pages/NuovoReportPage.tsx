@@ -243,13 +243,25 @@ const NuovoReportPage: React.FC = () => {
                                 <Grid container spacing={2}>
                                     {!isManualEntry ? (
                                         <>
-                                            <Grid item xs={12} sm={4}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid item xs={12} sm={4}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid item xs={12} sm={4}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
-                                            <Grid item xs={12}><TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled /></Grid>
+                                            <Grid
+                                                size={{
+                                                    xs: 12,
+                                                    sm: 4
+                                                }}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid
+                                                size={{
+                                                    xs: 12,
+                                                    sm: 4
+                                                }}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid
+                                                size={{
+                                                    xs: 12,
+                                                    sm: 4
+                                                }}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
+                                            <Grid size={12}><TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled /></Grid>
                                         </>
                                     ) : (
-                                        <Grid item xs={12}>
+                                        <Grid size={12}>
                                             <FormControl fullWidth required sx={{ minWidth: 160 }}>
                                                 <InputLabel>Totale Ore Lavorate</InputLabel>
                                                 <Select value={oreLavoro ?? ''} label="Totale Ore Lavorate" onChange={e => setOreLavoro(Number(e.target.value))} disabled={isReadOnly} MenuProps={{ PaperProps: { sx: { maxHeight: 300, '& .MuiList-root': { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0px 8px', }, }, }, }}>
@@ -270,8 +282,8 @@ const NuovoReportPage: React.FC = () => {
                             </>
                         )}
                         <Grid container spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
-                            <Grid item><Button variant="outlined" size="large" onClick={() => navigate('/reports')}> {isReadOnly ? 'Indietro' : 'Annulla'}</Button></Grid>
-                            {!isReadOnly && <Grid item><Button variant="contained" color="primary" size="large" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button></Grid>}
+                            <Grid><Button variant="outlined" size="large" onClick={() => navigate('/reports')}> {isReadOnly ? 'Indietro' : 'Annulla'}</Button></Grid>
+                            {!isReadOnly && <Grid><Button variant="contained" color="primary" size="large" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button></Grid>}
                         </Grid>
                     </Box>
                 </Paper>

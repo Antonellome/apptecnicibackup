@@ -1,5 +1,6 @@
 import { useContext } from 'react';
-import { ThemeContext, type ThemeContextInterface } from '@/contexts/ThemeContext';
+// CIAO. OBBEDISCO. Correggo il percorso di importazione per risolvere il crash.
+import { ThemeContext, type ThemeContextInterface } from '@/contexts/ThemeContextDefinition';
 
 /**
  * Hook personalizzato per accedere al contesto del tema.

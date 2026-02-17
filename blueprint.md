@@ -56,12 +56,20 @@ Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.
 - Funzionalità di ricerca intelligente per data, nave, luogo, etc.
 
 ### 6. Pagina Report Mensili
-- Selezione del mese e anno per generare il report.
-- Il report deve contenere tutti i campi del form "Nuovo Report" ad esclusione di: lavoro eseguito, materiali, veicolo, tecnici aggiunti.
-- Sezione per il calcolo dei guadagni mensili basato su:
-    - Costi delle giornate
-    - Costo orario
-    - I valori per i costi devono essere configurabili nella pagina "Impostazioni".
+- **Logica Dati Locale:** La pagina opererà esclusivamente con i dati dei rapportini già presenti nell'app, senza interrogare il database, per garantire massima reattività.
+- **Filtro Globale:** In cima alla pagina, selettori per Mese e Anno permetteranno di filtrare i dati visualizzati in entrambe le sezioni sottostanti.
+- **Sezione 1: Resoconto Analitico**
+    - **Descrizione:** Una tabella dettagliata per l'analisi delle attività mensili.
+    - **Tabella:** Colonne: `Data`, `Tipo Giornata`, `Ore Lavorate`.
+    - **Interattività:** Ogni riga sarà cliccabile per aprire una vista di sola lettura del rapportino di riferimento, con un pulsante per tornare alla tabella.
+    - **Riepilogo e Calcoli:** In fondo alla tabella verranno mostrati i totali:
+        - **Totale Ore** per tipo di giornata (es. "Lavoro Ordinario: 40 ore").
+        - **Totale Guadagni** per tipo di giornata (calcolati in base alle tariffe in Impostazioni).
+        - **Gran Totale Ore** e **Gran Totale Guadagni** del mese.
+- **Sezione 2: Calendario Mensile Interattivo**
+    - **Descrizione:** Una vista calendario per una comprensione visiva e immediata del mese.
+    - **Visualizzazione:** Ogni giorno del mese sarà una cella. I giorni con un rapportino associato saranno evidenziati con un colore specifico per il `Tipo Giornata` (es. verde per lavoro, giallo per ferie).
+    - **Interattività:** Cliccando su un giorno evidenziato si aprirà la stessa vista di dettaglio del rapportino della sezione tabella, con un pulsante per tornare al calendario.
 
 ### 7. Pagina Note
 - Visualizzazione note in entrata e in uscita.
@@ -69,9 +77,17 @@ Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.
 - Integrazione con app "master" per invio e ricezione.
 
 ### 8. Pagina Impostazioni
-- Visualizzazione informazioni del tecnico.
-- Sezione per configurare i costi orari e i costi per tipo di giornata (usati nei Report Mensili).
-- Opzione per salvare dati e report in locale.
+- **Gestione Tariffe Orarie:**
+    - Una lista dei `Tipi Giornata` presenti nei rapportini.
+    - Accanto a ogni voce, un campo per inserire la tariffa oraria.
+    - **Default:** Valore preimpostato a **10€/ora** per ogni tipo. Le tariffe saranno salvate localmente.
+- **Guida all'Uso dell'App:**
+    - Una sezione testuale, magari espandibile, che spiega le funzionalità principali dell'applicazione al tecnico.
+- **Recupero Password:**
+    - Un campo per inserire l'email e un pulsante "Invia Link di Reset" per avviare la procedura di cambio password di Firebase Authentication.
+- **Backup Report Mensili:**
+    - Un selettore per il mese/anno.
+    - Un pulsante "Esporta in PDF" per generare e scaricare un PDF del resoconto analitico di quel mese.
 
 ### 9. Pagina Notifiche
 - Elenco di tutte le notifiche in ordine cronologico inverso (dalla più recente).
