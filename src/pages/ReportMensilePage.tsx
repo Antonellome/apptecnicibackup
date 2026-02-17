@@ -16,7 +16,6 @@ const ReportMensilePage: React.FC = () => {
     const { user } = useAuth();
     const { tipiGiornata, loading: globalLoading } = useGlobalData();
     
-    // --- LOGICA DI CARICAMENTO DATI: Copiata da ReportListPage e corretta ---
     const [allReports, setAllReports] = useState<Rapportino[]>([]);
     const [reportsLoading, setReportsLoading] = useState(true);
 
@@ -25,7 +24,6 @@ const ReportMensilePage: React.FC = () => {
             setReportsLoading(false);
             return;
         }
-        // Carica TUTTI i rapportini per l'utente loggato, una sola volta.
         const q = query(
             collection(db, 'rapportini'),
             where('tecnicoId', '==', user.uid)
@@ -36,13 +34,12 @@ const ReportMensilePage: React.FC = () => {
             setAllReports(data);
             setReportsLoading(false);
         }, (error) => {
-            console.error("Errore nel caricamento di tutti i rapportini: ", error);
+            console.error("Errore nel caricamento dei rapportini: ", error);
             setReportsLoading(false);
         });
 
         return () => unsubscribe();
     }, [user]);
-    // ------------------------------------------------------------------------
 
     const [activeTab, setActiveTab] = useState(0);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -54,7 +51,6 @@ const ReportMensilePage: React.FC = () => {
     };
 
     const enrichedAndFilteredReports = useMemo(() => {
-        // Filtra in memoria i rapportini caricati in base a mese e anno
         const filteredByDate = allReports.filter(report => {
             const reportDate = (report.data as Timestamp)?.toDate();
             if (!reportDate) return false;
@@ -83,7 +79,20 @@ const ReportMensilePage: React.FC = () => {
     };
 
     const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
-    const months = Array.from({ length: 12 }, (_, i) => new Date(0, i).toLocaleString('it-IT', { month: 'long' }));
+
+    // --- MODIFICA: Ordinamento alfabetico dei mesi --- 
+    const months = useMemo(() => {
+        const monthData = Array.from({ length: 12 }, (_, i) => {
+            const name = new Date(0, i).toLocaleString('it-IT', { month: 'long' });
+            return {
+                name: name.charAt(0).toUpperCase() + name.slice(1),
+                value: i,
+            };
+        });
+        monthData.sort((a, b) => a.name.localeCompare(b.name, 'it'));
+        return monthData;
+    }, []);
+    // --------------------------------------------------
 
     const loading = reportsLoading || globalLoading;
 
@@ -97,9 +106,11 @@ const ReportMensilePage: React.FC = () => {
                  <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
                      <FormControl >
                         <InputLabel>Mese</InputLabel>
+                        {/* --- MODIFICA: Aggiornamento del menu a tendina dei mesi --- */}
                         <Select value={currentMonth} onChange={(e) => setCurrentMonth(e.target.value as number)} label="Mese">
-                            {months.map((month, index) => <MenuItem key={index} value={index}>{month}</MenuItem>)}
+                            {months.map(month => <MenuItem key={month.value} value={month.value}>{month.name}</MenuItem>)}
                         </Select>
+                        {/* -------------------------------------------------------------- */}
                     </FormControl>
                     <FormControl >
                         <InputLabel>Anno</InputLabel>
