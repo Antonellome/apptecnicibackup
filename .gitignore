@@ -1,36 +1,27 @@
-# CIAO. File per ignorare file e cartelle non necessarie o sensibili
+# Firebase
+.firebase
+firebase.json
 
-# Dipendenze
+# Environments
+.env
+.env.*
+
+# Dependencies
 /node_modules
 
-# File di build
+# Build output
 /dist
 /build
 
-# Log e file di debug
-npm-debug.log
-yarn-debug.log
-yarn-error.log
-firebase-debug.log
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# File di ambiente - NON COMMETTERE MAI QUESTI FILE
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# File specifici dell'IDE
-.vscode/
-.idea/
-
-# File di sistema operativo
-.DS_Store
-Thumbs.db
-
-# File di configurazione di Firebase contenente le chiavi API
-# Assumiamo che le chiavi siano in questo file, lo creerò se necessario.
-src/firebaseConfig.ts
-
-# Archivi compressi
-*.tar.gz
+# IDE / Editor folders
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
