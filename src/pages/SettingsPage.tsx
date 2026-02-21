@@ -53,14 +53,13 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    // CIAO: Logica dinamica per gli anni, basata sui dati reali
     const now = new Date();
     const years = useMemo(() => {
         if (rapportini.length === 0) return [now.getFullYear()];
         const minYear = Math.min(...rapportini.map(r => r.data.toDate().getFullYear()));
         const maxYear = Math.max(...rapportini.map(r => r.data.toDate().getFullYear()));
         return Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i);
-    }, [rapportini, now]);
+    }, [rapportini]);
 
     if (loading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
@@ -115,9 +114,10 @@ const SettingsPage: React.FC = () => {
                     <Typography variant="h6">Guida all'Uso dell'App</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                    <Typography paragraph>Benvenuto in R.I.S.O.! Questa app ti aiuta a tracciare i tuoi report di lavoro giornalieri.</Typography>
+                    <Typography paragraph>Benvenuto in R.I.S.O. App Tecnici! Questa app ti aiuta a tracciare i tuoi report di lavoro giornalieri.</Typography>
                     <Typography paragraph><b>Home:</b> Dalla dashboard principale puoi creare un nuovo report, visualizzare quelli esistenti, accedere ai riepiloghi mensili e vedere le notifiche.</Typography>
-                    <Typography paragraph><b>Nuovo Report:</b> Compila il form con tutti i dettagli del tuo intervento. Puoi scegliere se inserire le ore totali o l'orario di inizio/fine.</Typography>
+                    <Typography paragraph><b>Nuovo Report:</b> Compila il form con tutti i dettagli del tuo intervento. Puoi scegliere se inserire le ore totali o l'orario di inizio/fine. Per le assenze (es. Ferie, Malattia) puoi anche creare report per più giorni consecutivi attivando l'apposito interruttore.</Typography>
+                    <Typography paragraph><b>Notifiche:</b> Qui trovi le comunicazioni importanti, come i rapportini non ancora sincronizzati o altre segnalazioni di sistema.</Typography>
                     <Typography paragraph><b>Impostazioni:</b> In questa pagina puoi configurare le tariffe orarie per calcolare i guadagni nei report mensili e recuperare la tua password.</Typography>
                 </AccordionDetails>
             </Accordion>
