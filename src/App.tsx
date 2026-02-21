@@ -11,6 +11,7 @@ import NuovoReportPage from './pages/NuovoReportPage';
 import AnagrafichePage from './pages/AnagrafichePage';
 import SettingsPage from './pages/SettingsPage'; // Import corretto
 import MonthlyReportPage from './pages/MonthlyReportPage'; // Import corretto
+import NotificationsPage from './pages/Notifiche'; // Importazione della pagina delle notifiche
 
 const App: React.FC = () => {
   return (
@@ -24,7 +25,7 @@ const App: React.FC = () => {
           <Route path="report/edit/:reportId" element={<NuovoReportPage />} />
           <Route path="anagrafiche/:tipo" element={<AnagrafichePage />} />
           <Route path="report-mensile" element={<MonthlyReportPage />} /> {/* Sostituito */}
-          <Route path="notifiche" element={<div>Pagina Notifiche (in costruzione)</div>} />
+          <Route path="notifiche" element={<NotificationsPage />} />
           <Route path="impostazioni" element={<SettingsPage />} /> {/* Sostituito */}
         </Route>
       </Route>

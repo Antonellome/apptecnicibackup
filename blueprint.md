@@ -92,14 +92,32 @@ Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.
 ### 9. Pagina Notifiche
 - Elenco di tutte le notifiche in ordine cronologico inverso (dalla più recente).
 - Le notifiche non lette devono avere uno stile differente (es. sfondo evidenziato).
-- All'apertura della pagina, le notifiche visualizzate vengono marcate come "lette" e il contatore nel badge dell'AppBar si azzera.
+- All'apertura della pagina o al click sulla notifica, le notifiche visualizzate vengono marcate come "lette".
+- **Funzionalità:** Aggiungere un'icona (es. un cestino) accanto a ogni notifica **letta** per permetterne l'eliminazione singola.
+- **Badge Notifiche:** L'icona nella App Bar e nella Home devono mostrare un badge con il numero di notifiche non lette.
 
 ---
 
-## Specifiche Tecniche e di Stile
+## Piano di Implementazione Attuale: Gestione Assenze su Periodo
 
-- **Color Palette:**
-    - Sfondo: Nero o blu notte.
-    - Testi: Blu e bianco.
-    - Icone: Bianche.
-    - Colore supplementare: Grigio.
+**Obiettivo:** Consentire all'utente di inserire periodi di assenza (Malattia, Ferie, Legge 104) selezionando una data di inizio e una di fine, generando automaticamente un rapportino per ogni giorno del periodo.
+
+**Passaggi di Implementazione:**
+
+1.  **[COMPLETATO] Aggiornamento del Blueprint:** Documentare la nuova funzionalità nel file `blueprint.md`.
+2.  **[DA FARE] Identificazione Componente Form:** Localizzare il file del componente React che gestisce il form di inserimento del nuovo report (presumibilmente `NuovoRapportinoPage.tsx`).
+3.  **[DA FARE] Modifica Interfaccia Utente (UI) del Form:**
+    *   Aggiungere due nuovi state per `dataInizio` e `dataFine`.
+    *   Modificare la logica di rendering del form:
+        *   Se il `tipoGiornata` selezionato è "Malattia", "Ferie" o "104", mostrare i campi date picker per "Data Inizio" e "Data Fine".
+        *   Nascondere il campo data singolo.
+        *   Altrimenti, mostrare il campo data singolo e nascondere i selettori di periodo.
+4.  **[DA FARE] Aggiornamento Logica di Salvataggio (`handleSubmit`):**
+    *   Nella funzione di submit, verificare il `tipoGiornata`.
+    *   Se è uno dei tre tipi speciali ("Malattia", "Ferie", "104"):
+        *   Validare che `dataFine` non sia precedente a `dataInizio`.
+        *   Creare un ciclo che itera su ogni giorno compreso tra `dataInizio` e `dataFine` (inclusi).
+        *   All'interno del ciclo, per ogni giorno, creare un nuovo oggetto rapportino con i dati del form e la data corrente del ciclo.
+        *   Invocare la funzione di salvataggio (es. `addDoc`) per ogni oggetto rapportino creato.
+        *   Mostrare un singolo messaggio di successo all'utente al termine del processo.
+    *   Altrimenti, eseguire la logica di salvataggio esistente per il singolo rapportino.
