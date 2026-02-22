@@ -15,7 +15,6 @@ import duration from 'dayjs/plugin/duration';
 import { useNavigate } from 'react-router-dom';
 dayjs.extend(duration);
 
-// Helper per la visualizzazione delle ore straordinarie
 const formatOreLavorate = (ore: number) => {
     const oreFormattate = parseFloat(ore.toFixed(2));
     if (oreFormattate <= 8) {
@@ -25,7 +24,6 @@ const formatOreLavorate = (ore: number) => {
     return `8+${straordinario.toString()}`;
 };
 
-// Componente per il calcolo automatico delle ore
 const OreLavorateCalculator = () => {
     const { values, setFieldValue } = useFormikContext<any>();
     useEffect(() => {
@@ -34,10 +32,11 @@ const OreLavorateCalculator = () => {
             const end = dayjs(values.oraFine, 'HH:mm');
             if (start.isValid() && end.isValid() && end.isAfter(start)) {
                 const diffInMinutes = end.diff(start, 'minute');
+                // CIAO: Corretto il nome della proprietà in oreLavoro
                 const totalHours = (diffInMinutes - values.pausa) / 60;
-                setFieldValue('oreLavorate', totalHours);
+                setFieldValue('oreLavoro', totalHours);
             } else {
-                setFieldValue('oreLavorate', 0);
+                setFieldValue('oreLavoro', 0);
             }
         }
     }, [values.oraInizio, values.oraFine, values.pausa, values.inserimentoManualeOre, setFieldValue]);
@@ -58,19 +57,20 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
     const { data: tipiGiornata, loading: loadingTipi } = useCollection<TipoGiornata>('tipiGiornata');
     const { data: veicoli, loading: loadingVeicoli } = useCollection<Veicolo>('veicoli');
 
+    // CIAO: Corretto il nome della funzione in createRapportinoSchema
     const validationSchema = useMemo(() => createRapportinoSchema(tipiGiornata || []), [tipiGiornata]);
 
     const initialValues = useMemo(() => {
         const defaultValues = {
             data: initialDate || dayjs(),
             tecnicoId: currentTecnico?.id || '',
-            giornataId: '',
-            oreLavorate: 8,
+            tipoGiornataId: '',
+            oreLavoro: 8,
             naveId: null,
             luogoId: null,
             veicoloId: null,
             altriTecnici: [],
-            breveDescrizione: '',
+            descrizioneBreve: '',
             lavoroEseguito: '',
             materialiImpiegati: '',
             inserimentoManualeOre: false,
@@ -83,10 +83,10 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
             return {
                 ...defaultValues,
                 ...rapportino,
-                data: rapportino.data ? dayjs(rapportino.data.toDate()) : dayjs(),
-                naveId: navi?.find(n => n.id === (rapportino.naveId as any)?.id || rapportino.naveId) || null,
-                luogoId: luoghi?.find(l => l.id === (rapportino.luogoId as any)?.id || rapportino.luogoId) || null,
-                veicoloId: veicoli?.find(v => v.id === (rapportino.veicoloId as any)?.id || rapportino.veicoloId) || null,
+                data: rapportino.data ? dayjs(rapportino.data) : dayjs(),
+                naveId: navi?.find(n => n.id === rapportino.naveId) || null,
+                luogoId: luoghi?.find(l => l.id === rapportino.luogoId) || null,
+                veicoloId: veicoli?.find(v => v.id === rapportino.veicoloId) || null,
             };
         }
 
@@ -114,7 +114,7 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
             delete docData.altriTecnici;
 
             await setDoc(doc(db, 'rapportini', id), docData, { merge: true });
-            navigate('/'); // Torna alla dashboard dopo il salvataggio
+            navigate('/');
         } catch (error) {
             console.error("Errore nel salvataggio del rapportino:", error);
         } finally {
@@ -123,7 +123,7 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
     };
     
     const handleClose = () => {
-        navigate('/'); // Torna alla dashboard
+        navigate('/');
     }
 
     const isLoading = loadingNavi || loadingLuoghi || loadingTipi || loadingTecnici || loadingVeicoli;
@@ -166,7 +166,7 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                                 
                                 {values.inserimentoManualeOre ? (
                                     <Grid size={12}>
-                                        <Field name="oreLavorate" component={FormikTextField} select label="Ore Lavorate" fullWidth required>
+                                        <Field name="oreLavoro" component={FormikTextField} select label="Ore Lavorate" fullWidth required>
                                             {[...Array(16).keys()].map(i => (
                                                 <MenuItem key={i + 1} value={i + 1}>{formatOreLavorate(i + 1)}</MenuItem>
                                             ))}
@@ -202,7 +202,7 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                                                 xs: 12,
                                                 sm: 3
                                             }}>
-                                            <TextField label="Totale Ore" fullWidth disabled value={formatOreLavorate(values.oreLavorate)} InputProps={{ readOnly: true }} />
+                                            <TextField label="Totale Ore" fullWidth disabled value={formatOreLavorate(values.oreLavoro)} InputProps={{ readOnly: true }} />
                                         </Grid>
                                     </>
                                 )}
@@ -213,7 +213,8 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                                         xs: 12,
                                         sm: 6
                                     }}>
-                                    <Field name="giornataId" component={FormikTextField} select label="Tipo Giornata" fullWidth required>
+                                    {/* CIAO: Corretto il nome della proprietà in tipoGiornataId */}
+                                    <Field name="tipoGiornataId" component={FormikTextField} select label="Tipo Giornata" fullWidth required>
                                         {tipiGiornata?.map(option => <MenuItem key={option.id} value={option.id}>{option.nome}</MenuItem>) || []}
                                     </Field>
                                 </Grid>
@@ -222,26 +223,27 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                                         xs: 12,
                                         sm: 6
                                     }}>
-                                    <Autocomplete options={veicoli || []} getOptionLabel={(option) => option.nome} value={values.veicoloId as any} onChange={(_, newValue) => setFieldValue('veicoloId', newValue)} renderInput={(params) => <TextField {...params} label="Veicolo" error={touched.veicoloId && !!errors.veicoloId} />} isOptionEqualToValue={(option, value) => option.id === value.id} />
+                                    <Autocomplete options={veicoli || []} getOptionLabel={(option) => option?.nome || ''} value={values.veicoloId as any} onChange={(_, newValue) => setFieldValue('veicoloId', newValue)} renderInput={(params) => <TextField {...params} label="Veicolo" error={touched.veicoloId && !!errors.veicoloId} />} isOptionEqualToValue={(option, value) => option.id === value.id} />
                                 </Grid>
                                 <Grid
                                     size={{
                                         xs: 12,
                                         sm: 6
                                     }}>
-                                    <Autocomplete options={navi || []} getOptionLabel={(option) => option.nome} value={values.naveId as any} onChange={(_, newValue) => setFieldValue('naveId', newValue)} renderInput={(params) => <TextField {...params} label="Nave" error={touched.naveId && !!errors.naveId} />} isOptionEqualToValue={(option, value) => option.id === value.id}/>
+                                    <Autocomplete options={navi || []} getOptionLabel={(option) => option?.nome || ''} value={values.naveId as any} onChange={(_, newValue) => setFieldValue('naveId', newValue)} renderInput={(params) => <TextField {...params} label="Nave" error={touched.naveId && !!errors.naveId} />} isOptionEqualToValue={(option, value) => option.id === value.id}/>
                                 </Grid>
                                 <Grid
                                     size={{
                                         xs: 12,
                                         sm: 6
                                     }}>
-                                    <Autocomplete options={luoghi || []} getOptionLabel={(option) => option.nome} value={values.luogoId as any} onChange={(_, newValue) => setFieldValue('luogoId', newValue)} renderInput={(params) => <TextField {...params} label="Luogo" error={touched.luogoId && !!errors.luogoId} />} isOptionEqualToValue={(option, value) => option.id === value.id}/>
+                                    <Autocomplete options={luoghi || []} getOptionLabel={(option) => option?.nome || ''} value={values.luogoId as any} onChange={(_, newValue) => setFieldValue('luogoId', newValue)} renderInput={(params) => <TextField {...params} label="Luogo" error={touched.luogoId && !!errors.luogoId} />} isOptionEqualToValue={(option, value) => option.id === value.id}/>
                                 </Grid>
 
                                 <Grid size={12}><Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Dettagli Intervento</Typography></Grid>
                                 <Grid size={12}>
-                                    <Field name="breveDescrizione" component={FormikTextField} label="Breve Descrizione Intervento" multiline rows={2} fullWidth />
+                                    {/* CIAO: Corretto il nome della proprietà in descrizioneBreve */}
+                                    <Field name="descrizioneBreve" component={FormikTextField} label="Breve Descrizione Intervento" multiline rows={2} fullWidth />
                                 </Grid>
                                 <Grid size={12}>
                                     <Field name="lavoroEseguito" component={FormikTextField} label="Lavoro Eseguito" multiline rows={4} fullWidth />
@@ -256,10 +258,10 @@ const NuovoRapportino: React.FC<RapportinoFormProps> = ({ rapportino, currentTec
                                         multiple
                                         options={altriTecniciOptions}
                                         getOptionLabel={(option) => `${option.cognome} ${option.nome}`}
-                                        value={values.altriTecnici.map(id => tecnici?.find(t => t.id === id)).filter(Boolean)}
-                                        onChange={(_, newValue) => setFieldValue('altriTecnici', newValue.map(t => t.id))}
+                                        value={values.altriTecnici.map((id: string) => tecnici?.find(t => t.id === id)).filter(Boolean) as Tecnico[]}
+                                        onChange={(_, newValue) => setFieldValue('altriTecnici', newValue.map(t => t?.id || ''))}
                                         renderTags={(value, getTagProps) => value.map((option, index) => (
-                                            <Chip key={option.id} variant="outlined" label={`${option.cognome} ${option.nome}`} {...getTagProps({ index })} />
+                                            <Chip variant="outlined" label={`${option.cognome} ${option.nome}`} {...getTagProps({ index })} />
                                         ))}
                                         renderInput={(params) => <TextField {...params} label="Aggiungi Tecnici" />}
                                         isOptionEqualToValue={(option, value) => option.id === value.id}

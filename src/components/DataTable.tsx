@@ -3,7 +3,6 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
     TableSortLabel, Paper, Box, Typography
 } from '@mui/material';
-import type { BaseEntity } from '@/models/definitions';
 
 type Order = 'asc' | 'desc';
 
@@ -13,13 +12,12 @@ interface HeadCell<T> {
     numeric: boolean;
 }
 
-interface DataTableProps<T extends BaseEntity> {
+interface DataTableProps<T extends { id?: string }> {
     data: T[];
     headCells: HeadCell<T>[];
     title: string;
     onEdit?: (item: T) => void;
     onDelete?: (id: string) => void;
-    // Aggiungi altre props necessarie
 }
 
 function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
@@ -32,10 +30,8 @@ function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
     return 0;
 }
 
-function getComparator<Key extends keyof any>(
-    order: Order,
-    orderBy: Key,
-): (a: { [key in Key]: number | string }, b: { [key in Key]: number | string }) => number {
+// CIAO: Rilassato il tipo del comparatore per accettare qualsiasi tipo di dato
+function getComparator<T>(order: Order, orderBy: keyof T): (a: T, b: T) => number {
     return order === 'desc'
         ? (a, b) => descendingComparator(a, b, orderBy)
         : (a, b) => -descendingComparator(a, b, orderBy);
@@ -53,7 +49,7 @@ function stableSort<T>(array: readonly T[], comparator: (a: T, b: T) => number) 
     return stabilizedThis.map((el) => el[0]);
 }
 
-export default function DataTable<T extends BaseEntity>({ data, headCells, title }: DataTableProps<T>) {
+export default function DataTable<T extends { id?: string }>({ data, headCells, title }: DataTableProps<T>) {
     const [order, setOrder] = useState<Order>('asc');
     const [orderBy, setOrderBy] = useState<keyof T>(headCells[0].id);
 
@@ -98,11 +94,11 @@ export default function DataTable<T extends BaseEntity>({ data, headCells, title
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {sortedData.map((row) => (
-                                <TableRow hover tabIndex={-1} key={row.id}>
+                            {sortedData.map((row, index) => (
+                                <TableRow hover tabIndex={-1} key={row.id || index}>
                                     {headCells.map(cell => (
                                         <TableCell key={cell.id as string} align={cell.numeric ? 'right' : 'left'}>
-                                            {row[cell.id] as string | number}
+                                            {typeof row[cell.id] === 'object' ? JSON.stringify(row[cell.id]) : String(row[cell.id])}
                                         </TableCell>
                                     ))}
                                 </TableRow>

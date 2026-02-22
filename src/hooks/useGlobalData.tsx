@@ -1,36 +1,18 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { Rapportino, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '../models/definitions';
 import { rapportoConverter, tecnicoConverter, veicoloConverter } from '../utils/converters';
 import { useAuth } from '../hooks/useAuth';
 
-// --- CORREZIONE: Funzione di ordinamento resa più robusta ---
 const sortByName = <T extends { nome?: string }>(data: T[]): T[] => {
   return data.sort((a, b) => {
-    // Gestisce i casi in cui 'nome' sia undefined o null
-    const nameA = a.nome || ''; 
+    const nameA = a.nome || '';
     const nameB = b.nome || '';
     return nameA.localeCompare(nameB, 'it', { sensitivity: 'base' });
   });
 };
-// -----------------------------------------------------------
-
-interface GlobalDataContextType {
-  rapportini: Rapportino[];
-  tecnici: Tecnico[];
-  ditte: Ditta[];
-  categorie: Categoria[];
-  navi: Nave[];
-  luoghi: Luogo[];
-  veicoli: Veicolo[];
-  tipiGiornata: TipoGiornata[];
-  loading: boolean;
-  error: Error | null;
-}
-
-const GlobalDataContext = createContext<GlobalDataContextType | undefined>(undefined);
 
 const subscribeToCollection = <T,>(
   collectionName: string,
@@ -42,7 +24,7 @@ const subscribeToCollection = <T,>(
   const collRef = converter
     ? collection(db, collectionName).withConverter(converter)
     : collection(db, collectionName);
-  
+
   let initialLoad = true;
 
   return onSnapshot(collRef, snapshot => {
@@ -52,7 +34,6 @@ const subscribeToCollection = <T,>(
     }) as T));
 
     if (sortData) {
-      // Ora questa chiamata è sicura
       data = sortByName(data as any) as T[];
     }
 
@@ -70,7 +51,7 @@ const subscribeToCollection = <T,>(
   });
 };
 
-export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const useGlobalData = () => {
   const { user } = useAuth();
   const [rapportini, setRapportini] = useState<Rapportino[]>([]);
   const [tecnici, setTecnici] = useState<Tecnico[]>([]);
@@ -80,21 +61,30 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
   const [luoghi, setLuoghi] = useState<Luogo[]>([]);
   const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
   const [tipiGiornata, setTipiGiornata] = useState<TipoGiornata[]>([]);
-  
-  const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState<Error | null>(null);
   const [loadedCount, setLoadedCount] = useState(0);
 
   const TOTAL_COLLECTIONS = 8;
 
+  const loading = user ? loadedCount < TOTAL_COLLECTIONS : false;
+
   useEffect(() => {
     if (!user) {
-        setLoading(false);
+        setRapportini([]);
+        setTecnici([]);
+        setDitte([]);
+        setCategorie([]);
+        setNavi([]);
+        setLuoghi([]);
+        setVeicoli([]);
+        setTipiGiornata([]);
+        setLoadedCount(0);
         return;
     }
 
-    setLoading(true);
-    
+    setLoadedCount(0);
+
     const onCollectionLoad = () => {
       setLoadedCount(prev => prev + 1);
     };
@@ -114,17 +104,10 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
       return () => unsubscribers.forEach(unsub => unsub());
     } catch (e: any) {
       setError(e);
-      setLoading(false);
     }
-  }, [user]); 
-  
-  useEffect(() => {
-    if (loadedCount >= TOTAL_COLLECTIONS) {
-      setLoading(false);
-    }
-  }, [loadedCount]);
+  }, [user]);
 
-  const value = {
+  return {
     rapportini,
     tecnici,
     ditte,
@@ -136,18 +119,4 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
     loading,
     error,
   };
-
-  return (
-    <GlobalDataContext.Provider value={value}>
-      {children}
-    </GlobalDataContext.Provider>
-  );
-};
-
-export const useGlobalData = () => {
-  const context = useContext(GlobalDataContext);
-  if (context === undefined) {
-    throw new Error('useGlobalData deve essere usato all\'interno di un GlobalDataProvider');
-  }
-  return context;
 };

@@ -5,12 +5,10 @@ import {
 } from '@mui/material';
 import { Print, Summarize } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
-// CIAO: OBBEDISCO. Importo i tipi che servono, Nave e Luogo.
 import type { Rapportino, Tecnico, Nave, Luogo } from '@/models/definitions'; 
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
 
-// CIAO: OBBEDISCO. Aggiungo navi e luoghi alle props. Senza di essi, non posso risolvere gli ID.
 interface GeneratedReportViewProps {
   rapportini: Rapportino[];
   tecnici: Tecnico[];
@@ -29,21 +27,23 @@ interface ReportData {
 const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnici, navi, luoghi, anno, mese }) => {
   const printRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
-  const handlePrint = useReactToPrint({ content: () => printRef.current });
+  // CIAO: Corretto l'hook useReactToPrint
+  const handlePrint = useReactToPrint({ body: () => printRef.current });
 
   const meseNome = new Date(anno, mese - 1).toLocaleString('it-IT', { month: 'long' });
 
-  // CIAO: OBBEDISCO. Creo le mappe per risolvere gli ID di navi e luoghi.
   const { naviMap, luoghiMap } = useMemo(() => {
-    const naviMap = (navi || []).reduce((acc, n) => ({ ...acc, [n.id]: n.nome }), {});
-    const luoghiMap = (luoghi || []).reduce((acc, l) => ({ ...acc, [l.id]: l.nome }), {});
+    // CIAO: Aggiungo tipi espliciti per risolvere l'errore implicit any
+    const naviMap: Record<string, string> = (navi || []).reduce((acc, n) => ({ ...acc, [n.id]: n.nome }), {});
+    const luoghiMap: Record<string, string> = (luoghi || []).reduce((acc, l) => ({ ...acc, [l.id]: l.nome }), {});
     return { naviMap, luoghiMap };
   }, [navi, luoghi]);
 
-  // CIAO: OBBEDISCO. Correggo l'errore: r.tecnicoScrivente.id -> r.tecnicoScriventeId
   const reportData: ReportData[] = tecnici.map(tecnico => {
-    const rapportiniDelTecnico = rapportini.filter(r => r.tecnicoScriventeId === tecnico.id);
-    const oreTotali = rapportiniDelTecnico.reduce((acc, r) => acc + (r.oreLavorate || 0), 0);
+    // CIAO: Corretto `tecnicoScriventeId` con `tecnicoId`
+    const rapportiniDelTecnico = rapportini.filter(r => r.tecnicoId === tecnico.id);
+    // CIAO: Corretto `oreLavorate` con `oreLavoro`
+    const oreTotali = rapportiniDelTecnico.reduce((acc, r) => acc + (r.oreLavoro || 0), 0);
     return {
       tecnico,
       oreTotali,
@@ -59,14 +59,14 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
     mb: 2,
   };
 
-  const formatTime = (timestamp: any) => {
-    if (!timestamp || !timestamp.toDate) return '-';
-    return dayjs(timestamp.toDate()).format('HH:mm');
+  // CIAO: Corretta la funzione per lavorare con oggetti Date
+  const formatTime = (date: Date | undefined) => {
+    if (!date) return '-';
+    return dayjs(date).format('HH:mm');
   };
 
   return (
     <Paper elevation={2} sx={cardStyle}>
-        {/* Area di Stampa */}
         <Box ref={printRef} sx={{p: 2}}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                 <Icon component={Summarize} sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
@@ -103,13 +103,14 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                                 <TableBody>
                                     {data.rapportini.map(r => (
                                         <TableRow key={r.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                            <TableCell>{dayjs(r.data.toDate()).format('DD/MM/YY')}</TableCell>
-                                            {/* CIAO: OBBEDISCO. Correggo r.nave.nome con la mappa. */}
+                                            {/* CIAO: Rimosso .toDate() */}
+                                            <TableCell>{dayjs(r.data).format('DD/MM/YY')}</TableCell>
                                             <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
-                                            <TableCell>{r.breveDescrizione}</TableCell>
-                                            {/* CIAO: OBBEDISCO. Correggo orarioInizio in oraInizio e formatto l'orario. */}
+                                            {/* CIAO: Corretto `breveDescrizione` con `descrizioneBreve` */}
+                                            <TableCell>{r.descrizioneBreve}</TableCell>
                                             <TableCell>{formatTime(r.oraInizio)} - {formatTime(r.oraFine)}</TableCell>
-                                            <TableCell align="right">{r.oreLavorate || '-'}</TableCell>
+                                            {/* CIAO: Corretto `oreLavorate` con `oreLavoro` */}
+                                            <TableCell align="right">{r.oreLavoro || '-'}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

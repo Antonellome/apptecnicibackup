@@ -1,7 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Box, TextField, Button, Typography, CircularProgress, Snackbar, Alert, Grid } from '@mui/material';
 import { getFirestore, doc, onSnapshot, setDoc } from 'firebase/firestore';
-import type { Orari } from '@/models/definitions';
+
+// CIAO: Definisco il tipo Orari localmente
+interface Orari {
+    inizioMattina: string;
+    fineMattina: string;
+    inizioPomeriggio: string;
+    finePomeriggio: string;
+}
 
 const OrariDefault = () => {
     const [orari, setOrari] = useState<Orari>({
@@ -40,7 +47,8 @@ const OrariDefault = () => {
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = event.target;
-        setOrari(prev => ({ ...prev, [name]: value }));
+        // CIAO: Aggiungo il tipo a `prev`
+        setOrari((prev: Orari) => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {

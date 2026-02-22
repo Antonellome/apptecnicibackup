@@ -15,19 +15,22 @@ export interface GenericItem {
 // Estende GenericItem e aggiunge il cognome
 export interface Tecnico extends GenericItem {
     cognome: string;
+    attivo?: boolean;
+    noteInterne?: string;
+    [key: string]: any;
 }
 
 // Estende GenericItem per le Ditte
-export interface Ditta extends GenericItem {}
+export type Ditta = GenericItem;
 
 // Estende GenericItem per le Categorie
-export interface Categoria extends GenericItem {}
+export type Categoria = GenericItem;
 
 // Estende GenericItem per le Navi
-export interface Nave extends GenericItem {}
+export type Nave = GenericItem;
 
 // Estende GenericItem per i Luoghi
-export interface Luogo extends GenericItem {}
+export type Luogo = GenericItem;
 
 // Interfaccia specifica per i Veicoli
 export interface Veicolo {
@@ -72,3 +75,18 @@ export interface Rapportino {
     lastUpdatedAt?: Date;
     lastUpdatedBy?: string;
 }
+
+// Interfaccia di base per tutte le anagrafiche
+export interface BaseAnagrafica {
+    id?: string;
+}
+
+// Interfaccia per descrivere la struttura di un campo di form
+export interface FormField {
+    name: string;
+    label: string;
+    type: 'text' | 'number' | 'textarea' | 'select' | 'date' | 'boolean';
+    required?: boolean;
+    options?: { value: string; label: string }[];
+}
+

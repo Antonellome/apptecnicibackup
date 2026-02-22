@@ -10,7 +10,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
 import { eachDayOfInterval, isBefore, startOfDay } from 'date-fns';
 import { useAuth } from '../hooks/useAuth';
-import { useGlobalData } from '../contexts/GlobalDataProvider';
+import { useGlobalData } from '@/hooks/useGlobalData';
 import { db } from '../utils/firebase';
 import { collection, doc, getDoc, addDoc, updateDoc, Timestamp, DocumentData, writeBatch } from 'firebase/firestore';
 import { TipoGiornata, Tecnico, Veicolo, Nave, Luogo } from '../models/definitions';

@@ -1,9 +1,8 @@
 import React from 'react';
-import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
+import { Box, Paper, Typography, ButtonBase } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useNotifications } from '@/hooks/useNotifications'; // Import the hook
 import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
@@ -12,23 +11,14 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { unreadCount } = useNotifications(user?.uid || null); // Get the unread count
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
     const dashboardItems = [
         { title: 'Nuovo report', path: '/report/nuovo', icon: <PostAddIcon sx={iconStyles} /> },
-        { title: 'Report', path: '/reports', icon: <ArticleIcon sx={iconStyles} /> },
+        { title: 'Report', path: '/lista-report', icon: <ArticleIcon sx={iconStyles} /> },
         { title: 'Report mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={iconStyles} /> },
-        {
-            title: 'Notifiche',
-            path: '/notifiche',
-            icon: (
-                <Badge badgeContent={unreadCount} color="error">
-                    <NotificationsIcon sx={iconStyles} />
-                </Badge>
-            ),
-        },
+        { title: 'Notifiche', path: '/notifiche', icon: <NotificationsIcon sx={iconStyles} /> },
     ];
 
     return (
@@ -37,9 +27,8 @@ const HomePage: React.FC = () => {
                 display: 'flex', 
                 flexDirection: 'column', 
                 alignItems: 'center', 
-                justifyContent: 'center', 
-                minHeight: 'calc(100vh - 64px)', 
                 p: { xs: 2, sm: 3 },
+                mt: 4, 
             }}
         >
             <Box sx={{ width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -66,9 +55,15 @@ const HomePage: React.FC = () => {
                 
                 <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ maxWidth: '500px', mb: 4 }}>
                     {dashboardItems.map((item) => (
-                        <Grid size={{ xs: 6 }} key={item.title}>
+                        <Grid size={6} key={item.title}>
                             <ButtonBase
-                                onClick={() => navigate(item.path)}
+                                onClick={() => {
+                                    if (item.path.startsWith('http')) {
+                                        window.open(item.path, '_blank');
+                                    } else {
+                                        navigate(item.path);
+                                    }
+                                }}
                                 sx={{
                                     width: '100%',
                                     borderRadius: '16px',
@@ -79,7 +74,7 @@ const HomePage: React.FC = () => {
                                 <Paper
                                     elevation={8}
                                     sx={{
-                                        backgroundColor: 'primary.main',
+                                        backgroundColor: '#0D47A1',
                                         color: 'white',
                                         width: '100%',
                                         aspectRatio: '1 / 1', 

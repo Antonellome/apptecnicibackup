@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
-import { useGlobalData } from '@/contexts/GlobalDataProvider';
+import { useGlobalData } from '@/hooks/useGlobalData';
 
 const SettingsPage: React.FC = () => {
     const { user, resetPassword } = useAuth();

@@ -1,4 +1,3 @@
-import React from 'react';
 import { AppBar, Toolbar, Typography, IconButton, Box, Badge } from '@mui/material';
 import {
   Home as HomeIcon, // CIAO. OBBEDISCO. Aggiungo l'icona Home.

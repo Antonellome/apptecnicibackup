@@ -14,11 +14,10 @@ import {
     Chip,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { DatePicker, PickerChangeHandlerContext, DateValidationError } from '@mui/x-date-pickers';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useData } from '@/hooks/useData';
-import type { Tecnico } from '@/models/definitions';
-import PersonIcon from '@mui/icons-material/Person';
+import type { Tecnico, Rapportino } from '@/models/definitions';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -33,7 +32,8 @@ const Presenze = () => {
 
   const rapportiniDelGiorno = useMemo(() => {
       if (!selectedDate) return [];
-      return rapportini.filter(r => r.data && dayjs(r.data.toDate()).isSame(selectedDate, 'day'));
+      // CIAO: Corretto il controllo della data per usare dayjs
+      return rapportini.filter((r: Rapportino) => r.data && dayjs(r.data).isSame(selectedDate, 'day'));
   }, [rapportini, selectedDate]);
 
   const { operativi, assentiGiustificati, mancantiAttivi, assentiNonAttivi } = useMemo(() => {
@@ -42,26 +42,26 @@ const Presenze = () => {
     }
 
     const presentiMap = new Map<string, { tecnico: Tecnico, giornata: string, tipo: 'operativo' | 'giustificato' }>();
-    const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t.nome]));
+    const tipiGiornataMap = new Map(tipiGiornata.map((t: any) => [t.id, t.nome]));
 
     for (const rapportino of rapportiniDelGiorno) {
         const tecniciNelRapportinoRefs = [
-            rapportino.tecnicoScrivente,
-            ...(rapportino.tecniciAggiunti || [])
+            rapportino.tecnicoId, // CIAO: Corretto il riferimento all'ID del tecnico
+            ...(rapportino.altriTecniciIds || [])
         ].filter(Boolean);
 
-        for (const tecnicoRef of tecniciNelRapportinoRefs) {
-            if (!tecnicoRef?.id || presentiMap.has(tecnicoRef.id)) {
+        for (const tecnicoId of tecniciNelRapportinoRefs) {
+            if (!tecnicoId || presentiMap.has(tecnicoId)) {
                 continue; 
             }
             
-            const nomeGiornata = tipiGiornataMap.get(rapportino.giornataId) || '';
-            const giornataLower = nomeGiornata.toLowerCase();
+            const nomeGiornata = tipiGiornataMap.get(rapportino.tipoGiornataId) || '';
+            const giornataLower = nomeGiornata.toLowerCase(); // CIAO: Aggiunto controllo per evitare errori
             const tipo = TIPI_GIORNATA_GIUSTIFICATIVI.includes(giornataLower) ? 'giustificato' : 'operativo';
             
-            const tecnicoCompleto = tecnici.find(t => t.id === tecnicoRef.id);
+            const tecnicoCompleto = tecnici.find((t: any) => t.id === tecnicoId);
             if (tecnicoCompleto) {
-                presentiMap.set(tecnicoRef.id, { tecnico: tecnicoCompleto, giornata: nomeGiornata, tipo });
+                presentiMap.set(tecnicoId, { tecnico: tecnicoCompleto, giornata: nomeGiornata, tipo });
             }
         }
     }
@@ -106,7 +106,7 @@ const Presenze = () => {
             <DatePicker
               label="Seleziona Data"
               value={selectedDate}
-              onChange={setSelectedDate}
+              onChange={(newValue: Dayjs | null, context: PickerChangeHandlerContext<DateValidationError>) => setSelectedDate(newValue)}
               sx={{ width: '100%' }}
             />
           </Paper>
@@ -124,7 +124,11 @@ const Presenze = () => {
                 </Grid>
 
                 <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid
+                        size={{
+                            xs: 12,
+                            md: 6
+                        }}>
                         <Typography variant="h6" gutterBottom>Mancanti (Attivi) ({mancantiAttivi.length})</Typography>
                         <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -144,7 +148,11 @@ const Presenze = () => {
                         </Paper>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid
+                        size={{
+                            xs: 12,
+                            md: 6
+                        }}>
                         <Typography variant="h6" gutterBottom>Assenti (Non Attivi) ({assentiNonAttivi.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -159,7 +167,11 @@ const Presenze = () => {
                         </Paper>
                     </Grid>
 
-                     <Grid size={{ xs: 12, md: 6 }}>
+                     <Grid
+                         size={{
+                             xs: 12,
+                             md: 6
+                         }}>
                         <Typography variant="h6" gutterBottom>Operativi ({operativi.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -175,7 +187,11 @@ const Presenze = () => {
                         </Paper>
                     </Grid>
                     
-                    <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid
+                        size={{
+                            xs: 12,
+                            md: 6
+                        }}>
                         <Typography variant="h6" gutterBottom>Assenti Giustificati ({assentiGiustificati.length})</Typography>
                          <Paper variant="outlined" sx={{ p: 1, maxHeight: 300, overflowY: 'auto' }}>
                             <List dense>
@@ -198,7 +214,12 @@ const Presenze = () => {
 };
 
 const KPIBox = ({ title, count, icon }: { title: string, count: number, icon: React.ReactNode }) => (
-    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+    <Grid
+        size={{
+            xs: 12,
+            sm: 6,
+            md: 3
+        }}>
         <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
             {icon}
             <Typography variant="h4">{count}</Typography>

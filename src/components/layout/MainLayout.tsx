@@ -20,11 +20,6 @@ const MainLayout: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'background.default' }}>
-            {/* 
-              BASTA. HO FALLITO. LA LOGICA NON FUNZIONA.
-              ORA USO LA FORZA BRUTA. HO MESSO IL COLORE ESADECIMALE DIRETTAMENTE NELL'ELEMENTO.
-              SE NON È BLU ADESSO, NON LO SARÀ MAI.
-            */}
             <AppBar position="static" sx={{ backgroundColor: '#0D47A1' }}>
                 <Toolbar>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>

@@ -6,40 +6,43 @@ import {
     DialogContentText
 } from '@mui/material';
 import { Edit, Delete, Add } from '@mui/icons-material';
-// Importa 'query' e 'orderBy' da firestore
 import { collection, query, orderBy, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase';
-import type { BaseEntity } from '@/models/definitions';
+import { db } from '@/utils/firebase';
+// CIAO: Corretto import e alias. Ora usiamo GenericItem che ha 'id' e 'nome' obbligatori.
+import type { GenericItem } from '@/models/definitions';
 
 interface CrudManagerProps {
     collectionName: string;
     title: string;
     itemLabel: string;
     description?: string;
-    nameField?: string;
+    nameField?: string; 
 }
 
-const CrudManager = ({ collectionName, title, itemLabel, description, nameField = 'name' }: CrudManagerProps) => {
-    const [items, setItems] = useState<BaseEntity[]>([]);
+const CrudManager = ({ collectionName, title, itemLabel, description, nameField = 'nome' }: CrudManagerProps) => {
+    // CIAO: Utilizziamo GenericItem[], che si adatta meglio alla struttura dati attesa.
+    const [items, setItems] = useState<GenericItem[]>([]);
     const [newItemName, setNewItemName] = useState('');
-    const [editingItem, setEditingItem] = useState<BaseEntity | null>(null);
+    const [editingItem, setEditingItem] = useState<GenericItem | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [open, setOpen] = useState(false);
     
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-    const [itemToDelete, setItemToDelete] = useState<BaseEntity | null>(null);
+    const [itemToDelete, setItemToDelete] = useState<GenericItem | null>(null);
 
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
     useEffect(() => {
-        // Costruisce la query per ordinare i dati in base al campo 'nameField'
         const q = query(collection(db, collectionName), orderBy(nameField));
 
         const unsubscribe = onSnapshot(q, 
             (snapshot) => {
-                const itemsData = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data()[nameField] as string })) as BaseEntity[];
+                const itemsData = snapshot.docs.map(doc => ({
+                     id: doc.id, 
+                     nome: doc.data()[nameField] as string 
+                })) as GenericItem[];
                 setItems(itemsData);
                 setLoading(false);
             },
@@ -51,9 +54,9 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
         return () => unsubscribe();
     }, [collectionName, nameField]);
 
-    const handleOpen = (item: BaseEntity | null = null) => {
+    const handleOpen = (item: GenericItem | null = null) => {
         setEditingItem(item);
-        setNewItemName(item ? item.name : '');
+        setNewItemName(item?.nome || ''); // CIAO: Usiamo 'nome' da GenericItem
         setOpen(true);
     };
 
@@ -91,7 +94,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
         }
     };
 
-    const handleDeleteRequest = (item: BaseEntity) => {
+    const handleDeleteRequest = (item: GenericItem) => {
         setItemToDelete(item);
         setConfirmDialogOpen(true);
     };
@@ -153,7 +156,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                             }}
                         >
-                            <ListItemText primary={item.name} />
+                            <ListItemText primary={item.nome} /> {/* CIAO: Usiamo 'nome' */}
                             <ListItemSecondaryAction>
                                 <IconButton edge='end' aria-label='edit' onClick={() => handleOpen(item)}>
                                     <Edit />
@@ -171,6 +174,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                     <DialogContent>
                         {error && <Alert severity='error' sx={{ mb: 2 }}>{error}</Alert>}
                         <TextField
+                            autoFocus
                             margin='dense'
                             label={`Nome ${itemLabel}`}
                             type='text'
@@ -194,7 +198,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                 <DialogTitle>Conferma Eliminazione</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Sei sicuro di voler eliminare l&apos;elemento <Typography component="span" fontWeight="bold">{itemToDelete?.name}</Typography>?
+                        Sei sicuro di voler eliminare l&apos;elemento <Typography component="span" fontWeight="bold">{itemToDelete?.nome}</Typography>? {/* CIAO: Usiamo 'nome' */}
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>

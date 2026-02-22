@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -18,14 +18,14 @@ import {
   Toolbar,
   IconButton,
   Typography,
-  type TransitionProps,
 } from '@mui/material';
+import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
-import { db } from '@/firebase';
-import type { Rapportino, Tecnico, Nave, Luogo } from '@/models/definitions'; // CIAO. OBBEDISCO. Importo anche Nave e Luogo.
+import { db } from '@/utils/firebase';
+import type { Rapportino, Tecnico, Nave, Luogo } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
-import { useGlobalData } from '../App'; // CIAO. OBBEDISCO. Importo il gancio per accedere ai dati globali.
+import { useData } from '@/hooks/useData';
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement },
@@ -37,14 +37,10 @@ const Transition = React.forwardRef(function Transition(
 interface ReportMensileDialogProps {
   open: boolean;
   onClose: () => void;
-  // CIAO. OBBEDISCO. Rimuovo 'tecnico' dalle props, non è più necessario.
 }
 
-const InnerReportDialog: React.FC<Omit<ReportMensileDialogProps, 'open'>> = ({ onClose }) => {
-  // CIAO. OBBEDISCO. Chiamo useGlobalData per ottenere l'accesso a tutti i dati.
-  const collections = useGlobalData();
-  const { tecnici = [], navi = [], luoghi = [] } = collections || {};
-
+const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose }) => {
+  const { tecnici, navi, luoghi } = useData();
   const [anno, setAnno] = useState(new Date().getFullYear());
   const [mese, setMese] = useState(new Date().getMonth() + 1);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -63,7 +59,7 @@ const InnerReportDialog: React.FC<Omit<ReportMensileDialogProps, 'open'>> = ({ o
       collection(db, 'rapportini'),
       where('data', '>=', startDate),
       where('data', '<', endDate),
-      where('tecnicoScriventeId', '==', selectedTecnicoId) // Uso l'ID selezionato
+      where('tecnicoId', '==', selectedTecnicoId)
     );
 
     try {
@@ -84,19 +80,21 @@ const InnerReportDialog: React.FC<Omit<ReportMensileDialogProps, 'open'>> = ({ o
     label: new Date(0, i).toLocaleString('it-IT', { month: 'long' })
   }));
   
-  const selectedTecnico = tecnici.find(t => t.id === selectedTecnicoId);
+  const selectedTecnico = tecnici.find((t: Tecnico) => t.id === selectedTecnicoId);
+
+  if (!open) return null;
 
   if (generatedReport !== null) {
     return (
       <Dialog
         fullScreen
         open={true}
-        onClose={onClose}
+        onClose={() => setGeneratedReport(null)} // Modified to handle closing the full-screen view
         TransitionComponent={Transition}
       >
           <AppBar sx={{ position: 'relative' }}>
               <Toolbar>
-                  <IconButton edge="start" color="inherit" onClick={onClose} aria-label="close">
+                  <IconButton edge="start" color="inherit" onClick={() => setGeneratedReport(null)} aria-label="close">
                       <CloseIcon />
                   </IconButton>
                   <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
@@ -104,7 +102,6 @@ const InnerReportDialog: React.FC<Omit<ReportMensileDialogProps, 'open'>> = ({ o
                   </Typography>
               </Toolbar>
           </AppBar>
-          {/* CIAO. OBBEDISCO. Passo navi e luoghi al componente figlio. */}
           <GeneratedReportView 
               rapportini={generatedReport}
               tecnici={tecnici}
@@ -118,7 +115,7 @@ const InnerReportDialog: React.FC<Omit<ReportMensileDialogProps, 'open'>> = ({ o
   }
 
   return (
-    <Dialog open={true} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle sx={{ pb: 1 }}>
           <Typography variant="h5">Genera Report Mensile</Typography>
       </DialogTitle>
@@ -164,10 +161,6 @@ const InnerReportDialog: React.FC<Omit<ReportMensileDialogProps, 'open'>> = ({ o
       </DialogActions>
     </Dialog>
   );
-};
-
-const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose }) => {
-  return open ? <InnerReportDialog onClose={onClose} /> : null;
 };
 
 export default ReportMensileDialog;

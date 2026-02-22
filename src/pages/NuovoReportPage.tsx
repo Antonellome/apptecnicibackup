@@ -1,5 +1,3 @@
-
-// CIAO. OBBEDISCO. QUESTA VERSIONE CORREGGE IL MIO ERRORE E RIPRISTINA LA PAGINA.
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -9,14 +7,13 @@ import {
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
-import { eachDayOfInterval, isBefore, startOfDay } from 'date-fns';
+import { eachDayOfInterval, isBefore, startOfDay, parseISO } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
-import { useGlobalData } from '@/contexts/GlobalDataProvider';
+import { useData } from '@/hooks/useData';
 import { db } from '@/utils/firebase';
-import { doc, getDoc, addDoc, updateDoc, collection, Timestamp, DocumentData, writeBatch } from 'firebase/firestore';
-import { TipoGiornata, Tecnico, Veicolo, Nave, Luogo } from '@/models/definitions';
+import { doc, getDoc, addDoc, updateDoc, collection, Timestamp, writeBatch } from 'firebase/firestore';
+import { Report, TipoGiornata } from '@/models/definitions';
 
-// --- COSTANTI E FUNZIONI HELPER ---
 const timeOptions = Array.from({ length: 48 }, (_, i) => { const h = Math.floor(i / 2).toString().padStart(2, '0'); const m = (i % 2 === 0 ? '00' : '30'); return `${h}:${m}`; });
 const generateManualHoursOptions = () => {
     const options = [];
@@ -44,11 +41,10 @@ const NuovoReportPage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { reportId } = useParams<{ reportId: string }>();
-    const { tipiGiornata, tecnici, veicoli, navi, luoghi, loading: collectionsLoading } = useGlobalData();
+    const { tipiGiornata, tecnici, veicoli, navi, luoghi, loading: collectionsLoading } = useData();
     const isEditMode = Boolean(reportId);
     const loggedInTecnicoId = user?.uid;
 
-    // --- STATI ---
     const [data, setData] = useState<Date | null>(new Date());
     const [tipoGiornataId, setTipoGiornataId] = useState('');
     const [isLavorativo, setIsLavorativo] = useState(true);
@@ -68,7 +64,6 @@ const NuovoReportPage: React.FC = () => {
     const [lockReason, setLockReason] = useState<string | null>(null);
     const [pageLoading, setPageLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [reportDataToLoad, setReportDataToLoad] = useState<DocumentData | null>(null);
     const [isPeriodo, setIsPeriodo] = useState(false);
     const [dataInizio, setDataInizio] = useState<Date | null>(new Date());
     const [dataFine, setDataFine] = useState<Date | null>(new Date());
@@ -76,61 +71,62 @@ const NuovoReportPage: React.FC = () => {
     const otherTecnicos = useMemo(() => tecnici.filter(t => t.id !== loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
     const selectedTecnicos = useMemo(() => otherTecnicos.filter(t => altriTecniciIds.includes(t.id)), [altriTecniciIds, otherTecnicos]);
 
-    // --- EFFETTI ---
     useEffect(() => {
-        if (!isEditMode) {
-            if (!collectionsLoading) setPageLoading(false);
-            return;
-        }
-        const loadReportData = async () => {
-            if (reportId) {
+        if (collectionsLoading) return;
+        if (isEditMode && reportId) {
+            setPageLoading(true);
+            const loadReport = async () => {
                 try {
                     const reportSnap = await getDoc(doc(db, 'rapportini', reportId));
-                    if (reportSnap.exists()) setReportDataToLoad(reportSnap.data());
-                    else { alert("Rapportino non trovato."); navigate('/reports'); }
-                } catch (e) { console.error("Errore caricamento report: ", e); alert("Errore caricamento report."); }
-            }
-        };
-        loadReportData();
-    }, [isEditMode, reportId, navigate, collectionsLoading]);
+                    if (reportSnap.exists()) {
+                        const reportData = reportSnap.data() as Report;
+                        const reportDate = reportData.data instanceof Timestamp ? reportData.data.toDate() : parseISO(reportData.data as any);
+                        setData(reportDate);
+                        setTipoGiornataId(reportData.tipoGiornataId);
+                        const tipo = tipiGiornata.find(t => t.id === reportData.tipoGiornataId);
+                        setIsLavorativo(isGiornataLavorativa(tipo));
+                        setIsManualEntry(reportData.inserimentoManualeOre || false);
+                        setOraInizio(reportData.oraInizio || '07:30');
+                        setOraFine(reportData.oraFine || '16:30');
+                        setPausa(reportData.pausa === undefined ? 60 : reportData.pausa);
+                        setOreLavoro(reportData.oreLavoro || 8);
+                        setVeicoloId(reportData.veicoloId || null);
+                        setNaveId(reportData.naveId || null);
+                        setLuogoId(reportData.luogoId || null);
+                        setDescrizioneBreve(reportData.descrizioneBreve || '');
+                        setLavoroEseguito(reportData.lavoroEseguito || '');
+                        setMaterialiImpiegati(reportData.materialiImpiegati || '');
+                        setAltriTecniciIds(reportData.altriTecniciIds || []);
 
-    useEffect(() => {
-        if (!isEditMode || !reportDataToLoad || collectionsLoading) return;
-        const d = reportDataToLoad;
-        const tipo = tipiGiornata.find(t => t.id === d.tipoGiornataId);
-        setTipoGiornataId(d.tipoGiornataId);
-        setIsLavorativo(isGiornataLavorativa(tipo));
-        const reportDate = d.data.toDate();
-        setData(reportDate);
-        
-        const today = new Date();
-        let isLocked = false;
-        let reason = '';
+                        const today = new Date();
+                        let isLocked = false;
+                        let reason = '';
+                        if (reportData.tecnicoId !== loggedInTecnicoId) {
+                            isLocked = true;
+                            reason = "Rapportino bloccato: non sei l'autore originale.";
+                        } else if (reportDate.getMonth() !== today.getMonth() || reportDate.getFullYear() !== today.getFullYear()) {
+                            isLocked = true;
+                            reason = "Rapportino bloccato: puoi modificare solo i report del mese corrente.";
+                        }
+                        setIsReadOnly(isLocked);
+                        setLockReason(reason);
 
-        if (d.tecnicoId !== loggedInTecnicoId) {
-            isLocked = true;
-            reason = "Rapportino bloccato: non sei l'autore originale.";
-        } else if (reportDate.getMonth() !== today.getMonth() || reportDate.getFullYear() !== today.getFullYear()) {
-            isLocked = true;
-            reason = "Rapportino bloccato: puoi modificare solo i report del mese corrente.";
+                    } else {
+                        alert("Rapportino non trovato.");
+                        navigate('/lista-report');
+                    }
+                } catch (e) {
+                    console.error("Errore caricamento report: ", e);
+                    alert("Errore caricamento report.");
+                } finally {
+                    setPageLoading(false);
+                }
+            };
+            loadReport();
+        } else {
+            setPageLoading(false);
         }
-        setIsReadOnly(isLocked);
-        setLockReason(reason);
-
-        setIsManualEntry(d.inserimentoManualeOre || false);
-        setOraInizio(d.oraInizio || '07:30');
-        setOraFine(d.oraFine || '16:30');
-        setPausa(d.pausa === undefined ? 60 : d.pausa);
-        setOreLavoro(d.oreLavoro || 8);
-        setVeicoloId(d.veicoloId || null);
-        setNaveId(d.naveId || null);
-        setLuogoId(d.luogoId || null);
-        setDescrizioneBreve(d.descrizioneBreve || '');
-        setLavoroEseguito(d.lavoroEseguito || '');
-        setMaterialiImpiegati(d.materialiImpiegati || '');
-        setAltriTecniciIds(d.altriTecniciIds || []);
-        setPageLoading(false);
-    }, [reportDataToLoad, isEditMode, collectionsLoading, tipiGiornata, loggedInTecnicoId]);
+    }, [isEditMode, reportId, navigate, collectionsLoading, tipiGiornata, loggedInTecnicoId]);
 
     useEffect(() => {
         if (!isManualEntry && isLavorativo) {
@@ -142,9 +138,8 @@ const NuovoReportPage: React.FC = () => {
         }
     }, [oraInizio, oraFine, pausa, isManualEntry, isLavorativo]);
 
-    // --- GESTORI ---
     const handleTipoGiornataChange = (id: string) => { setTipoGiornataId(id); const tipo = tipiGiornata.find(t => t.id === id); setIsLavorativo(isGiornataLavorativa(tipo)); };
-    const handleCancel = () => { if (isEditMode) { navigate('/reports'); } else { navigate('/'); } };
+    const handleCancel = () => navigate(isEditMode ? '/lista-report' : '/');
 
     const handleSubmit = async () => {
         if ((!data && !isPeriodo) || !tipoGiornataId || !loggedInTecnicoId) { alert("Compila i campi obbligatori (Data e Tipo Giornata)."); return; }
@@ -156,25 +151,39 @@ const NuovoReportPage: React.FC = () => {
                 const days = eachDayOfInterval({ start: dataInizio, end: dataFine });
                 days.forEach(day => {
                     const newReportRef = doc(collection(db, 'rapportini'));
-                    const rapportinoData = { data: Timestamp.fromDate(day), tecnicoId: loggedInTecnicoId, tipoGiornataId, partecipantiIds: [loggedInTecnicoId], createdAt: Timestamp.now(), lastModified: Timestamp.now(), oreLavoro: 0, isLavorativo: false, inserimentoManualeOre: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [], };
+                    const rapportinoData: Partial<Report> = { tipoGiornataId, data: Timestamp.fromDate(day), tecnicoId: loggedInTecnicoId, partecipantiIds: [loggedInTecnicoId], createdAt: Timestamp.now(), lastModified: Timestamp.now(), oreLavoro: 0, isLavorativo: false };
                     batch.set(newReportRef, rapportinoData);
                 });
                 await batch.commit();
                 alert(`Salvataggio completato. Creati ${days.length} rapportini di assenza.`);
-                navigate('/reports'); // Navigate after successful save
+                navigate('/lista-report');
             } else {
                 const partecipantiIds = Array.from(new Set([loggedInTecnicoId, ...altriTecniciIds]));
-                const rapportinoData: any = { data: Timestamp.fromDate(data!), tipoGiornataId, tecnicoId: loggedInTecnicoId, partecipantiIds, lastModified: Timestamp.now() };
-                if (isLavorativo) { Object.assign(rapportinoData, { inserimentoManualeOre: isManualEntry, oraInizio: isManualEntry ? null : oraInizio, oraFine: isManualEntry ? null : oraFine, pausa: isManualEntry ? null : pausa, oreLavoro, veicoloId, naveId, luogoId, descrizioneBreve, lavoroEseguito, materialiImpiegati, altriTecniciIds });
-                } else { Object.assign(rapportinoData, { oreLavoro: 0, inserimentoManualeOre: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [] }); }
-                if (isEditMode) { await updateDoc(doc(db, 'rapportini', reportId!), rapportinoData); } else { rapportinoData.createdAt = Timestamp.now(); await addDoc(collection(db, 'rapportini'), rapportinoData); }
+                const rapportinoData: Partial<Report> = { data: Timestamp.fromDate(data!), tipoGiornataId, tecnicoId: loggedInTecnicoId, partecipantiIds, lastModified: Timestamp.now() };
+                
+                if (isLavorativo) {
+                    Object.assign(rapportinoData, { inserimentoManualeOre: isManualEntry, oraInizio: isManualEntry ? null : oraInizio, oraFine: isManualEntry ? null : oraFine, pausa: isManualEntry ? null : pausa, oreLavoro, veicoloId, naveId, luogoId, descrizioneBreve, lavoroEseguito, materialiImpiegati, altriTecniciIds });
+                } else {
+                    Object.assign(rapportinoData, { oreLavoro: 0, inserimentoManualeOre: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [] });
+                }
+
+                if (isEditMode) {
+                    await updateDoc(doc(db, 'rapportini', reportId!), rapportinoData);
+                } else {
+                    rapportinoData.createdAt = Timestamp.now();
+                    await addDoc(collection(db, 'rapportini'), rapportinoData);
+                }
                 alert(`Rapportino ${isEditMode ? 'aggiornato' : 'creato'} con successo!`);
-                navigate('/reports'); // Navigate after successful save
+                navigate('/lista-report');
             }
-        } catch (error) { console.error("Errore salvataggio: ", error); alert("Errore durante il salvataggio."); } finally { setIsSaving(false); }
+        } catch (error) {
+            console.error("Errore salvataggio: ", error);
+            alert("Errore durante il salvataggio.");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    // --- RENDER ---
     if (pageLoading || collectionsLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress />;</Box>;
 
     return (
@@ -187,16 +196,8 @@ const NuovoReportPage: React.FC = () => {
                         {!isEditMode && ( <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', mt: 1 }}> <FormControlLabel control={<Switch checked={isPeriodo} onChange={e => setIsPeriodo(e.target.checked)} disabled={isSaving} />} label="Inserisci per un periodo di più giorni" /> </Alert> )}
                         {isPeriodo && !isEditMode ? (
                             <Grid container spacing={2}>
-                                <Grid
-                                    size={{
-                                        xs: 12,
-                                        sm: 6
-                                    }}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
-                                <Grid
-                                    size={{
-                                        xs: 12,
-                                        sm: 6
-                                    }}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid xs={12} sm={6}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid xs={12} sm={6}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
                             </Grid>
                         ) : ( <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || isSaving} slotProps={{ textField: { fullWidth: true, required: true } }} /> )}
                         <TextField label="Tecnico Responsabile" value={user?.email || '...'} fullWidth disabled />
@@ -209,27 +210,15 @@ const NuovoReportPage: React.FC = () => {
                         {isLavorativo && !isPeriodo && ( <>
                                 <FormControlLabel control={<Switch checked={isManualEntry} onChange={e => setIsManualEntry(e.target.checked)} disabled={isReadOnly} />} label="Inserimento Manuale Ore" />
                                 <Grid container spacing={2}>{!isManualEntry ? ( <>
-                                            <Grid
-                                                size={{
-                                                    xs: 12,
-                                                    sm: 4
-                                                }}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid
-                                                size={{
-                                                    xs: 12,
-                                                    sm: 4
-                                                }}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid
-                                                size={{
-                                                    xs: 12,
-                                                    sm: 4
-                                                }}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
-                                            <Grid size={12}><TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled /></Grid>
-                                        </> ) : ( <Grid size={12}><FormControl fullWidth required sx={{ minWidth: 160 }}><InputLabel>Totale Ore Lavorate</InputLabel><Select value={oreLavoro ?? ''} label="Totale Ore Lavorate" onChange={e => setOreLavoro(Number(e.target.value))} disabled={isReadOnly} MenuProps={{ PaperProps: { sx: { maxHeight: 300, '& .MuiList-root': { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0px 8px', }, }, }, }}>{manualTotalHoursOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}</Select></FormControl></Grid> )}
+                                            <Grid xs={12} sm={4}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid xs={12} sm={4}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid xs={12} sm={4}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
+                                            <Grid xs={12}><TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled /></Grid>
+                                        </> ) : ( <Grid xs={12}><FormControl fullWidth required sx={{ minWidth: 160 }}><InputLabel>Totale Ore Lavorate</InputLabel><Select value={oreLavoro ?? ''} label="Totale Ore Lavorate" onChange={e => setOreLavoro(Number(e.target.value))} disabled={isReadOnly} MenuProps={{ PaperProps: { sx: { maxHeight: 300, '& .MuiList-root': { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0px 8px', }, }, }, }}>{manualTotalHoursOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}</Select></FormControl></Grid> )}
                                 </Grid>
                                 <Autocomplete multiple options={otherTecnicos} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={selectedTecnicos} onChange={(_, nv) => setAltriTecniciIds(nv.map(v => v.id))} renderInput={params => <TextField {...params} label="Altri Tecnici" />} disabled={isReadOnly} />
-                                <FormControl fullWidth><InputLabel>Nave</InputLabel><Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuna</em></MenuItem>{(navi as Nave[]).map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}</Select></FormControl>
-                                <FormControl fullWidth><InputLabel>Luogo</InputLabel><Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{(luoghi as Luogo[]).map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}</Select></FormControl>
+                                <FormControl fullWidth><InputLabel>Nave</InputLabel><Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuna</em></MenuItem>{navi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}</Select></FormControl>
+                                <FormControl fullWidth><InputLabel>Luogo</InputLabel><Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{luoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}</Select></FormControl>
                                 <FormControl fullWidth><InputLabel>Veicolo</InputLabel><Select value={veicoloId || ''} label="Veicolo" onChange={e => setVeicoloId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{veicoli.map(v => <MenuItem key={v.id} value={v.id}>{v.targa}</MenuItem>)}</Select></FormControl>
                                 <TextField label="Breve Descrizione" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={isReadOnly} />
                                 <TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={isReadOnly} />

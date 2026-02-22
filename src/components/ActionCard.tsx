@@ -32,7 +32,7 @@ const ActionCard: React.FC<ActionCardProps> = ({ title, subtitle, to, icon }) =>
           display: 'flex',
           alignItems: 'center'
         }}>
-          {React.cloneElement(icon, { style: { fontSize: 'inherit' } })}
+          {icon}
         </Box>
         <Box>
           <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>

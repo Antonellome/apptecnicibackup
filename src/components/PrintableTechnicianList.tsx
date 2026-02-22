@@ -30,9 +30,10 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
 
     const getDisplayValue = (field: FormField, value: Tecnico[keyof Tecnico]): string | null => {
         if (value === null || typeof value === 'undefined' || value === '') return null;
-        if (field.type === 'switch') return value ? 'Sì' : 'No';
+        // CIAO: Corretto il confronto del tipo
+        if (field.type === 'boolean') return value ? 'Sì' : 'No';
         if (field.type === 'date') {
-            const date = safeGetDayjs(value);
+            const date = safeGetDayjs(value as string);
             return date ? date.format('DD/MM/YYYY') : null;
         }
         if (field.name === 'dittaId') return ditteMap?.get(value as string)?.nome || null;
@@ -44,9 +45,10 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
         return stringValue.trim() === '' ? null : stringValue;
     };
 
+    // CIAO: Corretto il nome del campo in `noteInterne`
     const nameFields = ['nome', 'cognome'];
-    const noteField = fields.find(f => f.name === 'note');
-    const otherFields = fields.filter(f => !nameFields.includes(f.name) && f.name !== 'note');
+    const noteField = fields.find(f => f.name === 'noteInterne');
+    const otherFields = fields.filter(f => !nameFields.includes(f.name) && f.name !== 'noteInterne');
 
     return (
         <Box>
@@ -59,7 +61,8 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
             </Box>
             {data.map((tecnico, index) => {
                 const fullName = `${tecnico.cognome || ''}, ${tecnico.nome || ''}`.replace(/^,|,$/g, '').trim();
-                const noteValue = tecnico.note;
+                // CIAO: Corretto il nome della proprietà in `noteInterne`
+                const noteValue = tecnico.noteInterne;
 
                 return (
                     <Box key={tecnico.id} sx={{ pageBreakInside: 'avoid', pt: 1, pb: 1 }}>
@@ -94,7 +97,7 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
                                 </Typography>
                                 {noteValue ? (
                                     <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.875rem' }}>
-                                        {noteValue.split('\n').map((line, i) => (
+                                        {(noteValue as string).split('\n').map((line: string, i: number) => (
                                             line.trim() && <li key={i}>{line.trim()}</li>
                                         ))}
                                     </ul>
