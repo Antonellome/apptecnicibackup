@@ -14,9 +14,9 @@ import {
   Button
 } from '@mui/material';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { Report, TipoGiornata, EnrichedReport } from '@/models/definitions';
+import { Rapportino, TipoGiornata, EnrichedRapportino, Tecnico } from '@/models/definitions';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import ReportMensileDialog from '@/components/ReportMensileDialog';
@@ -30,7 +30,7 @@ const convertTimestamp = (ts: unknown): Date | undefined => {
 
 const MonthlyReportPage = () => {
   const { user } = useAuth();
-  const [reports, setReports] = useState<EnrichedReport[]>([]);
+  const [reports, setReports] = useState<EnrichedRapportino[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -42,39 +42,57 @@ const MonthlyReportPage = () => {
       setLoading(true);
       setError('');
       try {
+        if (!user) return;
+
         const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
         const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
 
+        // Use 'tecnicoId' for the query to match legacy data structure
         const reportsQuery = query(
           collection(db, 'rapportini'),
-          where('tecnicoId', '==', user!.uid),
+          where('tecnicoId', '==', user.uid),
           where('data', '>=', Timestamp.fromDate(startOfMonth)),
           where('data', '<=', Timestamp.fromDate(endOfMonth))
         );
 
-        const reportSnapshot = await getDocs(reportsQuery);
-        const reportList = reportSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Report[];
+        const [reportSnapshot, tipiGiornataSnapshot, tecniciSnapshot] = await Promise.all([
+          getDocs(reportsQuery),
+          getDocs(collection(db, 'tipiGiornata')),
+          getDocs(collection(db, 'tecnici'))
+        ]);
 
-        const tipiGiornataSnapshot = await getDocs(collection(db, 'tipiGiornata'));
+        const reportList = reportSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Rapportino[];
+
         const tipiGiornataMap = new Map<string, TipoGiornata>();
         const tipiGiornataList: TipoGiornata[] = [];
         tipiGiornataSnapshot.forEach(doc => {
-            const data = doc.data() as TipoGiornata;
-            tipiGiornataMap.set(doc.id, data);
-            tipiGiornataList.push({ ...data, id: doc.id });
+          const data = { ...doc.data(), id: doc.id } as TipoGiornata;
+          tipiGiornataMap.set(doc.id, data);
+          tipiGiornataList.push(data);
         });
         setTipiGiornata(tipiGiornataList);
 
+        const tecniciMap = new Map<string, Tecnico>();
+        tecniciSnapshot.forEach(doc => {
+            const data = { ...doc.data(), id: doc.id } as Tecnico;
+            tecniciMap.set(doc.id, data);
+        });
+
         const enrichedReports = reportList.map(report => {
           const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId);
-          
+          // Use 'tecnicoId' for enrichment
+          const tecnicoScrivente = tecniciMap.get(report.tecnicoId || report.tecnicoScriventeId);
+          const presenze = report.presenze?.map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
+
           return {
             ...report,
             data: (report.data as Timestamp).toDate(),
             oraInizio: convertTimestamp(report.oraInizio),
             oraFine: convertTimestamp(report.oraFine),
-            tipoGiornata: tipoGiornata || { nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help' },
+            tipoGiornata: tipoGiornata || { id: 'non-definito', nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help' },
             oreLavoro: report.oreLavoro || 0,
+            tecnicoScrivente,
+            presenze,
           };
         });
 
@@ -159,7 +177,7 @@ const MonthlyReportPage = () => {
               <Button variant="contained" onClick={() => setModalOpen(true)}>Visualizza Consuntivo</Button>
           </Box>
           <ReportMensileDialog 
-              open={isModalOpen} 
+              open={isModalOpen}
               onClose={() => setModalOpen(false)}
               reports={reports}
               currentMonth={currentMonth}

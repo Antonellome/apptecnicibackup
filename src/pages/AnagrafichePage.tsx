@@ -1,8 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { useData } from '@/hooks/useData';
-import { Cliente, Nave, Luogo, Veicolo, Tecnico, TipoGiornata } from '@/models/definitions';
+import { useGlobalData } from '@/contexts/GlobalDataProvider';
 
 // Definiamo le colonne per ogni tipo di anagrafica
 const columnsConfig: Record<string, GridColDef[]> = {
@@ -37,11 +36,11 @@ const columnsConfig: Record<string, GridColDef[]> = {
 };
 
 // Un tipo per mappare le chiavi alle nostre anagrafiche
-type DataKey = keyof Omit<ReturnType<typeof useData>, 'loading'>;
+type DataKey = keyof Omit<ReturnType<typeof useGlobalData>, 'loading'>;
 
 const AnagrafichePage = () => {
   const { tipo } = useParams<{ tipo: string }>();
-  const { loading, ...data } = useData();
+  const { loading, ...data } = useGlobalData();
 
   // Se il tipo non è valido o non è una chiave dei nostri dati, mostra un errore.
   if (!tipo || !(tipo in columnsConfig)) {
@@ -53,7 +52,9 @@ const AnagrafichePage = () => {
   }
 
   const dataKey = tipo as DataKey;
-  const rows = data[dataKey];
+  const dataValue = data[dataKey];
+
+  const rows = Array.isArray(dataValue) ? dataValue : Array.from((dataValue as Map<string, any>).values());
   const columns = columnsConfig[dataKey];
 
   const title = tipo.charAt(0).toUpperCase() + tipo.slice(1);

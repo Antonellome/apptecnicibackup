@@ -1,4 +1,4 @@
-import React, { useState, useCallback, ReactNode } from 'react';
+import { useState, useCallback, ReactNode } from 'react';
 import { RefreshContext } from './RefreshContext';
 
 interface RefreshProviderProps {

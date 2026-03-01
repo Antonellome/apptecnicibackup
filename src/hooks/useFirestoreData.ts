@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onSnapshot } from 'firebase/firestore';
-import type { Query, FirebaseError } from 'firebase/firestore';
+import type { Query, FirestoreError } from 'firebase/firestore';
 
 /**
  * Stato restituito dall'hook useFirestoreData.
@@ -9,7 +9,7 @@ import type { Query, FirebaseError } from 'firebase/firestore';
 interface FirestoreDataState<T> {
   data: T[] | null;
   loading: boolean;
-  error: FirebaseError | null;
+  error: FirestoreError | null;
 }
 
 /**
@@ -23,7 +23,7 @@ interface FirestoreDataState<T> {
 export const useFirestoreData = <T extends { id: string }>(query: Query | null): FirestoreDataState<T> => {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<FirebaseError | null>(null);
+  const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
     // Se la query non è valida, resettiamo lo stato solo se necessario per evitare render a cascata.
@@ -45,9 +45,9 @@ export const useFirestoreData = <T extends { id: string }>(query: Query | null):
       setData(docs);
       setLoading(false);
     }, (err) => {
-      const firebaseError = err as FirebaseError;
-      console.error(`[useFirestoreData] Errore durante il fetch dei dati:`, firebaseError);
-      setError(firebaseError);
+      const firestoreError = err as FirestoreError;
+      console.error(`[useFirestoreData] Errore durante il fetch dei dati:`, firestoreError);
+      setError(firestoreError);
       setData(null); // In caso di errore, i dati non sono più validi.
       setLoading(false);
     });

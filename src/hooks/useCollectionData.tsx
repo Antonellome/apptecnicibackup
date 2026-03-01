@@ -23,7 +23,7 @@ export const useCollectionData = <T extends DocumentData>(q: Query<DocumentData>
       (snapshot) => {
         const result: T[] = [];
         snapshot.forEach((doc: QueryDocumentSnapshot) => {
-          result.push({ id: doc.id, ...doc.data() } as T);
+          result.push({ id: doc.id, ...doc.data() } as unknown as T);
         });
         setData(result);
         setLoading(false);

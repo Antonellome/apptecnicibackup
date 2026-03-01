@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Button, Divider, Icon
 } from '@mui/material';
-import { Share, Summarize, EuroSymbol } from '@mui/icons-material';
+import { Share, Summarize } from '@mui/icons-material';
 import html2canvas from 'html2canvas';
 import type { Tecnico, Nave, Luogo, EnrichedReport } from '@/models/definitions'; 
 import dayjs from 'dayjs';

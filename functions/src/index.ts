@@ -14,7 +14,7 @@ const db = admin.firestore();
 export const checkAbsences = functions.region('europe-west1').pubsub
     .schedule('every mon,tue,wed,thu,fri 09:00')
     .timeZone('Europe/Rome')
-    .onRun(async (context) => {
+    .onRun(async () => {
         functions.logger.info("Esecuzione controllo assenze ingiustificate.", { structuredData: true });
 
         // Calcola la data del giorno lavorativo precedente

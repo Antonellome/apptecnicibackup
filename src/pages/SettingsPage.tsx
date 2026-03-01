@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -24,53 +24,54 @@ const SettingsPage: React.FC = () => {
     const { user, resetPassword } = useAuth();
     const { tipiGiornata, loading: globalLoading } = useGlobalData();
     const [emailSent, setEmailSent] = useState(false);
-    const [tariffe, setTariffe] = useState<Record<string, number | string>>({});
+    const [tariffe, setTariffe] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isDirty, setIsDirty] = useState(false);
     const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
 
-    const tipiGiornataUnici = useMemo(() => {
-        if (globalLoading || !tipiGiornata) return [];
-        return [...new Set(tipiGiornata.map(t => t.nome).filter(Boolean))];
-    }, [tipiGiornata, globalLoading]);
-
-    // Carica le tariffe da localStorage
     useEffect(() => {
-        if (globalLoading || !user?.uid) return; // Attendi i dati globali e l'utente
+        if (globalLoading || !user?.uid || tipiGiornata.length === 0) {
+            return;
+        }
 
         setIsLoading(true);
+
+        // 1. Imposta il default a 10.00 per TUTTI i tipi di giornata.
+        const defaultTariffe = tipiGiornata.reduce((acc, tipo) => {
+            acc[tipo.nome] = '10.00';
+            return acc;
+        }, {} as Record<string, string>);
+
+        // 2. Carica le tariffe salvate da localStorage.
+        let savedTariffe: Record<string, number> = {};
         try {
             const savedTariffeJSON = localStorage.getItem(`tariffe_${user.uid}`);
-            let loadedTariffe: Record<string, number | string> = {};
             if (savedTariffeJSON) {
-                loadedTariffe = JSON.parse(savedTariffeJSON);
+                savedTariffe = JSON.parse(savedTariffeJSON);
             }
-
-            // Assicura che tutti i tipi di giornata abbiano una tariffa, usando i default per quelli nuovi
-            const completeTariffe = tipiGiornataUnici.reduce((acc, tipo) => {
-                acc[tipo] = loadedTariffe[tipo] ?? '10.00';
-                return acc;
-            }, {} as Record<string, number | string>);
-
-            setTariffe(completeTariffe);
         } catch (error) {
-            console.error("Failed to load or parse tariffs from local storage", error);
-            // In caso di errore (es. JSON malformato), usa i default
-            const defaultTariffe = tipiGiornataUnici.reduce((acc, tipo) => {
-                acc[tipo] = '10.00';
-                return acc;
-            }, {} as Record<string, string>);
-            setTariffe(defaultTariffe);
-        } finally {
-            setIsLoading(false);
+            console.error("Errore nel caricamento delle tariffe da localStorage:", error);
         }
-    }, [user, tipiGiornataUnici, globalLoading]);
+
+        // 3. Unisci i default con i valori salvati. Quelli salvati hanno la precedenza.
+        const finalTariffe = { ...defaultTariffe };
+        for (const nomeTipo in savedTariffe) {
+            if (Object.prototype.hasOwnProperty.call(finalTariffe, nomeTipo)) {
+                finalTariffe[nomeTipo] = String(savedTariffe[nomeTipo].toFixed(2));
+            }
+        }
+
+        setTariffe(finalTariffe);
+        setIsLoading(false);
+
+    }, [user, tipiGiornata, globalLoading]);
+
 
     const handleTariffaChange = (id: string, value: string) => {
-        if (value === '' || (parseFloat(value) >= 0 && !isNaN(parseFloat(value)))) {
+        if (value === '' || /^[0-9]*\.?[0-9]*$/.test(value)) {
             setTariffe(prev => ({ ...prev, [id]: value }));
-            setIsDirty(true); // Segna che ci sono modifiche non salvate
+            setIsDirty(true);
         }
     };
 
@@ -82,16 +83,24 @@ const SettingsPage: React.FC = () => {
         setIsSaving(true);
         try {
             const tariffeToSave = Object.entries(tariffe).reduce((acc, [key, value]) => {
-                acc[key] = parseFloat(value as string) || 0;
+                const numericValue = parseFloat(value);
+                acc[key] = isNaN(numericValue) ? 0 : numericValue;
                 return acc;
             }, {} as Record<string, number>);
 
             localStorage.setItem(`tariffe_${user.uid}`, JSON.stringify(tariffeToSave));
-            setNotification({ open: true, message: 'Tariffe salvate con successo sul dispositivo!', severity: 'success' });
-            setIsDirty(false); // Resetta lo stato dopo il salvataggio
+            
+            const formattedTariffe = Object.entries(tariffeToSave).reduce((acc, [key, value]) => {
+                acc[key] = value.toFixed(2);
+                return acc;
+            }, {} as Record<string, string>);
+            setTariffe(formattedTariffe);
+            
+            setNotification({ open: true, message: 'Tariffe salvate con successo!', severity: 'success' });
+            setIsDirty(false);
         } catch (error) {
-            console.error("Errore durante il salvataggio in localStorage:", error);
-            setNotification({ open: true, message: 'Errore durante il salvataggio locale.', severity: 'error' });
+            console.error("Errore durante il salvataggio:", error);
+            setNotification({ open: true, message: 'Errore durante il salvataggio.', severity: 'error' });
         } finally {
             setIsSaving(false);
         }
@@ -106,11 +115,11 @@ const SettingsPage: React.FC = () => {
             await resetPassword(user.email);
             setEmailSent(true);
         } catch (error) {
-            console.error("Errore durante l'invio della mail di reset:", error);
+            console.error("Errore invio mail di reset:", error);
             alert("Si è verificato un errore. Riprova.");
         }
     };
-
+    
     const handleCloseNotification = () => {
         setNotification({ ...notification, open: false });
     };
@@ -123,25 +132,28 @@ const SettingsPage: React.FC = () => {
         <Box sx={{ maxWidth: 800, mx: 'auto', p: { xs: 2, sm: 3 } }}>
             <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>Impostazioni</Typography>
 
-            {/* Gestione Tariffe */}
             <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
                 <Typography variant="h6" gutterBottom>Gestione Tariffe Orarie</Typography>
                 <List>
-                    {tipiGiornataUnici.map((tipo) => (
-                        <React.Fragment key={tipo}>
+                    {tipiGiornata.map((tipo) => (
+                        <React.Fragment key={tipo.id}>
                             <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                                <ListItemText primary={tipo} />
+                                <ListItemText primary={tipo.nome} />
                                 <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
                                     <TextField
-                                        type="number"
+                                        type="text"
                                         size="small"
-                                        value={tariffe[tipo] ?? ''}
-                                        onChange={(e) => handleTariffaChange(tipo, e.target.value)}
-                                        sx={{ width: '100px', mr: 1 }}
-                                        inputProps={{ min: 0, step: "0.01" }}
+                                        value={tariffe[tipo.nome] ?? ''}
+                                        onChange={(e) => handleTariffaChange(tipo.nome, e.target.value)}
+                                        sx={{ width: '100px' }}
+                                        inputProps={{ 
+                                            inputMode: 'decimal',
+                                            pattern: '^[0-9]*\\.?[0-9]*$',
+                                            style: { textAlign: 'right' } 
+                                        }}
                                         disabled={isSaving}
                                     />
-                                    <Typography variant="body1">€/ora</Typography>
+                                    <Typography variant="body1" sx={{ ml: 1 }}>€/ora</Typography>
                                 </Box>
                             </ListItem>
                             <Divider />
@@ -153,7 +165,6 @@ const SettingsPage: React.FC = () => {
                 </Button>
             </Paper>
 
-            {/* Recupero Password, etc. */}
             <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
                 <Typography variant="h6" gutterBottom>Recupero Password</Typography>
                 {emailSent ? (
@@ -168,13 +179,12 @@ const SettingsPage: React.FC = () => {
 
             <Accordion elevation={3}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6">Guida all'Uso dell'App</Typography>
+                    <Typography variant="h6">Guida all&apos;Uso dell&apos;App</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                    <Typography paragraph>Benvenuto in R.I.S.O. App Tecnici! Questa app ti aiuta a tracciare i tuoi report di lavoro giornalieri.</Typography>
-                    <Typography paragraph><b>Home:</b> Dalla dashboard principale puoi creare un nuovo report, visualizzare quelli esistenti, accedere ai riepiloghi mensili e vedere le notifiche.</Typography>
-                    <Typography paragraph><b>Nuovo Report:</b> Compila il form con tutti i dettagli del tuo intervento. Per le assenze puoi anche creare report per più giorni.</Typography>
-                    <Typography paragraph><b>Impostazioni:</b> Qui puoi configurare le tariffe e recuperare la tua password.</Typography>
+                    <Typography paragraph>Benvenuto! Quest&apos;app ti aiuta a tracciare i tuoi report di lavoro giornalieri.</Typography>
+                    <Typography paragraph><b>Home:</b> Dalla dashboard puoi creare un nuovo report o visualizzare quelli esistenti.</Typography>
+                    <Typography paragraph><b>Impostazioni:</b> Qui puoi configurare le tariffe e recuperare la password.</Typography>
                 </AccordionDetails>
             </Accordion>
 

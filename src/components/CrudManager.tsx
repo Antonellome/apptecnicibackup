@@ -8,7 +8,6 @@ import {
 import { Edit, Delete, Add } from '@mui/icons-material';
 import { collection, query, orderBy, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/utils/firebase';
-// CIAO: Corretto import e alias. Ora usiamo GenericItem che ha 'id' e 'nome' obbligatori.
 import type { GenericItem } from '@/models/definitions';
 
 interface CrudManagerProps {
@@ -20,7 +19,6 @@ interface CrudManagerProps {
 }
 
 const CrudManager = ({ collectionName, title, itemLabel, description, nameField = 'nome' }: CrudManagerProps) => {
-    // CIAO: Utilizziamo GenericItem[], che si adatta meglio alla struttura dati attesa.
     const [items, setItems] = useState<GenericItem[]>([]);
     const [newItemName, setNewItemName] = useState('');
     const [editingItem, setEditingItem] = useState<GenericItem | null>(null);
@@ -56,7 +54,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
 
     const handleOpen = (item: GenericItem | null = null) => {
         setEditingItem(item);
-        setNewItemName(item?.nome || ''); // CIAO: Usiamo 'nome' da GenericItem
+        setNewItemName(item?.nome || '');
         setOpen(true);
     };
 
@@ -156,7 +154,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                             }}
                         >
-                            <ListItemText primary={item.nome} /> {/* CIAO: Usiamo 'nome' */}
+                            <ListItemText primary={item.nome} />
                             <ListItemSecondaryAction>
                                 <IconButton edge='end' aria-label='edit' onClick={() => handleOpen(item)}>
                                     <Edit />
@@ -198,7 +196,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                 <DialogTitle>Conferma Eliminazione</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Sei sicuro di voler eliminare l&apos;elemento <Typography component="span" fontWeight="bold">{itemToDelete?.nome}</Typography>? {/* CIAO: Usiamo 'nome' */}
+                        Sei sicuro di voler eliminare l&apos;elemento <Typography component="span" fontWeight="bold">{itemToDelete?.nome}</Typography>?
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>

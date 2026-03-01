@@ -1,6 +1,6 @@
 import { Box, Typography, Divider } from '@mui/material';
 import type { Tecnico, FormField } from '@/models/definitions';
-import { useData } from '@/hooks/useData';
+import { useGlobalData } from '@/contexts/GlobalDataProvider';
 import { safeGetDayjs } from '@/utils/dateUtils';
 import logo from '@/assets/react.svg';
 
@@ -26,7 +26,7 @@ const abbreviations: Record<string, string> = {
 };
 
 const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps) => {
-    const { ditteMap, categorieMap } = useData();
+    const { ditteMap, categorieMap } = useGlobalData();
 
     const getDisplayValue = (field: FormField, value: Tecnico[keyof Tecnico]): string | null => {
         if (value === null || typeof value === 'undefined' || value === '') return null;

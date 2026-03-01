@@ -1,13 +1,8 @@
 
-import { collection, doc, Timestamp } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
-import type { BaseEntity, Tecnico, Veicolo, Rapportino } from '@/models/definitions';
+import { Timestamp } from 'firebase/firestore';
+import { GenericItem, Tecnico, Veicolo, Report, Ditta, Categoria, Documento } from '@/models/definitions';
 
-// --- FACTORY DI CONVERTITORI ---
-// Funzione generica per creare un convertitore Firestore standard
-// allineato con le interfacce definite in \`definitions.ts\`.
-
-const createConverter = <T extends BaseEntity>(defaultValues: Omit<T, 'id'>) => ({
+const createConverter = <T extends GenericItem>(defaultValues: Omit<T, 'id'>) => ({
     toFirestore: (data: Partial<T>): T => {
         const firestoreData: any = {};
         for (const key in defaultValues) {
@@ -28,17 +23,12 @@ const createConverter = <T extends BaseEntity>(defaultValues: Omit<T, 'id'>) => 
     }
 });
 
-// --- ISTANZE DEI CONVERTITORI ---
-
-// CIAO. OBBEDISCO. CORREGGO IL CONVERTER DEL TECNICO.
-// Convertitore per i Tecnici - Aggiornato per includere il campo 'uid'
-// e garantire l'allineamento con l'interfaccia corretta.
 export const tecnicoConverter = createConverter<Tecnico>({
     nome: '',
     cognome: '',
+    email: '',
     attivo: true,
     sincronizzazioneAttiva: false,
-    email: undefined,
     codiceFiscale: undefined,
     indirizzo: undefined,
     citta: undefined,
@@ -65,51 +55,38 @@ export const tecnicoConverter = createConverter<Tecnico>({
     scadenzaPrimoSoccorso: undefined,
     scadenzaAntincendio: undefined,
     note: undefined,
-    lastModified: undefined,
-    uid: undefined, // <-- ECCO LA CORREZIONE CHIAVE
 });
 
-// Convertitore per i Veicoli
 export const veicoloConverter = createConverter<Veicolo>({
-    marca: '',
-    modello: '',
-    targa: '',
-    tipo: undefined,
-    anno: undefined,
-    proprieta: undefined,
-    scadenzaAssicurazione: undefined,
-    scadenzaBollo: undefined,
-    scadenzaRevisione: undefined,
-    scadenzaTachimetro: undefined,
-    scadenzaTagliando: undefined,
-    note: undefined,
+    nome: '',
+    targa: undefined,
 });
 
-// Convertitore per i Rapportini
-export const rapportoConverter = createConverter<Rapportino>({
+export const rapportoConverter = createConverter<Report>({
+    nome: '',
     data: Timestamp.now(),
     tecnicoScriventeId: '',
     tipoGiornataId: '', 
-    oreLavorate: 8,
-    oreViaggio: 0,
-    oreStraordinario: 0,
-    oreTotali: 8,
-    sedePartenza: undefined,
-    sedeArrivo: undefined,
-    kmInizio: undefined,
-    kmFine: undefined,
-    kmTotali: undefined,
-    veicoloId: undefined,
+    oreLavoro: 8,
+    stato: 'bozza',
+    isTrasferta: false,
+    descrizioneBreve: undefined,
     naveId: undefined,
     luogoId: undefined,
-    breveDescrizione: undefined,
-    descrizioneLavoro: undefined,
-    materiali: undefined,
-    altriTecniciIds: [],
-    dettagliViaggio: undefined,
-    immagineKmInizioUrl: undefined,
-    immagineKmFineUrl: undefined,
-    concluso: false,
-    approvato: false,
-    noteApprovazione: undefined,
+    oraInizio: undefined,
+    oraFine: undefined
+});
+
+export const dittaConverter = createConverter<Ditta>({
+    nome: ''
+});
+
+export const categoriaConverter = createConverter<Categoria>({
+    nome: ''
+});
+
+export const documentoConverter = createConverter<Documento>({
+    nome: '',
+    url: '',
+    tecnicoId: ''
 });

@@ -1,9 +1,20 @@
-import React from 'react';
+import { GlobalStyles as MuiGlobalStyles } from '@mui/material';
 
-// CIAO. Componente vuoto. Non applica nessuno stile globale.
-// Serve solo a risolvere il crash della build.
-const GlobalStyles = () => {
-  return null;
-};
+const GlobalStyles = () => (
+  <MuiGlobalStyles
+    styles={{
+      body: {
+        margin: 0,
+        padding: 0,
+        boxSizing: 'border-box',
+      },
+      '#root': {
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+      },
+    }}
+  />
+);
 
 export default GlobalStyles;

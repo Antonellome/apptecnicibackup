@@ -12,9 +12,10 @@ import {
 } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
-import type { EnrichedReport, Tecnico, TipoGiornata } from '@/models/definitions';
+import type { EnrichedRapportino, Tecnico, TipoGiornata } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
-import { useData } from '@/hooks/useData';
+// CORRECTED: Import the global data hook
+import { useGlobalData } from '@/contexts/GlobalDataProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -29,7 +30,7 @@ const Transition = React.forwardRef(function Transition(
 interface ReportMensileDialogProps {
   open: boolean;
   onClose: () => void;
-  reports: EnrichedReport[];
+  reports: EnrichedRapportino[];
   currentMonth: Date;
   tipiGiornata: TipoGiornata[];
 }
@@ -52,7 +53,8 @@ const loadTariffe = (userId: string): Record<string, number> => {
 
 const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tipiGiornata }) => {
   const { user } = useAuth();
-  const { tecnici, navi, luoghi } = useData();
+  // CORRECTED: Use the correct global data hook
+  const { tecnici, navi, luoghi } = useGlobalData();
 
   const selectedTecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
 
@@ -67,7 +69,6 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
       const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t]));
       return reports.map(report => {
           const tipo = tipiGiornataMap.get(report.tipoGiornataId);
-          // --- CORREZIONE TARIFFA DEFAULT ---
           const tariffa = tipo ? (tariffe[tipo.nome] ?? (tipo.lavorativo ? 10 : 0)) : 0;
           const guadagno = (report.oreLavoro ?? 0) * tariffa;
           return {

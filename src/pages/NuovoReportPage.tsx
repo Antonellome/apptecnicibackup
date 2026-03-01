@@ -9,10 +9,12 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
 import { eachDayOfInterval, isBefore, startOfDay, parseISO } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
-import { useData } from '@/hooks/useData';
-import { db } from '@/utils/firebase';
+// CORRECTED: Use the new global data hook
+import { useGlobalData } from '@/contexts/GlobalDataProvider';
+// CORRECTED: Import db from the correct path
+import { db } from '@/firebase';
 import { doc, getDoc, addDoc, updateDoc, collection, Timestamp, writeBatch } from 'firebase/firestore';
-import { Report, TipoGiornata } from '@/models/definitions';
+import { Rapportino, TipoGiornata } from '@/models/definitions'; // Keep TipoGiornata for type checks
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => { const h = Math.floor(i / 2).toString().padStart(2, '0'); const m = (i % 2 === 0 ? '00' : '30'); return `${h}:${m}`; });
 const generateManualHoursOptions = () => {
@@ -41,14 +43,16 @@ const NuovoReportPage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { reportId } = useParams<{ reportId: string }>();
-    const { tipiGiornata, tecnici, veicoli, navi, luoghi, loading: collectionsLoading } = useData();
+    // CORRECTED: Use useGlobalData and get the correct data collections
+    const { tipiGiornata, tecnici, veicoli, navi, luoghi, loading: collectionsLoading } = useGlobalData();
     const isEditMode = Boolean(reportId);
     const loggedInTecnicoId = user?.uid;
 
-    // --- CIAO: Dati ordinati in modo sicuro ---
+    // --- Data sorting with safety checks ---
     const sortedTipiGiornata = useMemo(() => [...tipiGiornata].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [tipiGiornata]);
     const sortedNavi = useMemo(() => [...navi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [navi]);
     const sortedLuoghi = useMemo(() => [...luoghi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [luoghi]);
+    // CORRECTED: Safe sorting for veicoli
     const sortedVeicoli = useMemo(() => [...veicoli].sort((a, b) => (a?.targa || '').localeCompare(b?.targa || '')), [veicoli]);
     const sortedTecnici = useMemo(() => [...tecnici].sort((a, b) => (`${a?.cognome || ''} ${a?.nome || ''}`.trim()).localeCompare((`${b?.cognome || ''} ${b?.nome || ''}`.trim()))), [tecnici]);
 
@@ -86,13 +90,14 @@ const NuovoReportPage: React.FC = () => {
                 try {
                     const reportSnap = await getDoc(doc(db, 'rapportini', reportId));
                     if (reportSnap.exists()) {
-                        const reportData = reportSnap.data() as Report;
+                        const reportData = reportSnap.data() as Rapportino;
                         const reportDate = reportData.data instanceof Timestamp ? reportData.data.toDate() : parseISO(reportData.data as any);
                         setData(reportDate);
-                        setTipoGiornataId(reportData.tipoGiornataId);
+                        setTipoGiornataId(reportData.tipoGiornataId || '');
                         const tipo = tipiGiornata.find(t => t.id === reportData.tipoGiornataId);
                         setIsLavorativo(isGiornataLavorativa(tipo));
-                        setIsManualEntry(reportData.inserimentoManualeOre || false);
+                        // Use optional chaining for safety
+                        setIsManualEntry(reportData.isTrasferta || false);
                         setOraInizio(reportData.oraInizio || '07:30');
                         setOraFine(reportData.oraFine || '16:30');
                         setPausa(reportData.pausa === undefined ? 60 : reportData.pausa);
@@ -158,20 +163,20 @@ const NuovoReportPage: React.FC = () => {
                 const days = eachDayOfInterval({ start: dataInizio, end: dataFine });
                 days.forEach(day => {
                     const newReportRef = doc(collection(db, 'rapportini'));
-                    const rapportinoData: Partial<Report> = { tipoGiornataId, data: Timestamp.fromDate(day), tecnicoId: loggedInTecnicoId, partecipantiIds: [loggedInTecnicoId], createdAt: Timestamp.now(), lastModified: Timestamp.now(), oreLavoro: 0, isLavorativo: false };
+                    const rapportinoData: Partial<Rapportino> = { tipoGiornataId, data: Timestamp.fromDate(day), tecnicoId: loggedInTecnicoId, presenze: [loggedInTecnicoId], createdAt: Timestamp.now(), oreLavoro: 0 };
                     batch.set(newReportRef, rapportinoData);
                 });
                 await batch.commit();
                 alert(`Salvataggio completato. Creati ${days.length} rapportini di assenza.`);
                 navigate('/lista-report');
             } else {
-                const partecipantiIds = Array.from(new Set([loggedInTecnicoId, ...altriTecniciIds]));
-                const rapportinoData: Partial<Report> = { data: Timestamp.fromDate(data!), tipoGiornataId, tecnicoId: loggedInTecnicoId, partecipantiIds, lastModified: Timestamp.now() };
+                const presenze = Array.from(new Set([loggedInTecnicoId, ...altriTecniciIds]));
+                const rapportinoData: Partial<Rapportino> = { data: Timestamp.fromDate(data!), tipoGiornataId, tecnicoId: loggedInTecnicoId, presenze };
                 
                 if (isLavorativo) {
-                    Object.assign(rapportinoData, { inserimentoManualeOre: isManualEntry, oraInizio: isManualEntry ? null : oraInizio, oraFine: isManualEntry ? null : oraFine, pausa: isManualEntry ? null : pausa, oreLavoro, veicoloId, naveId, luogoId, descrizioneBreve, lavoroEseguito, materialiImpiegati, altriTecniciIds });
+                    Object.assign(rapportinoData, { isTrasferta: isManualEntry, oraInizio: isManualEntry ? null : oraInizio, oraFine: isManualEntry ? null : oraFine, pausa: isManualEntry ? null : pausa, oreLavoro, veicoloId, naveId, luogoId, descrizioneBreve, lavoroEseguito, materialiImpiegati, altriTecniciIds });
                 } else {
-                    Object.assign(rapportinoData, { oreLavoro: 0, inserimentoManualeOre: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [] });
+                    Object.assign(rapportinoData, { oreLavoro: 0, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [] });
                 }
 
                 if (isEditMode) {
@@ -203,8 +208,16 @@ const NuovoReportPage: React.FC = () => {
                         {!isEditMode && ( <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', mt: 1 }}> <FormControlLabel control={<Switch checked={isPeriodo} onChange={e => setIsPeriodo(e.target.checked)} disabled={isSaving} />} label="Inserisci per un periodo di più giorni" /> </Alert> )}
                         {isPeriodo && !isEditMode ? (
                             <Grid container spacing={2}>
-                                <Grid item xs={12} sm={6}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
-                                <Grid item xs={12} sm={6}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 6
+                                    }}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 6
+                                    }}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
                             </Grid>
                         ) : ( <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || isSaving} slotProps={{ textField: { fullWidth: true, required: true } }} /> )}
                         <TextField label="Tecnico Responsabile" value={user?.email || '...'} fullWidth disabled />
@@ -217,23 +230,35 @@ const NuovoReportPage: React.FC = () => {
                         {isLavorativo && !isPeriodo && ( <>
                                 <FormControlLabel control={<Switch checked={isManualEntry} onChange={e => setIsManualEntry(e.target.checked)} disabled={isReadOnly} />} label="Inserimento Manuale Ore" />
                                 <Grid container spacing={2}>{!isManualEntry ? ( <>
-                                            <Grid item xs={12} sm={4}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid item xs={12} sm={4}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid item xs={12} sm={4}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
-                                            <Grid item xs={12}><TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled /></Grid>
-                                        </> ) : ( <Grid item xs={12}><FormControl fullWidth required sx={{ minWidth: 160 }}><InputLabel>Totale Ore Lavorate</InputLabel><Select value={oreLavoro ?? ''} label="Totale Ore Lavorate" onChange={e => setOreLavoro(Number(e.target.value))} disabled={isReadOnly} MenuProps={{ PaperProps: { sx: { maxHeight: 300, '& .MuiList-root': { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0px 8px', }, }, }, }}>{manualTotalHoursOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}</Select></FormControl></Grid> )}
+                                            <Grid
+                                                size={{
+                                                    xs: 12,
+                                                    sm: 4
+                                                }}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid
+                                                size={{
+                                                    xs: 12,
+                                                    sm: 4
+                                                }}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid
+                                                size={{
+                                                    xs: 12,
+                                                    sm: 4
+                                                }}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
+                                            <Grid size={12}><TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled /></Grid>
+                                        </> ) : ( <Grid size={12}><FormControl fullWidth required sx={{ minWidth: 160 }}><InputLabel>Totale Ore Lavorate</InputLabel><Select value={oreLavoro ?? ''} label="Totale Ore Lavorate" onChange={e => setOreLavoro(Number(e.target.value))} disabled={isReadOnly} MenuProps={{ PaperProps: { sx: { maxHeight: 300, '& .MuiList-root': { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0px 8px', }, }, }, }}>{manualTotalHoursOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}</Select></FormControl></Grid> )}
                                 </Grid>
                                 <Autocomplete multiple options={otherTecnicos} getOptionLabel={o => `${o.cognome} ${o.nome}`} value={selectedTecnicos} onChange={(_, nv) => setAltriTecniciIds(nv.map(v => v.id))} renderInput={params => <TextField {...params} label="Altri Tecnici" />} disabled={isReadOnly} />
                                 <FormControl fullWidth><InputLabel>Nave</InputLabel><Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuna</em></MenuItem>{sortedNavi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}</Select></FormControl>
                                 <FormControl fullWidth><InputLabel>Luogo</InputLabel><Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{sortedLuoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}</Select></FormControl>
-                                <FormControl fullWidth><InputLabel>Veicolo</InputLabel><Select value={veicoloId || ''} label="Veicolo" onChange={e => setVeicoloId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{sortedVeicoli.map(v => <MenuItem key={v.id} value={v.id}>{`${v.targa} - ${v.marca} ${v.modello}`}</MenuItem>)}</Select></FormControl>
+                                <FormControl fullWidth><InputLabel>Veicolo</InputLabel><Select value={veicoloId || ''} label="Veicolo" onChange={e => setVeicoloId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{sortedVeicoli.map(v => <MenuItem key={v.id} value={v.id}>{`${v.targa || 'N/A'} - ${v.nome}`}</MenuItem>)}</Select></FormControl>
                                 <TextField label="Breve Descrizione" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={isReadOnly} />
                                 <TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={isReadOnly} />
                                 <TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={isReadOnly} />
                             </> )}
                         <Grid container spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
-                            <Grid item><Button variant="outlined" size="large" onClick={handleCancel}> {isReadOnly ? 'Indietro' : 'Annulla'}</Button></Grid>
-                            {!isReadOnly && <Grid item><Button variant="contained" color="primary" size="large" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button></Grid>}
+                            <Grid><Button variant="outlined" size="large" onClick={handleCancel}> {isReadOnly ? 'Indietro' : 'Annulla'}</Button></Grid>
+                            {!isReadOnly && <Grid><Button variant="contained" color="primary" size="large" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button></Grid>}
                         </Grid>
                     </Box>
                 </Paper>

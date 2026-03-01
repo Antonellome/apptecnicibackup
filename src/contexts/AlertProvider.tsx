@@ -40,18 +40,18 @@ export const AlertProvider: React.FC<AlertProviderProps> = ({ children }) => {
     <AlertContext.Provider value={{ showAlert, showConfirm }}>
       {children}
 
-      <Snackbar 
-        open={!!alert} 
-        autoHideDuration={6000} 
-        onClose={handleCloseAlert} 
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        {alert && (
+      {alert && (
+        <Snackbar 
+          open={!!alert} 
+          autoHideDuration={6000} 
+          onClose={handleCloseAlert} 
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
           <MuiAlert onClose={handleCloseAlert} severity={alert.severity} sx={{ width: '100%' }} variant="filled">
             {alert.message}
           </MuiAlert>
-        )}
-      </Snackbar>
+        </Snackbar>
+      )}
 
       {confirm && (
         <Dialog open={!!confirm} onClose={handleCancel}>

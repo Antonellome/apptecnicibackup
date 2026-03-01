@@ -14,31 +14,30 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  ListItemButton,
 } from '@mui/material';
 import { collection, getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { Report } from '@/models/definitions';
+import { Rapportino } from '@/models/definitions';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { useData } from '@/hooks/useData';
+import { useGlobalData } from '@/contexts/GlobalDataProvider';
 
 const ReportListPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { tipiGiornata, loading: dataLoading } = useData();
+  const { tipiGiornata, loading: dataLoading } = useGlobalData();
 
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reports, setReports] = useState<Rapportino[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  // CIAO: Corretto il bug del loop infinito e assicurato il caricamento per utente
   useEffect(() => {
-    // Eseguiamo il fetch solo se l'ID utente è disponibile e i dati di base sono caricati.
     if (user?.uid && !dataLoading) {
       const fetchReports = async () => {
         setLoading(true);
@@ -49,9 +48,7 @@ const ReportListPage = () => {
     
           const reportsQuery = query(
             collection(db, 'rapportini'),
-            // Filtro per l'ID del tecnico loggato
             where('tecnicoId', '==', user.uid),
-            // Filtro per il range di date selezionato
             where('data', '>=', Timestamp.fromDate(startDate)),
             where('data', '<=', Timestamp.fromDate(endDate)),
             orderBy('data', 'desc')
@@ -65,7 +62,7 @@ const ReportListPage = () => {
               id: doc.id,
               data: data.data instanceof Timestamp ? data.data.toDate() : new Date(data.data),
               oreLavoro: data.oreLavoro || 0,
-            } as Report;
+            } as Rapportino;
           });
     
           setReports(reportList);
@@ -80,7 +77,6 @@ const ReportListPage = () => {
 
       fetchReports();
     }
-  // La dipendenza user.uid risolve il loop, l'effetto si attiva solo se cambia l'ID utente.
   }, [user?.uid, selectedMonth, selectedYear, dataLoading]);
 
   const getTipoGiornataNome = (tipoId: string): string => {
@@ -94,20 +90,21 @@ const ReportListPage = () => {
     name: format(new Date(0, i), 'MMMM', { locale: it })
   }));
 
+  const isLoading = loading || dataLoading;
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
           I Miei Rapportini
         </Typography>
-        <Button variant="contained" onClick={() => navigate('/rapportino/nuovo')}>
+        <Button variant="contained" onClick={() => navigate('/report/nuovo')}>
           Nuovo Rapportino
         </Button>
       </Box>
-
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth>
               <InputLabel>Mese</InputLabel>
               <Select
@@ -121,7 +118,7 @@ const ReportListPage = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth>
               <InputLabel>Anno</InputLabel>
               <Select
@@ -137,25 +134,23 @@ const ReportListPage = () => {
           </Grid>
         </Grid>
       </Paper>
-
-      {(loading || dataLoading) && <CircularProgress />}
+      {isLoading && <CircularProgress />}
       {error && <Alert severity="error">{error}</Alert>}
-
-      {!loading && !dataLoading && !error && (
+      {!isLoading && !error && (
         <List>
           {reports.length > 0 ? (
             reports.map((report) => (
               <ListItem 
                 key={report.id} 
-                divider 
-                button
-                onClick={() => navigate(`/rapportino/edit/${report.id}`)}
+                disablePadding
                 sx={{ backgroundColor: 'background.paper', mb: 1, borderRadius: 1 }}
               >
-                <ListItemText 
-                  primary={`${format(report.data, 'dd/MM/yyyy')} - ${getTipoGiornataNome(report.tipoGiornataId)}`}
-                  secondary={`Ore lavorate: ${report.oreLavoro.toFixed(2)}`}
-                />
+                <ListItemButton onClick={() => navigate(`/report/edit/${report.id}`)}>
+                  <ListItemText 
+                    primary={`${format(report.data, 'dd/MM/yyyy')} - ${getTipoGiornataNome(report.tipoGiornataId)}`}
+                    secondary={`Ore lavorate: ${report.oreLavoro.toFixed(2)}`}
+                  />
+                </ListItemButton>
               </ListItem>
             ))
           ) : (

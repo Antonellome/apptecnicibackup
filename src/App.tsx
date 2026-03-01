@@ -10,38 +10,37 @@ import NuovoReportPage from './pages/NuovoReportPage';
 import AnagrafichePage from './pages/AnagrafichePage';
 import SettingsPage from './pages/SettingsPage';
 import MonthlyReportPage from './pages/MonthlyReportPage';
-import NotificationsPage from './pages/Notifiche';
-import { DataProvider } from './contexts/DataProvider';
+// Corrected import to the newly created GlobalDataProvider
+import { GlobalDataProvider } from './contexts/GlobalDataProvider';
 
 const App: React.FC = () => {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      
-      {/* PrivateRoute si occupa solo dell'autenticazione */}
-      <Route element={<PrivateRoute />}>
-        {/* DataProvider avvolge il Layout e tutte le pagine figlie */}
-        <Route 
-          path="/" 
-          element={
-            <DataProvider>
-              <MainLayout />
-            </DataProvider>
-          }
-        >
-          <Route index element={<HomePage />} />
-          <Route path="lista-report" element={<ReportListPage />} />
-          <Route path="report/nuovo" element={<NuovoReportPage />} />
-          <Route path="report/edit/:reportId" element={<NuovoReportPage />} />
-          <Route path="anagrafiche/:tipo" element={<AnagrafichePage />} />
-          <Route path="report-mensile" element={<MonthlyReportPage />} />
-          <Route path="notifiche" element={<NotificationsPage />} />
-          <Route path="impostazioni" element={<SettingsPage />} />
+    // Wrap the entire application with the GlobalDataProvider
+    <GlobalDataProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        
+        {/* PrivateRoute handles authentication */}
+        <Route element={<PrivateRoute />}>
+          {/* MainLayout is now a child of the provider */}
+          <Route 
+            path="/" 
+            element={<MainLayout />}
+          >
+            <Route index element={<HomePage />} />
+            <Route path="lista-report" element={<ReportListPage />} />
+            <Route path="report/nuovo" element={<NuovoReportPage />} />
+            <Route path="report/edit/:reportId" element={<NuovoReportPage />} />
+            <Route path="anagrafiche/:tipo" element={<AnagrafichePage />} />
+            <Route path="report-mensile" element={<MonthlyReportPage />} />
+            {/* The notifications route has been removed as per instructions */}
+            <Route path="impostazioni" element={<SettingsPage />} />
+          </Route>
         </Route>
-      </Route>
 
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </GlobalDataProvider>
   );
 };
 
