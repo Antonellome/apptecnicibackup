@@ -1,6 +1,18 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Typography, Paper, Tabs, Tab, Select, MenuItem, FormControl, InputLabel, TextField, IconButton, CircularProgress } from '@mui/material';
+import {
+    Box,
+    Typography,
+    Paper,
+    Tabs,
+    Tab,
+    Select,
+    MenuItem,
+    FormControl,
+    InputLabel,
+    TextField,
+    IconButton,
+    CircularProgress
+} from '@mui/material';
 import { useGlobalData } from '@/contexts/GlobalDataProvider';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,12 +24,35 @@ import ConsuntivoTable from '@/components/ConsuntivoTable';
 import CalendarioView from '@/components/CalendarioView';
 import { TipoGiornata, Rapportino } from '@/models/definitions';
 
+const loadTariffe = (userId: string): Record<string, number> => {
+    try {
+        const savedTariffeJSON = localStorage.getItem(`tariffe_${userId}`);
+        if (savedTariffeJSON) {
+            const parsedTariffe = JSON.parse(savedTariffeJSON);
+            Object.keys(parsedTariffe).forEach(key => {
+                parsedTariffe[key] = Number(parsedTariffe[key]) || 0;
+            });
+            return parsedTariffe;
+        }
+    } catch (error) {
+        console.error("Errore nel caricamento o parsing delle tariffe:", error);
+    }
+    return {};
+};
+
 const ReportMensilePage: React.FC = () => {
     const { user } = useAuth();
     const { tipiGiornata, loading: globalLoading } = useGlobalData();
     
     const [allReports, setAllReports] = useState<Rapportino[]>([]);
     const [reportsLoading, setReportsLoading] = useState(true);
+    const [tariffe, setTariffe] = useState<Record<string, number>>({});
+
+    useEffect(() => {
+        if (user?.uid) {
+            setTariffe(loadTariffe(user.uid));
+        }
+    }, [user]);
 
     useEffect(() => {
         if (!user) {
@@ -59,10 +94,18 @@ const ReportMensilePage: React.FC = () => {
         });
 
         const tipiGiornataMap = new Map(tipiGiornata.map((item: TipoGiornata) => [item.id, item]));
-        const enriched = filteredByDate.map(report => ({
-            ...report,
-            tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId),
-        }));
+        
+        const enriched = filteredByDate.map(report => {
+            const tipo = tipiGiornataMap.get(report.tipoGiornataId);
+            // --- CORREZIONE TARIFFA DEFAULT ---
+            const tariffa = tipo ? (tariffe[tipo.nome] ?? (tipo.lavorativo ? 10 : 0)) : 0;
+            const guadagno = (report.oreLavoro ?? 0) * tariffa;
+            return {
+                ...report,
+                tipoGiornata: tipo,
+                guadagno: guadagno,
+            };
+        });
 
         if (searchTerm === '') return enriched;
         const lowerCaseSearch = searchTerm.toLowerCase();
@@ -71,7 +114,11 @@ const ReportMensilePage: React.FC = () => {
             return searchIn.includes(lowerCaseSearch);
         });
 
-    }, [allReports, tipiGiornata, currentMonth, currentYear, searchTerm]);
+    }, [allReports, tipiGiornata, currentMonth, currentYear, searchTerm, tariffe]);
+
+    const totalGuadagno = useMemo(() => {
+        return enrichedAndFilteredReports.reduce((sum, report) => sum + (report.guadagno ?? 0), 0);
+    }, [enrichedAndFilteredReports]);
 
     const handleExport = () => {
         console.log("Esportazione dei dati...", enrichedAndFilteredReports);
@@ -79,20 +126,12 @@ const ReportMensilePage: React.FC = () => {
     };
 
     const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
-
-    // --- MODIFICA: Ordinamento alfabetico dei mesi --- 
     const months = useMemo(() => {
-        const monthData = Array.from({ length: 12 }, (_, i) => {
+        return Array.from({ length: 12 }, (_, i) => {
             const name = new Date(0, i).toLocaleString('it-IT', { month: 'long' });
-            return {
-                name: name.charAt(0).toUpperCase() + name.slice(1),
-                value: i,
-            };
+            return { name: name.charAt(0).toUpperCase() + name.slice(1), value: i };
         });
-        monthData.sort((a, b) => a.name.localeCompare(b.name, 'it'));
-        return monthData;
     }, []);
-    // --------------------------------------------------
 
     const loading = reportsLoading || globalLoading;
 
@@ -106,11 +145,9 @@ const ReportMensilePage: React.FC = () => {
                  <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
                      <FormControl >
                         <InputLabel>Mese</InputLabel>
-                        {/* --- MODIFICA: Aggiornamento del menu a tendina dei mesi --- */}
                         <Select value={currentMonth} onChange={(e) => setCurrentMonth(e.target.value as number)} label="Mese">
                             {months.map(month => <MenuItem key={month.value} value={month.value}>{month.name}</MenuItem>)}
                         </Select>
-                        {/* -------------------------------------------------------------- */}
                     </FormControl>
                     <FormControl >
                         <InputLabel>Anno</InputLabel>
@@ -146,7 +183,7 @@ const ReportMensilePage: React.FC = () => {
                 {!loading && (
                     <>
                         <Box sx={{ display: activeTab === 0 ? 'block' : 'none' }}>
-                           <ConsuntivoTable reports={enrichedAndFilteredReports} />
+                           <ConsuntivoTable reports={enrichedAndFilteredReports} totalGuadagno={totalGuadagno} />
                         </Box>
                          <Box sx={{ display: activeTab === 1 ? 'block' : 'none' }}>
                             <CalendarioView reports={enrichedAndFilteredReports} year={currentYear} month={currentMonth} />

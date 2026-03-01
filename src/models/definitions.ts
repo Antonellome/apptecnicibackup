@@ -1,92 +1,58 @@
-
-// src/models/definitions.ts
-
-/**
- * Definizioni centralizzate dei tipi di dati (interfacce TypeScript)
- * per garantire coerenza in tutta l'applicazione.
- */
-
-// Interfaccia per un generico elemento con id e nome
-export interface GenericItem {
-    id: string;
-    nome: string;
+export interface Tecnico {
+  id: string;
+  nome: string;
+  cognome: string;
+  email: string;
 }
 
-// Estende GenericItem e aggiunge il cognome
-export interface Tecnico extends GenericItem {
-    cognome: string;
-    attivo?: boolean;
-    noteInterne?: string;
-    [key: string]: any;
+export interface Nave {
+  id: string;
+  nome: string;
 }
 
-// Estende GenericItem per le Ditte
-export type Ditta = GenericItem;
-
-// Estende GenericItem per le Categorie
-export type Categoria = GenericItem;
-
-// Estende GenericItem per le Navi
-export type Nave = GenericItem;
-
-// Estende GenericItem per i Luoghi
-export type Luogo = GenericItem;
-
-// Interfaccia specifica per i Veicoli
-export interface Veicolo {
-    id: string;
-    targa: string;
-    nome?: string; // Il nome/descrizione del veicolo è opzionale
+export interface Luogo {
+  id: string;
+  nome: string;
 }
 
-// CIAO. OBBEDISCO. HO AGGIUNTO isPeriodo A QUESTA DEFINIZIONE CENTRALE.
-// QUESTA ERA LA CAUSA DI TUTTI I PROBLEMI.
-export interface TipoGiornata extends GenericItem {
-    lavorativo: boolean;
-    isPeriodo?: boolean; // Campo opzionale per gestire le assenze su più giorni
+export interface TipoGiornata {
+  id: string;
+  nome: string;
+  colore: string;
+  lavorativo: boolean;
+  icona: string;
 }
 
-// Interfaccia completa per un Rapportino
-export interface Rapportino {
-    id: string;
-    data: Date;
-    tecnicoId: string;
-    tipoGiornataId: string;
-    isLavorativo: boolean;
-
-    // Campi opzionali per le giornate lavorative
-    oreLavoro?: number;
-    isManuale?: boolean;
-    oraInizio?: string | null;
-    oraFine?: string | null;
-    pausa?: number | null;
-    veicoloId?: string | null;
-    naveId?: string | null;
-    luogoId?: string | null;
-    descrizioneBreve?: string;
-    lavoroEseguito?: string;
-    materialiImpiegati?: string;
-    altriTecniciIds?: string[];
-    partecipanti?: string[];
-
-    // Metadati
-    createdAt: Date;
-    createdBy: string;
-    lastUpdatedAt?: Date;
-    lastUpdatedBy?: string;
+export interface Report {
+  id: string;
+  tecnicoId: string;
+  data: any; // Firestore Timestamp
+  tipoGiornataId: string;
+  oreLavoro: number;
+  descrizioneBreve?: string;
+  naveId?: string;
+  luogoId?: string;
+  oraInizio?: any; // Firestore Timestamp
+  oraFine?: any; // Firestore Timestamp
 }
 
-// Interfaccia di base per tutte le anagrafiche
-export interface BaseAnagrafica {
-    id?: string;
+// Tipo "arricchito" per l'uso nel frontend
+export interface EnrichedReport extends Omit<Report, 'data' | 'oraInizio' | 'oraFine'> {
+  data: Date;
+  oraInizio?: Date;
+  oraFine?: Date;
+  tipoGiornata: TipoGiornata; // Oggetto completo invece del solo ID
 }
 
-// Interfaccia per descrivere la struttura di un campo di form
-export interface FormField {
-    name: string;
-    label: string;
-    type: 'text' | 'number' | 'textarea' | 'select' | 'date' | 'boolean';
-    required?: boolean;
-    options?: { value: string; label: string }[];
+// Definizione per il form, dove le date possono essere null o Date
+export interface RapportinoFormValues {
+  id?: string;
+  data: Date | null;
+  tipoGiornataId: string;
+  oreLavoro: number;
+  descrizioneBreve: string;
+  naveId: string;
+  luogoId: string;
+  oraInizio: Date | null;
+  oraFine: Date | null;
 }
-

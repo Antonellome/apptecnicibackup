@@ -1,18 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Grid,
-  CircularProgress,
-  DialogContentText,
-  Box,
   Slide,
   AppBar,
   Toolbar,
@@ -21,11 +12,12 @@ import {
 } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
-import type { Rapportino, Tecnico, Nave, Luogo } from '@/models/definitions';
+import type { EnrichedReport, Tecnico, TipoGiornata } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
 import { useData } from '@/hooks/useData';
+import { useAuth } from '@/hooks/useAuth';
+import { format } from 'date-fns';
+import { it } from 'date-fns/locale';
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement },
@@ -37,127 +29,96 @@ const Transition = React.forwardRef(function Transition(
 interface ReportMensileDialogProps {
   open: boolean;
   onClose: () => void;
+  reports: EnrichedReport[];
+  currentMonth: Date;
+  tipiGiornata: TipoGiornata[];
 }
 
-const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose }) => {
-  const { tecnici, navi, luoghi } = useData();
-  const [anno, setAnno] = useState(new Date().getFullYear());
-  const [mese, setMese] = useState(new Date().getMonth() + 1);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedReport, setGeneratedReport] = useState<Rapportino[] | null>(null);
-  const [selectedTecnicoId, setSelectedTecnicoId] = useState<string>('');
-
-  const handleGenerate = async () => {
-    if (!selectedTecnicoId) return;
-    setIsGenerating(true);
-    setGeneratedReport(null);
-
-    const startDate = Timestamp.fromDate(new Date(anno, mese - 1, 1));
-    const endDate = Timestamp.fromDate(new Date(anno, mese, 0, 23, 59, 59));
-
-    const q = query(
-      collection(db, 'rapportini'),
-      where('data', '>=', startDate),
-      where('data', '<', endDate),
-      where('tecnicoId', '==', selectedTecnicoId)
-    );
-
+const loadTariffe = (userId: string): Record<string, number> => {
     try {
-      const snapshot = await getDocs(q);
-      const reportData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Rapportino));
-      setGeneratedReport(reportData);
+        const savedTariffeJSON = localStorage.getItem(`tariffe_${userId}`);
+        if (savedTariffeJSON) {
+            const parsedTariffe = JSON.parse(savedTariffeJSON);
+            Object.keys(parsedTariffe).forEach(key => {
+                parsedTariffe[key] = Number(parsedTariffe[key]) || 0;
+            });
+            return parsedTariffe;
+        }
     } catch (error) {
-      console.error("Errore nella generazione del report:", error);
-      setGeneratedReport([]);
+        console.error("Errore nel caricamento o parsing delle tariffe:", error);
     }
+    return {};
+};
 
-    setIsGenerating(false);
-  };
+const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tipiGiornata }) => {
+  const { user } = useAuth();
+  const { tecnici, navi, luoghi } = useData();
 
-  const anni = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
-  const mesi = Array.from({ length: 12 }, (_, i) => ({
-    value: i + 1,
-    label: new Date(0, i).toLocaleString('it-IT', { month: 'long' })
-  }));
-  
-  const selectedTecnico = tecnici.find((t: Tecnico) => t.id === selectedTecnicoId);
+  const selectedTecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
 
-  if (!open) return null;
+  const tariffe = useMemo(() => {
+      if (user?.uid) {
+          return loadTariffe(user.uid);
+      }
+      return {};
+  }, [user]);
 
-  if (generatedReport !== null) {
-    return (
-      <Dialog
-        fullScreen
-        open={true}
-        onClose={() => setGeneratedReport(null)} // Modified to handle closing the full-screen view
-        TransitionComponent={Transition}
-      >
-          <AppBar sx={{ position: 'relative' }}>
-              <Toolbar>
-                  <IconButton edge="start" color="inherit" onClick={() => setGeneratedReport(null)} aria-label="close">
-                      <CloseIcon />
-                  </IconButton>
-                  <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-                      Report per {selectedTecnico?.nome} {selectedTecnico?.cognome} - {mesi.find(m => m.value === mese)?.label} {anno}
-                  </Typography>
-              </Toolbar>
-          </AppBar>
-          <GeneratedReportView 
-              rapportini={generatedReport}
-              tecnici={tecnici}
-              navi={navi}
-              luoghi={luoghi}
-              anno={anno}
-              mese={mese}
-          />
-      </Dialog>
-    );
+  const enrichedReportsWithGuadagno = useMemo(() => {
+      const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t]));
+      return reports.map(report => {
+          const tipo = tipiGiornataMap.get(report.tipoGiornataId);
+          // --- CORREZIONE TARIFFA DEFAULT ---
+          const tariffa = tipo ? (tariffe[tipo.nome] ?? (tipo.lavorativo ? 10 : 0)) : 0;
+          const guadagno = (report.oreLavoro ?? 0) * tariffa;
+          return {
+              ...report,
+              guadagno: guadagno,
+          };
+      });
+  }, [reports, tariffe, tipiGiornata]);
+
+  const totalGuadagno = useMemo(() => {
+      return enrichedReportsWithGuadagno.reduce((sum, report) => sum + (report.guadagno ?? 0), 0);
+  }, [enrichedReportsWithGuadagno]);
+
+  const anno = currentMonth.getFullYear();
+  const mese = currentMonth.getMonth() + 1;
+  const monthString = format(currentMonth, 'MMMM yyyy', { locale: it });
+
+  if (!open || !selectedTecnico) {
+    return null;
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h5">Genera Report Mensile</Typography>
-      </DialogTitle>
-      <DialogContent dividers sx={{ pt: 2 }}>
-        <DialogContentText sx={{mb: 3}}>Seleziona un tecnico e il periodo desiderato.</DialogContentText>
-        <Grid container spacing={3}>
-          <Grid size={12}>
-            <FormControl fullWidth variant="outlined">
-                <InputLabel>Tecnico</InputLabel>
-                <Select value={selectedTecnicoId} onChange={(e) => setSelectedTecnicoId(e.target.value as string)} label="Tecnico">
-                    {tecnici.map((t: Tecnico) => <MenuItem key={t.id} value={t.id}>{t.nome} {t.cognome}</MenuItem>)}
-                </Select>
-            </FormControl>
-          </Grid>
-          <Grid
-            size={{
-              xs: 12,
-              sm: 6
-            }}>
-            <FormControl fullWidth variant="outlined">
-              <InputLabel>Anno</InputLabel>
-              <Select value={anno} onChange={(e) => setAnno(e.target.value as number)} label="Anno">{anni.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}</Select>
-            </FormControl>
-          </Grid>
-          <Grid
-            size={{
-              xs: 12,
-              sm: 6
-            }}>
-            <FormControl fullWidth variant="outlined">
-              <InputLabel>Mese</InputLabel>
-              <Select value={mese} onChange={(e) => setMese(e.target.value as number)} label="Mese">{mesi.map(m => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}</Select>
-            </FormControl>
-          </Grid>
-        </Grid>
+    <Dialog
+      fullScreen
+      open={open}
+      onClose={onClose}
+      TransitionComponent={Transition}
+    >
+      <AppBar sx={{ position: 'relative' }}>
+        <Toolbar>
+          <IconButton edge="start" color="inherit" onClick={onClose} aria-label="close">
+            <CloseIcon />
+          </IconButton>
+          <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
+            Consuntivo per {selectedTecnico?.nome} {selectedTecnico?.cognome} - {monthString}
+          </Typography>
+        </Toolbar>
+      </AppBar>
+      <DialogContent>
+        <GeneratedReportView 
+            rapportini={enrichedReportsWithGuadagno}
+            tecnico={selectedTecnico}
+            navi={navi}
+            luoghi={luoghi}
+            anno={anno}
+            mese={mese}
+            totalGuadagno={totalGuadagno}
+        />
       </DialogContent>
-      <DialogActions sx={{p: '16px 24px'}}>
-        <Button onClick={onClose} disabled={isGenerating}>Annulla</Button>
-        <Box sx={{ position: 'relative' }}>
-          <Button onClick={handleGenerate} variant="contained" color="primary" size="large" disabled={isGenerating || !selectedTecnicoId}>Genera</Button>
-          {isGenerating && <CircularProgress size={24} sx={{ position: 'absolute', top: '50%', left: '50%', marginTop: '-12px', marginLeft: '-12px' }} />}
-        </Box>
+      <DialogActions>
+        <Button onClick={onClose}>Chiudi</Button>
       </DialogActions>
     </Dialog>
   );

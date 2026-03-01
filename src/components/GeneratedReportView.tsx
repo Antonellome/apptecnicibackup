@@ -3,70 +3,77 @@ import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Button, Divider, Icon
 } from '@mui/material';
-import { Print, Summarize } from '@mui/icons-material';
-import { useReactToPrint } from 'react-to-print';
-import type { Rapportino, Tecnico, Nave, Luogo } from '@/models/definitions'; 
+import { Share, Summarize, EuroSymbol } from '@mui/icons-material';
+import html2canvas from 'html2canvas';
+import type { Tecnico, Nave, Luogo, EnrichedReport } from '@/models/definitions'; 
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
 
 interface GeneratedReportViewProps {
-  rapportini: Rapportino[];
-  tecnici: Tecnico[];
+  rapportini: (EnrichedReport & { guadagno?: number })[];
+  tecnico: Tecnico;
   navi: Nave[];
   luoghi: Luogo[];
   anno: number;
   mese: number;
+  totalGuadagno?: number; // Prop per il totale guadagno
 }
 
-interface ReportData {
-    tecnico: Tecnico;
-    oreTotali: number;
-    rapportini: Rapportino[];
-}
+// Funzione per formattare la valuta
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(value);
+};
 
-const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnici, navi, luoghi, anno, mese }) => {
+const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnico, navi, luoghi, anno, mese, totalGuadagno = 0 }) => {
   const printRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
-  // CIAO: Corretto l'hook useReactToPrint
-  const handlePrint = useReactToPrint({ body: () => printRef.current });
+
+  const handleShare = async () => {
+    if (!printRef.current) return;
+
+    const canvas = await html2canvas(printRef.current, { backgroundColor: '#ffffff' });
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+
+      const file = new File([blob], 'report.png', { type: blob.type });
+      const shareData = {
+        files: [file],
+        title: 'Report Mensile',
+        text: `Ecco il report mensile per ${tecnico.nome} ${tecnico.cognome}`,
+      };
+
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        try {
+          await navigator.share(shareData);
+        } catch (error) {
+          console.error('Errore durante la condivisione:', error);
+        }
+      } else {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'report.png';
+        link.click();
+      }
+    });
+  };
 
   const meseNome = new Date(anno, mese - 1).toLocaleString('it-IT', { month: 'long' });
 
   const { naviMap, luoghiMap } = useMemo(() => {
-    // CIAO: Aggiungo tipi espliciti per risolvere l'errore implicit any
     const naviMap: Record<string, string> = (navi || []).reduce((acc, n) => ({ ...acc, [n.id]: n.nome }), {});
     const luoghiMap: Record<string, string> = (luoghi || []).reduce((acc, l) => ({ ...acc, [l.id]: l.nome }), {});
     return { naviMap, luoghiMap };
   }, [navi, luoghi]);
 
-  const reportData: ReportData[] = tecnici.map(tecnico => {
-    // CIAO: Corretto `tecnicoScriventeId` con `tecnicoId`
-    const rapportiniDelTecnico = rapportini.filter(r => r.tecnicoId === tecnico.id);
-    // CIAO: Corretto `oreLavorate` con `oreLavoro`
-    const oreTotali = rapportiniDelTecnico.reduce((acc, r) => acc + (r.oreLavoro || 0), 0);
-    return {
-      tecnico,
-      oreTotali,
-      rapportini: rapportiniDelTecnico,
-    };
-  }).filter(data => data.rapportini.length > 0); 
+  const oreTotali = rapportini.reduce((acc, r) => acc + (r.oreLavoro || 0), 0);
 
-  const oreComplessive = reportData.reduce((acc, data) => acc + data.oreTotali, 0);
-
-  const cardStyle = {
-    borderLeft: `5px solid ${theme.palette.primary.main}`,
-    p: 2,
-    mb: 2,
-  };
-
-  // CIAO: Corretta la funzione per lavorare con oggetti Date
-  const formatTime = (date: Date | undefined) => {
-    if (!date) return '-';
-    return dayjs(date).format('HH:mm');
+  const headerCellStyle = {
+    fontWeight: 'bold',
+    color: theme.palette.common.white,
   };
 
   return (
-    <Paper elevation={2} sx={cardStyle}>
+    <Paper elevation={0} sx={{ p: 2, mb: 2, border: 'none', boxShadow: 'none' }}>
         <Box ref={printRef} sx={{p: 2}}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                 <Icon component={Summarize} sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
@@ -80,56 +87,56 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                 </Box>
             </Box>
 
-            {reportData.length === 0 ? (
-                <Typography align="center" color="text.secondary" sx={{py: 5}}>Nessun dato trovato per i criteri selezionati.</Typography>
+            {rapportini.length === 0 ? (
+                <Typography align="center" color="text.secondary" sx={{py: 5}}>Nessun dato trovato per questo mese.</Typography>
             ) : (
-                reportData.map(data => (
-                    <Box key={data.tecnico.id} sx={{ mb: 4 }}>
-                        <Box sx={{ p: 1.5, borderRadius: 2, mb: 2, border: `1px solid ${theme.palette.divider}` }}>
-                            <Typography variant="h6">{`${data.tecnico.nome} ${data.tecnico.cognome}`}</Typography>
-                            <Typography variant="subtitle1" color="text.secondary">Ore totali lavorate: <Typography component="span" fontWeight="bold" color="text.primary">{data.oreTotali}</Typography></Typography>
-                        </Box>
-                        <TableContainer component={Paper} variant="outlined">
-                            <Table size="small">
-                                <TableHead sx={{ backgroundColor: theme.palette.grey[100] }}>
-                                    <TableRow>
-                                        <TableCell sx={{fontWeight: 'bold'}}>Data</TableCell>
-                                        <TableCell sx={{fontWeight: 'bold'}}>Nave / Luogo</TableCell>
-                                        <TableCell sx={{fontWeight: 'bold'}}>Dettaglio</TableCell>
-                                        <TableCell sx={{fontWeight: 'bold'}}>Orario</TableCell>
-                                        <TableCell align="right" sx={{fontWeight: 'bold'}}>Ore</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {data.rapportini.map(r => (
-                                        <TableRow key={r.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                            {/* CIAO: Rimosso .toDate() */}
-                                            <TableCell>{dayjs(r.data).format('DD/MM/YY')}</TableCell>
-                                            <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
-                                            {/* CIAO: Corretto `breveDescrizione` con `descrizioneBreve` */}
-                                            <TableCell>{r.descrizioneBreve}</TableCell>
-                                            <TableCell>{formatTime(r.oraInizio)} - {formatTime(r.oraFine)}</TableCell>
-                                            {/* CIAO: Corretto `oreLavorate` con `oreLavoro` */}
-                                            <TableCell align="right">{r.oreLavoro || '-'}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
+                <Box>
+                    <Box sx={{ p: 1.5, borderRadius: 2, mb: 2, border: `1px solid ${theme.palette.divider}` }}>
+                        <Typography variant="h6">{`${tecnico.nome} ${tecnico.cognome}`}</Typography>
+                        <Typography variant="subtitle1" color="text.secondary">Ore totali lavorate: <Typography component="span" fontWeight="bold" color="text.primary">{oreTotali.toFixed(2)}</Typography></Typography>
+                         {/* --- VISUALIZZAZIONE TOTALE GUADAGNO --- */}
+                        <Typography variant="subtitle1" color="text.secondary">Guadagno totale: <Typography component="span" fontWeight="bold" color="text.primary">{formatCurrency(totalGuadagno)}</Typography></Typography>
                     </Box>
-                ))
+                    <TableContainer component={Paper} variant="outlined">
+                        <Table size="small">
+                            <TableHead sx={{ backgroundColor: theme.palette.primary.main }}>
+                                <TableRow>
+                                    <TableCell sx={headerCellStyle}>Data</TableCell>
+                                    <TableCell sx={headerCellStyle}>Nave / Luogo</TableCell>
+                                    <TableCell sx={headerCellStyle}>Dettaglio</TableCell>
+                                    <TableCell align="right" sx={headerCellStyle}>Ore</TableCell>
+                                    {/* --- COLONNA GUADAGNO --- */}
+                                    <TableCell align="right" sx={headerCellStyle}>Guadagno</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {rapportini.map(r => (
+                                    <TableRow key={r.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                        <TableCell>{dayjs(r.data).format('DD/MM/YY')}</TableCell>
+                                        <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
+                                        <TableCell>{r.descrizioneBreve}</TableCell>
+                                        <TableCell align="right">{r.oreLavoro ? r.oreLavoro.toFixed(2) : '-'}</TableCell>
+                                        {/* --- CELLA GUADAGNO --- */}
+                                        <TableCell align="right">{r.guadagno ? formatCurrency(r.guadagno) : '-'}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Box>
             )}
             <Divider sx={{ my: 3 }} />
-            <Box sx={{display: 'flex', justifyContent: 'flex-end'}}>
-                <Typography variant="h6" align="right">Totale Ore Complessive: <Typography component="span" color="primary" variant="h5" fontWeight="bold">{oreComplessive}</Typography></Typography>
+            <Box sx={{display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 3}}>
+                <Typography variant="h6" align="right">Totale Ore: <Typography component="span" color="primary" variant="h5" fontWeight="bold">{oreTotali.toFixed(2)}</Typography></Typography>
+                <Typography variant="h6" align="right">Totale Guadagno: <Typography component="span" color="primary" variant="h5" fontWeight="bold">{formatCurrency(totalGuadagno)}</Typography></Typography>
             </Box>
         </Box>
 
         <Divider sx={{ my: 2 }} />
 
         <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="contained" startIcon={<Print />} onClick={handlePrint} size="large">
-                Stampa Report
+            <Button variant="contained" startIcon={<Share />} onClick={handleShare} size="large">
+                Condividi Report
             </Button>
         </Box>
     </Paper>

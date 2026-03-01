@@ -1,172 +1,228 @@
-import React, { useState, useEffect } from 'react';
-import { 
-    Box, 
-    Typography, 
-    Paper, 
-    Grid, 
-    TextField, 
-    Button, 
-    FormControl, 
-    InputLabel, 
-    Select, 
-    MenuItem, 
-    Checkbox, 
-    ListItemText, 
-    OutlinedInput,
-    CircularProgress
+import { useState, useEffect, useMemo } from 'react';
+import {
+  Box,
+  Typography,
+  CircularProgress,
+  Alert,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Collapse,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Grid,
 } from '@mui/material';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { collection, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { db } from '@/utils/firebase';
+import { Report, EnrichedReport, Nave, Luogo, TipoGiornata } from '@/models/definitions';
+import { KeyboardArrowDown, KeyboardArrowUp } from '@mui/icons-material';
+import { format } from 'date-fns';
+import { it } from 'date-fns/locale';
 
-// Placeholder data - replace with actual data fetching
-interface Technician {
-    id: string;
-    name: string;
-}
+const Row = ({ report }: { report: EnrichedReport }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <TableRow sx={{ '& > *': { borderBottom: 'unset' } }}>
+        <TableCell>
+          <IconButton size="small" onClick={() => setOpen(!open)}>
+            {open ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
+          </IconButton>
+        </TableCell>
+        <TableCell component="th" scope="row">
+          {format(report.data, 'dd/MM/yyyy', { locale: it })}
+        </TableCell>
+        <TableCell>{report.nave?.nome || report.luogo?.nome || 'N/D'}</TableCell>
+        <TableCell>{report.tipoGiornata.nome}</TableCell>
+        <TableCell align="right">{report.oreLavoro.toFixed(2)}</TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ margin: 1 }}>
+              <Typography variant="h6" gutterBottom component="div">
+                Dettagli Rapportino
+              </Typography>
+              <Typography variant="body2"><strong>Descrizione:</strong> {report.descrizioneBreve}</Typography>
+              <Typography variant="body2"><strong>Ore Viaggio:</strong> {report.oreViaggio?.toString() || '-'}</Typography>
+              <Typography variant="body2"><strong>Note:</strong> {report.note || '-'}</Typography>
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+};
 
 const ReportPage = () => {
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    const [technicians, setTechnicians] = useState<Technician[]>([]);
-    const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
-    const [status, setStatus] = useState('all');
-    const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<EnrichedReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  
+  // CIAO: Stati per mese e anno
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-    useEffect(() => {
-        const fetchTechnicians = async () => {
-            try {
-                // This should point to your actual collection of users/technicians
-                const usersCollectionRef = collection(db, 'users'); 
-                const snapshot = await getDocs(usersCollectionRef);
-                const techList = snapshot.docs.map(doc => ({ 
-                    id: doc.id, 
-                    name: doc.data().displayName || doc.id 
-                }));
-                setTechnicians(techList);
-            } catch (error) {
-                console.error("Error fetching technicians:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
+  const { navi, luoghi, tipiGiornata } = useMemo(() => {
+    // Dati che potremmo voler caricare una sola volta
+    return {
+        navi: [] as Nave[], // da caricare
+        luoghi: [] as Luogo[], // da caricare
+        tipiGiornata: new Map<string, TipoGiornata>() // da caricare
+    };
+  }, []);
 
-        fetchTechnicians();
-    }, []);
+  useEffect(() => {
+    const fetchInitialData = async () => {
+        try {
+            const naviSnapshot = await getDocs(collection(db, 'navi'));
+            const naviData = naviSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Nave[];
 
-    const handleTechChange = (event: any) => {
-        const { target: { value } } = event;
-        setSelectedTechIds(
-            typeof value === 'string' ? value.split(',') : value,
+            const luoghiSnapshot = await getDocs(collection(db, 'luoghi'));
+            const luoghiData = luoghiSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Luogo[];
+
+            const tipiGiornataSnapshot = await getDocs(collection(db, 'tipiGiornata'));
+            const tipiGiornataMap = new Map<string, TipoGiornata>();
+            tipiGiornataSnapshot.forEach(doc => {
+                tipiGiornataMap.set(doc.id, doc.data() as TipoGiornata);
+            });
+            
+            return { naviData, luoghiData, tipiGiornataMap };
+        } catch (err) {
+            console.error("Errore nel caricamento dati iniziali:", err);
+            setError('Impossibile caricare i dati di supporto.');
+            return null;
+        }
+    };
+
+    const fetchReports = async () => {
+      setLoading(true);
+      setError('');
+
+      const initialData = await fetchInitialData();
+      if (!initialData) {
+        setLoading(false);
+        return;
+      }
+      const { naviData, luoghiData, tipiGiornataMap } = initialData;
+
+      try {
+        const startDate = new Date(selectedYear, selectedMonth, 1);
+        const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59);
+
+        const reportsQuery = query(
+          collection(db, 'rapportini'),
+          where('data', '>=', Timestamp.fromDate(startDate)),
+          where('data', '<=', Timestamp.fromDate(endDate)),
+          orderBy('data', 'desc')
         );
+
+        const reportSnapshot = await getDocs(reportsQuery);
+        const reportList = reportSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Report[];
+
+        const enrichedReports = reportList.map(report => ({
+          ...report,
+          data: (report.data as Timestamp).toDate(),
+          nave: naviData.find(n => n.id === report.naveId),
+          luogo: luoghiData.find(l => l.id === report.luogoId),
+          tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId) || { nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help' },
+          oreLavoro: report.oreLavoro || 0,
+        }));
+
+        setReports(enrichedReports);
+      } catch (err) {
+        console.error("Errore nel fetchReports:", err);
+        setError('Impossibile caricare i report.');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const handleGenerateReport = () => {
-        console.log("Generating report with filters:", { startDate, endDate, selectedTechIds, status });
-        // Report generation logic will be implemented here
-    };
+    fetchReports();
+  }, [selectedMonth, selectedYear]); // CIAO: Eseguo il fetch quando cambiano mese o anno
 
-    if (loading) {
-        return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
-    }
+  const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    value: i,
+    name: format(new Date(0, i), 'MMMM', { locale: it })
+  }));
 
-    return (
-        <Box sx={{ p: 3 }}>
-            <Paper sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h6" gutterBottom>Filtri Report</Typography>
-                <Grid container spacing={3}>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            sm: 6
-                        }}>
-                        <TextField
-                            label="Dal"
-                            type="date"
-                            fullWidth
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                        />
-                    </Grid>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            sm: 6
-                        }}>
-                        <TextField
-                            label="Al"
-                            type="date"
-                            fullWidth
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                        />
-                    </Grid>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
-                        <FormControl fullWidth>
-                            <InputLabel id="tech-select-label">Tecnici</InputLabel>
-                            <Select
-                                labelId="tech-select-label"
-                                multiple
-                                value={selectedTechIds}
-                                onChange={handleTechChange}
-                                input={<OutlinedInput label="Tecnici" />}
-                                renderValue={(selected) => 
-                                    (selected as string[]).map(id => technicians.find(t => t.id === id)?.name).join(', ')
-                                }
-                            >
-                                {technicians.map((tech) => (
-                                    <MenuItem key={tech.id} value={tech.id}>
-                                        <Checkbox checked={selectedTechIds.indexOf(tech.id) > -1} />
-                                        <ListItemText primary={tech.name} />
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 6
-                        }}>
-                        <FormControl fullWidth>
-                            <InputLabel id="status-select-label">Stato</InputLabel>
-                            <Select
-                                labelId="status-select-label"
-                                value={status}
-                                onChange={(e) => setStatus(e.target.value)}
-                                label="Stato"
-                            >
-                                <MenuItem value="all">Tutti</MenuItem>
-                                <MenuItem value="open">Aperto</MenuItem>
-                                <MenuItem value="closed">Chiuso</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid sx={{ textAlign: 'right' }} size={12}>
-                        <Button variant="contained" color="primary" onClick={handleGenerateReport}>
-                            Genera Report
-                        </Button>
-                    </Grid>
-                </Grid>
-            </Paper>
-            {/* Placeholder for report results and totals */}
-            <Paper sx={{ p: 3 }}>
-                <Typography variant="h6">Risultati</Typography>
-                <Box sx={{ mt: 2 }}>
-                    <Typography>I dati del report verranno visualizzati qui.</Typography>
-                </Box>
-                 <Box sx={{ mt: 4, textAlign: 'right' }}>
-                    <Typography variant="h6">Totale Ore: 0</Typography>
-                    <Typography variant="h6">Totale Costi: 0.00 €</Typography>
-                </Box>
-            </Paper>
-        </Box>
-    );
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
+        Elenco Report
+      </Typography>
+
+      <Paper sx={{ mb: 2, p: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel>Mese</InputLabel>
+              <Select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value as number)}
+              >
+                {months.map(month => (
+                  <MenuItem key={month.value} value={month.value}>{month.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel>Anno</InputLabel>
+              <Select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value as number)}
+              >
+                {years.map(year => (
+                  <MenuItem key={year} value={year}>{year}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {loading && <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>}
+      {error && <Alert severity="error">{error}</Alert>}
+
+      {!loading && !error && (
+        <TableContainer component={Paper}>
+          <Table aria-label="collapsible table">
+            <TableHead>
+              <TableRow>
+                <TableCell />
+                <TableCell>Data</TableCell>
+                <TableCell>Nave / Luogo</TableCell>
+                <TableCell>Tipo Giornata</TableCell>
+                <TableCell align="right">Ore Lavoro</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {reports.length > 0 ? (
+                reports.map((report) => <Row key={report.id} report={report} />)
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Nessun report trovato per il periodo selezionato.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  );
 };
 
 export default ReportPage;

@@ -1,0 +1,29 @@
+
+.nuovo-rapportino-form { max-width: 800px; margin: 2rem auto; padding: 2rem; background: #fff; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+.nuovo-rapportino-form h2 { text-align: center; color: #2c3e50; margin-bottom: 2rem; font-weight: 600; }
+.form-section { margin-bottom: 2rem; padding: 1.5rem; border: 1px solid #e0e0e0; border-radius: 8px; background: #fdfdfd; }
+.form-section h3 { margin-top: 0; margin-bottom: 1.5rem; color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 0.5rem; font-size: 1.2rem; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
+.form-group { display: flex; flex-direction: column; }
+.form-group label { font-weight: 600; margin-bottom: 0.5rem; color: #34495e; font-size: 0.9rem; }
+.form-group input, .form-group select, .form-group textarea { padding: 0.85rem; border: 1px solid #bdc3c7; border-radius: 6px; font-size: 1rem; width: 100%; box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #3498db; box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); outline: none; }
+.form-group textarea { min-height: 120px; resize: vertical; }
+.form-group input:disabled { background: #ecf0f1; color: #7f8c8d; cursor: not-allowed; border-color: #e0e0e0; }
+.ore-switch { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
+.ore-switch button { padding: 0.5rem 1rem; border: 1px solid #bdc3c7; border-radius: 20px; cursor: pointer; background: #fff; color: #34495e; transition: all 0.2s; }
+.ore-switch button.active { background: #3498db; color: white; border-color: #3498db; font-weight: bold; }
+.ore-summary { margin-top: 1.5rem; padding: 1rem; background: #ecf0f1; border: 1px solid #e0e0e0; border-radius: 6px; text-align: center; }
+.ore-summary p { margin: 0.25rem 0; font-size: 1.1rem; }
+.ore-summary strong { color: #2980b9; }
+.submit-button { width: 100%; padding: 1rem; font-size: 1.2rem; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 1rem; transition: background-color 0.2s; }
+.submit-button.single { background: #27ae60; }
+.submit-button.single:hover { background: #229954; }
+.submit-button.multiple { background: #3498db; }
+.submit-button.multiple:hover { background: #2980b9; }
+.mode-switcher { display: flex; justify-content: center; margin-bottom: 2rem; background-color: #ecf0f1; border-radius: 8px; padding: 5px; }
+.mode-switcher-btn { flex: 1; padding: 0.75rem; text-align: center; border: none; background: transparent; cursor: pointer; font-size: 1rem; font-weight: 500; border-radius: 6px; transition: all 0.2s ease-in-out; color: #7f8c8d; }
+.mode-switcher-btn.active { background-color: #fff; color: #3498db; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.checkbox-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; }
+.checkbox-item label { margin-bottom: 0; font-weight: normal; }

@@ -17,12 +17,13 @@
     "@mui/icons-material": "^7.3.7",
     "@mui/material": "^7.3.7",
     "@mui/x-data-grid": "^8.27.1",
-    "@mui/x-date-pickers": "^8.27.0",
+    "@mui/x-date-pickers": "^8.27.2",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
     "firebase": "^12.8.0",
     "formik": "^2.4.9",
     "formik-mui": "^5.0.0-alpha.1",
+    "html2canvas": "^1.4.1",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "react": "^19.2.0",
@@ -53,7 +54,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vite-plugin-pwa": "^1.2.0",
+    "vite-plugin-pwa": "^0.19.8",
     "vite-tsconfig-paths": "^6.0.5"
   }
 }

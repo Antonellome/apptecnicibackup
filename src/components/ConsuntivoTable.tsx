@@ -1,26 +1,33 @@
-
 import React from 'react';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Box } from '@mui/material';
 import { Rapportino as Report, TipoGiornata } from '@/models/definitions';
 import { format } from 'date-fns';
-import { it } from 'date-fns/locale/it'; // CIAO: Corretto l'import da default a nominato
+import { it } from 'date-fns/locale/it';
 
 interface EnrichedReport extends Report {
     tipoGiornata?: TipoGiornata;
+    guadagno?: number; // Aggiunta la proprietà guadagno
 }
 
 interface ConsuntivoTableProps {
     reports: EnrichedReport[];
+    totalGuadagno?: number; // Aggiunta la prop per il totale
 }
 
-const formatTotal = (label: string, value: number, unit: string) => (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+// Funzione di utility per formattare i totali
+const formatTotal = (label: string, value: string) => (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mt: 0.5 }}>
         <Typography variant="body2" component="span">{label}:</Typography>
-        <Typography variant="body2" component="span" fontWeight="bold">{value.toFixed(2)} {unit}</Typography>
+        <Typography variant="body2" component="span" fontWeight="bold">{value}</Typography>
     </Box>
 );
 
-const ConsuntivoTable: React.FC<ConsuntivoTableProps> = ({ reports }) => {
+// Funzione per formattare la valuta
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(value);
+};
+
+const ConsuntivoTable: React.FC<ConsuntivoTableProps> = ({ reports, totalGuadagno = 0 }) => {
 
     const totals = reports.reduce((acc, report) => {
         if (report.tipoGiornata?.lavorativo) {
@@ -30,16 +37,18 @@ const ConsuntivoTable: React.FC<ConsuntivoTableProps> = ({ reports }) => {
     }, { oreTotali: 0 });
 
     return (
-        <Paper sx={{ p: { xs: 1, sm: 2 }, mt: 2 }}>
-            <Typography variant="h6" gutterBottom align="center">Tabella Consuntivo</Typography>
-            <TableContainer>
+        <Paper sx={{ p: { xs: 1, sm: 2 } }}>
+            <Typography variant="h6" gutterBottom align="center" sx={{mb: 2}}>Tabella Consuntivo</Typography>
+            <TableContainer sx={{ maxHeight: 600 }}>
                 <Table stickyHeader size="small">
                     <TableHead>
                         <TableRow>
-                            <TableCell>Data</TableCell>
-                            <TableCell>Tipo Giornata</TableCell>
-                            <TableCell>Descrizione</TableCell>
-                            <TableCell align="right">Ore</TableCell>
+                            <TableCell sx={{width: '25%'}}>Data</TableCell>
+                            <TableCell sx={{width: '25%'}}>Tipo Giornata</TableCell>
+                            <TableCell sx={{width: '30%'}}>Descrizione</TableCell>
+                            <TableCell align="right" sx={{width: '10%'}}>Ore</TableCell>
+                            {/* --- NUOVA COLONNA --- */}
+                            <TableCell align="right" sx={{width: '10%'}}>Guadagno</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -49,14 +58,18 @@ const ConsuntivoTable: React.FC<ConsuntivoTableProps> = ({ reports }) => {
                                     {format(new Date(report.data), 'dd/MM/yyyy (eee)', { locale: it })}
                                 </TableCell>
                                 <TableCell>{report.tipoGiornata?.nome || 'N/D'}</TableCell>
-                                <TableCell>{report.descrizioneBreve || '-'}</TableCell>
+                                <TableCell sx={{ wordBreak: 'break-word'}}>{report.descrizioneBreve || '-'}</TableCell>
                                 <TableCell align="right">
                                     {report.oreLavoro ? report.oreLavoro.toFixed(2) : '-'}
+                                </TableCell>
+                                {/* --- CELLA GUADAGNO --- */}
+                                <TableCell align="right">
+                                    {report.guadagno ? formatCurrency(report.guadagno) : '-'}
                                 </TableCell>
                             </TableRow>
                         )) : (
                             <TableRow>
-                                <TableCell colSpan={4} align="center">Nessun report per il periodo selezionato.</TableCell>
+                                <TableCell colSpan={5} align="center">Nessun report per il periodo selezionato.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
@@ -64,7 +77,9 @@ const ConsuntivoTable: React.FC<ConsuntivoTableProps> = ({ reports }) => {
             </TableContainer>
             <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
                 <Typography variant="h6" gutterBottom>Riepilogo</Typography>
-                {formatTotal('Ore Lavorate Totali', totals.oreTotali, 'h')}
+                {formatTotal('Ore Lavorate Totali', `${totals.oreTotali.toFixed(2)} h`)}
+                {/* --- TOTALE GUADAGNO --- */}
+                {formatTotal('Guadagno Totale', formatCurrency(totalGuadagno))}
             </Box>
         </Paper>
     );

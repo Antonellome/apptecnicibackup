@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Paper, Typography, CircularProgress, Alert, TextField, Autocomplete, Box } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
@@ -13,6 +12,22 @@ import { Tecnico, Rapportino, TipoGiornata } from '@/models/definitions';
 
 dayjs.locale('it');
 
+const loadTariffe = (userId: string): Record<string, number> => {
+    try {
+        const savedTariffeJSON = localStorage.getItem(`tariffe_${userId}`);
+        if (savedTariffeJSON) {
+            const parsedTariffe = JSON.parse(savedTariffeJSON);
+            Object.keys(parsedTariffe).forEach(key => {
+                parsedTariffe[key] = Number(parsedTariffe[key]) || 0;
+            });
+            return parsedTariffe;
+        }
+    } catch (error) {
+        console.error("Errore nel caricamento o parsing delle tariffe:", error);
+    }
+    return {};
+};
+
 const ConsuntivoPage: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs());
     const [selectedTecnico, setSelectedTecnico] = useState<Tecnico | null>(null);
@@ -20,18 +35,38 @@ const ConsuntivoPage: React.FC = () => {
     const { tecnici, tipiGiornata, loading: dataLoading, error: dataError } = useGlobalData();
     const { reports, loading: reportsLoading, error: reportsError } = useReports(selectedMonth, selectedTecnico?.uid);
 
+    const [tariffe, setTariffe] = useState<Record<string, number>>({});
+
+    useEffect(() => {
+        if (selectedTecnico?.uid) {
+            setTariffe(loadTariffe(selectedTecnico.uid));
+        } else {
+            setTariffe({});
+        }
+    }, [selectedTecnico]);
+
     const getTipoGiornata = useCallback((tipoGiornataId: string): TipoGiornata | undefined => {
         return tipiGiornata.find(t => t.id === tipoGiornataId);
     }, [tipiGiornata]);
 
     const enrichedReports = useMemo(() => {
         if (!reports) return [];
-        return reports.map(report => ({
-            ...report,
-            tipoGiornata: getTipoGiornata(report.tipoGiornataId),
-        }));
-    }, [reports, getTipoGiornata]);
+        return reports.map(report => {
+            const tipo = getTipoGiornata(report.tipoGiornataId);
+            // --- CORREZIONE TARIFFA DEFAULT ---
+            const tariffa = tipo ? (tariffe[tipo.nome] ?? (tipo.lavorativo ? 10 : 0)) : 0;
+            const guadagno = (report.oreLavoro ?? 0) * tariffa;
+            return {
+                ...report,
+                tipoGiornata: tipo,
+                guadagno: guadagno,
+            };
+        });
+    }, [reports, getTipoGiornata, tariffe]);
 
+    const totalGuadagno = useMemo(() => {
+        return enrichedReports.reduce((sum, report) => sum + (report.guadagno ?? 0), 0);
+    }, [enrichedReports]);
 
     const handleTecnicoChange = (event: React.SyntheticEvent, value: Tecnico | null) => {
         setSelectedTecnico(value);
@@ -47,11 +82,7 @@ const ConsuntivoPage: React.FC = () => {
 
                 <Paper sx={{ p: 2, mb: 3 }}>
                     <Grid container spacing={2} alignItems="center">
-                        <Grid
-                            size={{
-                                xs: 12,
-                                md: 6
-                            }}>
+                        <Grid item xs={12} md={6}>
                             <DatePicker
                                 views={['month', 'year']}
                                 label="Seleziona Mese"
@@ -60,11 +91,7 @@ const ConsuntivoPage: React.FC = () => {
                                 sx={{ width: '100%' }}
                             />
                         </Grid>
-                        <Grid
-                            size={{
-                                xs: 12,
-                                md: 6
-                            }}>
+                        <Grid item xs={12} md={6}>
                             <Autocomplete
                                 options={tecnici}
                                 getOptionLabel={(option) => `${option.nome} ${option.cognome}`}
@@ -79,13 +106,13 @@ const ConsuntivoPage: React.FC = () => {
                 </Paper>
 
                 {isLoading ? (
-                    <CircularProgress />
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4}}><CircularProgress /></Box>
                 ) : error ? (
-                    <Alert severity="error">{error.message}</Alert>
+                    <Alert severity="error">{error.message || 'Si è verificato un errore'}</Alert>
                 ) : !selectedTecnico ? (
                     <Alert severity="info">Seleziona un tecnico per visualizzare il consuntivo.</Alert>
                 ) : (
-                    <ConsuntivoTable reports={enrichedReports} />
+                    <ConsuntivoTable reports={enrichedReports} totalGuadagno={totalGuadagno} />
                 )}
             </Box>
         </LocalizationProvider>

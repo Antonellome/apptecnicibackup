@@ -1,19 +1,20 @@
-
-import React, { useState, useMemo } from 'react';
-import { 
-    Box, 
-    Typography, 
-    Paper, 
-    TextField, 
-    Button, 
-    Accordion, 
-    AccordionSummary, 
-    AccordionDetails, 
-    List, 
-    ListItem, 
-    ListItemText, 
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+    Box,
+    Typography,
+    Paper,
+    TextField,
+    Button,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
+    List,
+    ListItem,
+    ListItemText,
     Divider,
-    CircularProgress
+    CircularProgress,
+    Snackbar,
+    Alert
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,47 +22,100 @@ import { useGlobalData } from '@/hooks/useGlobalData';
 
 const SettingsPage: React.FC = () => {
     const { user, resetPassword } = useAuth();
-    const { rapportini, tipiGiornata, loading } = useGlobalData();
+    const { tipiGiornata, loading: globalLoading } = useGlobalData();
     const [emailSent, setEmailSent] = useState(false);
-    
+    const [tariffe, setTariffe] = useState<Record<string, number | string>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isDirty, setIsDirty] = useState(false);
+    const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+
     const tipiGiornataUnici = useMemo(() => {
-        if (loading) return [];
-        if(tipiGiornata && tipiGiornata.length > 0) return tipiGiornata.map(t => t.nome);
-        const tipiNeiReport = rapportini.map(r => r.tipoGiornata).filter(Boolean);
-        return [...new Set(tipiNeiReport)];
-    }, [rapportini, tipiGiornata, loading]);
-    
-    const [tariffe, setTariffe] = useState<Record<string, string>>(
-        tipiGiornataUnici.reduce((acc, tipo) => ({ ...acc, [tipo]: '10' }), {})
-    );
+        if (globalLoading || !tipiGiornata) return [];
+        return [...new Set(tipiGiornata.map(t => t.nome).filter(Boolean))];
+    }, [tipiGiornata, globalLoading]);
+
+    // Carica le tariffe da localStorage
+    useEffect(() => {
+        if (globalLoading || !user?.uid) return; // Attendi i dati globali e l'utente
+
+        setIsLoading(true);
+        try {
+            const savedTariffeJSON = localStorage.getItem(`tariffe_${user.uid}`);
+            let loadedTariffe: Record<string, number | string> = {};
+            if (savedTariffeJSON) {
+                loadedTariffe = JSON.parse(savedTariffeJSON);
+            }
+
+            // Assicura che tutti i tipi di giornata abbiano una tariffa, usando i default per quelli nuovi
+            const completeTariffe = tipiGiornataUnici.reduce((acc, tipo) => {
+                acc[tipo] = loadedTariffe[tipo] ?? '10.00';
+                return acc;
+            }, {} as Record<string, number | string>);
+
+            setTariffe(completeTariffe);
+        } catch (error) {
+            console.error("Failed to load or parse tariffs from local storage", error);
+            // In caso di errore (es. JSON malformato), usa i default
+            const defaultTariffe = tipiGiornataUnici.reduce((acc, tipo) => {
+                acc[tipo] = '10.00';
+                return acc;
+            }, {} as Record<string, string>);
+            setTariffe(defaultTariffe);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [user, tipiGiornataUnici, globalLoading]);
 
     const handleTariffaChange = (id: string, value: string) => {
-        setTariffe(prev => ({ ...prev, [id]: value }));
+        if (value === '' || (parseFloat(value) >= 0 && !isNaN(parseFloat(value)))) {
+            setTariffe(prev => ({ ...prev, [id]: value }));
+            setIsDirty(true); // Segna che ci sono modifiche non salvate
+        }
+    };
+
+    const handleSalvaTariffe = () => {
+        if (!user) {
+            setNotification({ open: true, message: 'Utente non autenticato.', severity: 'error' });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const tariffeToSave = Object.entries(tariffe).reduce((acc, [key, value]) => {
+                acc[key] = parseFloat(value as string) || 0;
+                return acc;
+            }, {} as Record<string, number>);
+
+            localStorage.setItem(`tariffe_${user.uid}`, JSON.stringify(tariffeToSave));
+            setNotification({ open: true, message: 'Tariffe salvate con successo sul dispositivo!', severity: 'success' });
+            setIsDirty(false); // Resetta lo stato dopo il salvataggio
+        } catch (error) {
+            console.error("Errore durante il salvataggio in localStorage:", error);
+            setNotification({ open: true, message: 'Errore durante il salvataggio locale.', severity: 'error' });
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleResetPassword = async () => {
-        if (!user || !user.email) {
+        if (!user?.email) {
             alert('Impossibile identificare l\'utente. Prova a fare di nuovo il login.');
             return;
         }
         try {
             await resetPassword(user.email);
             setEmailSent(true);
-        } catch (error) { 
+        } catch (error) {
             console.error("Errore durante l'invio della mail di reset:", error);
-            alert("Si è verificato un errore. Riprova.")
+            alert("Si è verificato un errore. Riprova.");
         }
     };
 
-    const now = new Date();
-    const years = useMemo(() => {
-        if (rapportini.length === 0) return [now.getFullYear()];
-        const minYear = Math.min(...rapportini.map(r => r.data.toDate().getFullYear()));
-        const maxYear = Math.max(...rapportini.map(r => r.data.toDate().getFullYear()));
-        return Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i);
-    }, [rapportini]);
+    const handleCloseNotification = () => {
+        setNotification({ ...notification, open: false });
+    };
 
-    if (loading) {
+    if (isLoading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
     }
 
@@ -73,7 +127,7 @@ const SettingsPage: React.FC = () => {
             <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
                 <Typography variant="h6" gutterBottom>Gestione Tariffe Orarie</Typography>
                 <List>
-                    {tipiGiornataUnici.map((tipo, index) => (
+                    {tipiGiornataUnici.map((tipo) => (
                         <React.Fragment key={tipo}>
                             <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                                 <ListItemText primary={tipo} />
@@ -81,21 +135,25 @@ const SettingsPage: React.FC = () => {
                                     <TextField
                                         type="number"
                                         size="small"
-                                        value={tariffe[tipo] || '10'}
+                                        value={tariffe[tipo] ?? ''}
                                         onChange={(e) => handleTariffaChange(tipo, e.target.value)}
                                         sx={{ width: '100px', mr: 1 }}
+                                        inputProps={{ min: 0, step: "0.01" }}
+                                        disabled={isSaving}
                                     />
                                     <Typography variant="body1">€/ora</Typography>
                                 </Box>
                             </ListItem>
-                            {index < tipiGiornataUnici.length - 1 && <Divider />}
+                            <Divider />
                         </React.Fragment>
                     ))}
                 </List>
-                <Button variant="contained" sx={{ mt: 2 }}>Salva Tariffe</Button>
+                <Button variant="contained" sx={{ mt: 2 }} onClick={handleSalvaTariffe} disabled={isSaving || !isDirty}>
+                    {isSaving ? <CircularProgress size={24} /> : 'Salva Tariffe'}
+                </Button>
             </Paper>
 
-            {/* Recupero Password */}
+            {/* Recupero Password, etc. */}
             <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
                 <Typography variant="h6" gutterBottom>Recupero Password</Typography>
                 {emailSent ? (
@@ -108,34 +166,23 @@ const SettingsPage: React.FC = () => {
                 )}
             </Paper>
 
-            {/* Guida all'uso */}
-            <Accordion elevation={3} sx={{ mb: 4 }}>
+            <Accordion elevation={3}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography variant="h6">Guida all'Uso dell'App</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                     <Typography paragraph>Benvenuto in R.I.S.O. App Tecnici! Questa app ti aiuta a tracciare i tuoi report di lavoro giornalieri.</Typography>
                     <Typography paragraph><b>Home:</b> Dalla dashboard principale puoi creare un nuovo report, visualizzare quelli esistenti, accedere ai riepiloghi mensili e vedere le notifiche.</Typography>
-                    <Typography paragraph><b>Nuovo Report:</b> Compila il form con tutti i dettagli del tuo intervento. Puoi scegliere se inserire le ore totali o l'orario di inizio/fine. Per le assenze (es. Ferie, Malattia) puoi anche creare report per più giorni consecutivi attivando l'apposito interruttore.</Typography>
-                    <Typography paragraph><b>Notifiche:</b> Qui trovi le comunicazioni importanti, come i rapportini non ancora sincronizzati o altre segnalazioni di sistema.</Typography>
-                    <Typography paragraph><b>Impostazioni:</b> In questa pagina puoi configurare le tariffe orarie per calcolare i guadagni nei report mensili e recuperare la tua password.</Typography>
+                    <Typography paragraph><b>Nuovo Report:</b> Compila il form con tutti i dettagli del tuo intervento. Per le assenze puoi anche creare report per più giorni.</Typography>
+                    <Typography paragraph><b>Impostazioni:</b> Qui puoi configurare le tariffe e recuperare la tua password.</Typography>
                 </AccordionDetails>
             </Accordion>
 
-            {/* Backup PDF */}
-            <Paper elevation={3} sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>Backup Report Mensili</Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, flexWrap: 'wrap' }}>
-                     <TextField select label="Mese" defaultValue={now.getMonth() + 1} SelectProps={{ native: true }} sx={{ mr: 2, mb: { xs: 2, sm: 0 } }}>
-                        {Array.from({length: 12}, (_, i) => <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('it-IT', { month: 'long' })}</option>)}
-                    </TextField>
-                    <TextField select label="Anno" defaultValue={now.getFullYear()} SelectProps={{ native: true }} sx={{ mr: 2, mb: { xs: 2, sm: 0 } }}>
-                        {years.map(year => <option key={year} value={year}>{year}</option>)}
-                    </TextField>
-                    <Button variant="contained" color="secondary">Esporta in PDF</Button>
-                </Box>
-            </Paper>
-
+            <Snackbar open={notification.open} autoHideDuration={6000} onClose={handleCloseNotification}>
+                <Alert onClose={handleCloseNotification} severity={notification.severity} sx={{ width: '100%' }}>
+                    {notification.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 }
