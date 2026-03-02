@@ -69,8 +69,14 @@ const SettingsPage: React.FC = () => {
 
 
     const handleTariffaChange = (id: string, value: string) => {
-        if (value === '' || /^[0-9]*\.?[0-9]*$/.test(value)) {
-            setTariffe(prev => ({ ...prev, [id]: value }));
+        // L'utente può inserire la virgola, ma la convertiamo subito in punto
+        // per la validazione e per la logica interna.
+        const valueWithDot = value.replace(',', '.');
+
+        // La regex valida che ci sia al massimo un punto decimale
+        // e solo numeri.
+        if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
+            setTariffe(prev => ({ ...prev, [id]: valueWithDot }));
             setIsDirty(true);
         }
     };

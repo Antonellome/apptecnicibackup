@@ -36,6 +36,20 @@ const MonthlyReportPage = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isModalOpen, setModalOpen] = useState(false);
   const [tipiGiornata, setTipiGiornata] = useState<TipoGiornata[]>([]);
+  const [tariffe, setTariffe] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (user?.uid) {
+        try {
+            const savedTariffeJSON = localStorage.getItem(`tariffe_${user.uid}`);
+            if (savedTariffeJSON) {
+                setTariffe(JSON.parse(savedTariffeJSON));
+            }
+        } catch (error) {
+            console.error("Errore nel caricamento delle tariffe da localStorage:", error);
+        }
+    }
+}, [user]);
 
   useEffect(() => {
     const fetchReports = async (date: Date) => {
@@ -47,7 +61,6 @@ const MonthlyReportPage = () => {
         const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
         const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
 
-        // Use 'tecnicoId' for the query to match legacy data structure
         const reportsQuery = query(
           collection(db, 'rapportini'),
           where('tecnicoId', '==', user.uid),
@@ -80,7 +93,6 @@ const MonthlyReportPage = () => {
 
         const enrichedReports = reportList.map(report => {
           const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId);
-          // Use 'tecnicoId' for enrichment
           const tecnicoScrivente = tecniciMap.get(report.tecnicoId || report.tecnicoScriventeId);
           const presenze = report.presenze?.map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
 
@@ -182,6 +194,7 @@ const MonthlyReportPage = () => {
               reports={reports}
               currentMonth={currentMonth}
               tipiGiornata={tipiGiornata}
+              tariffe={tariffe}
           />
         </>
       )}

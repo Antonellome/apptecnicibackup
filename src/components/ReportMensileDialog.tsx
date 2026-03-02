@@ -14,7 +14,6 @@ import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
 import type { EnrichedRapportino, Tecnico, TipoGiornata } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
-// CORRECTED: Import the global data hook
 import { useGlobalData } from '@/contexts/GlobalDataProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
@@ -33,43 +32,27 @@ interface ReportMensileDialogProps {
   reports: EnrichedRapportino[];
   currentMonth: Date;
   tipiGiornata: TipoGiornata[];
+  tariffe: Record<string, number>;
 }
 
-const loadTariffe = (userId: string): Record<string, number> => {
-    try {
-        const savedTariffeJSON = localStorage.getItem(`tariffe_${userId}`);
-        if (savedTariffeJSON) {
-            const parsedTariffe = JSON.parse(savedTariffeJSON);
-            Object.keys(parsedTariffe).forEach(key => {
-                parsedTariffe[key] = Number(parsedTariffe[key]) || 0;
-            });
-            return parsedTariffe;
-        }
-    } catch (error) {
-        console.error("Errore nel caricamento o parsing delle tariffe:", error);
-    }
-    return {};
-};
-
-const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tipiGiornata }) => {
+const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tipiGiornata, tariffe }) => {
   const { user } = useAuth();
-  // CORRECTED: Use the correct global data hook
   const { tecnici, navi, luoghi } = useGlobalData();
 
   const selectedTecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
 
-  const tariffe = useMemo(() => {
-      if (user?.uid) {
-          return loadTariffe(user.uid);
-      }
-      return {};
-  }, [user]);
-
   const enrichedReportsWithGuadagno = useMemo(() => {
       const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t]));
+      const defaultTariffe = tipiGiornata.reduce((acc, tipo) => {
+          acc[tipo.nome] = 10.00;
+          return acc;
+      }, {} as Record<string, number>);
+
+      const finalTariffe = Object.keys(tariffe).length > 0 ? tariffe : defaultTariffe;
+
       return reports.map(report => {
           const tipo = tipiGiornataMap.get(report.tipoGiornataId);
-          const tariffa = tipo ? (tariffe[tipo.nome] ?? (tipo.lavorativo ? 10 : 0)) : 0;
+          const tariffa = tipo ? (finalTariffe[tipo.nome] ?? 0) : 0;
           const guadagno = (report.oreLavoro ?? 0) * tariffa;
           return {
               ...report,
