@@ -9,12 +9,12 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
 import { eachDayOfInterval, isBefore, startOfDay, parseISO } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
-// CORRECTED: Use the new global data hook
 import { useGlobalData } from '@/contexts/GlobalDataProvider';
-// CORRECTED: Import db from the correct path
-import { db } from '@/firebase';
+import { db as firestoreDb } from '@/firebase'; // Rinominato per chiarezza
 import { doc, getDoc, addDoc, updateDoc, collection, Timestamp, writeBatch } from 'firebase/firestore';
-import { Rapportino, TipoGiornata } from '@/models/definitions'; // Keep TipoGiornata for type checks
+import { Rapportino, TipoGiornata } from '@/models/definitions';
+import { aggiungiAllaCoda } from '@/services/offlineSync';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => { const h = Math.floor(i / 2).toString().padStart(2, '0'); const m = (i % 2 === 0 ? '00' : '30'); return `${h}:${m}`; });
 const generateManualHoursOptions = () => {
@@ -43,8 +43,8 @@ const NuovoReportPage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { reportId } = useParams<{ reportId: string }>();
-    // CORRECTED: Use useGlobalData and get the correct data collections
     const { tipiGiornata, tecnici, veicoli, navi, luoghi, loading: collectionsLoading } = useGlobalData();
+    const { showSnackbar } = useSnackbar();
     const isEditMode = Boolean(reportId);
     const loggedInTecnicoId = user?.uid;
 
@@ -52,7 +52,6 @@ const NuovoReportPage: React.FC = () => {
     const sortedTipiGiornata = useMemo(() => [...tipiGiornata].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [tipiGiornata]);
     const sortedNavi = useMemo(() => [...navi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [navi]);
     const sortedLuoghi = useMemo(() => [...luoghi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [luoghi]);
-    // CORRECTED: Safe sorting for veicoli
     const sortedVeicoli = useMemo(() => [...veicoli].sort((a, b) => (a?.targa || '').localeCompare(b?.targa || '')), [veicoli]);
     const sortedTecnici = useMemo(() => [...tecnici].sort((a, b) => (`${a?.cognome || ''} ${a?.nome || ''}`.trim()).localeCompare((`${b?.cognome || ''} ${b?.nome || ''}`.trim()))), [tecnici]);
 
@@ -88,7 +87,7 @@ const NuovoReportPage: React.FC = () => {
             setPageLoading(true);
             const loadReport = async () => {
                 try {
-                    const reportSnap = await getDoc(doc(db, 'rapportini', reportId));
+                    const reportSnap = await getDoc(doc(firestoreDb, 'rapportini', reportId));
                     if (reportSnap.exists()) {
                         const reportData = reportSnap.data() as Rapportino;
                         const reportDate = reportData.data instanceof Timestamp ? reportData.data.toDate() : parseISO(reportData.data as any);
@@ -96,7 +95,6 @@ const NuovoReportPage: React.FC = () => {
                         setTipoGiornataId(reportData.tipoGiornataId || '');
                         const tipo = tipiGiornata.find(t => t.id === reportData.tipoGiornataId);
                         setIsLavorativo(isGiornataLavorativa(tipo));
-                        // Use optional chaining for safety
                         setIsManualEntry(reportData.isTrasferta || false);
                         setOraInizio(reportData.oraInizio || '07:30');
                         setOraFine(reportData.oraFine || '16:30');
@@ -124,12 +122,12 @@ const NuovoReportPage: React.FC = () => {
                         setLockReason(reason);
 
                     } else {
-                        alert("Rapportino non trovato.");
+                        showSnackbar("Rapportino non trovato.", "error");
                         navigate('/lista-report');
                     }
                 } catch (e) {
                     console.error("Errore caricamento report: ", e);
-                    alert("Errore caricamento report.");
+                    showSnackbar("Errore durante il caricamento del report.", "error");
                 } finally {
                     setPageLoading(false);
                 }
@@ -138,7 +136,7 @@ const NuovoReportPage: React.FC = () => {
         } else {
             setPageLoading(false);
         }
-    }, [isEditMode, reportId, navigate, collectionsLoading, tipiGiornata, loggedInTecnicoId]);
+    }, [isEditMode, reportId, navigate, collectionsLoading, tipiGiornata, loggedInTecnicoId, showSnackbar]);
 
     useEffect(() => {
         if (!isManualEntry && isLavorativo) {
@@ -154,49 +152,75 @@ const NuovoReportPage: React.FC = () => {
     const handleCancel = () => navigate(isEditMode ? '/lista-report' : '/');
 
     const handleSubmit = async () => {
-        if ((!data && !isPeriodo) || !tipoGiornataId || !loggedInTecnicoId) { alert("Compila i campi obbligatori (Data e Tipo Giornata)."); return; }
+        if ((!data && !isPeriodo) || !tipoGiornataId || !loggedInTecnicoId) { showSnackbar("Compila i campi obbligatori (Data e Tipo Giornata).", "warning"); return; }
         setIsSaving(true);
+
+        const isOnline = navigator.onLine;
+
         try {
             if (isPeriodo && !isEditMode && dataInizio && dataFine) {
-                if (isBefore(startOfDay(dataFine), startOfDay(dataInizio))) { alert('La data di fine non può precedere quella di inizio.'); setIsSaving(false); return; }
-                const batch = writeBatch(db);
+                if (!isOnline) {
+                    showSnackbar("La creazione di report per un periodo è disponibile solo online.", "warning");
+                    setIsSaving(false);
+                    return;
+                }
+                if (isBefore(startOfDay(dataFine), startOfDay(dataInizio))) { showSnackbar('La data di fine non può precedere quella di inizio.', "error"); setIsSaving(false); return; }
+                const batch = writeBatch(firestoreDb);
                 const days = eachDayOfInterval({ start: dataInizio, end: dataFine });
                 days.forEach(day => {
-                    const newReportRef = doc(collection(db, 'rapportini'));
+                    const newReportRef = doc(collection(firestoreDb, 'rapportini'));
                     const rapportinoData: Partial<Rapportino> = { tipoGiornataId, data: Timestamp.fromDate(day), tecnicoId: loggedInTecnicoId, presenze: [loggedInTecnicoId], createdAt: Timestamp.now(), oreLavoro: 0 };
                     batch.set(newReportRef, rapportinoData);
                 });
                 await batch.commit();
-                alert(`Salvataggio completato. Creati ${days.length} rapportini di assenza.`);
+                showSnackbar(`Salvataggio completato. Creati ${days.length} rapportini di assenza.`, "success");
                 navigate('/lista-report');
-            } else {
+            } else { 
                 const presenze = Array.from(new Set([loggedInTecnicoId, ...altriTecniciIds]));
-                const rapportinoData: Partial<Rapportino> = { data: Timestamp.fromDate(data!), tipoGiornataId, tecnicoId: loggedInTecnicoId, presenze };
-                
+                const baseReportData = { data, tipoGiornataId, tecnicoId: loggedInTecnicoId, presenze, createdAt: new Date() };
+
+                let rapportinoData: any = baseReportData;
+
                 if (isLavorativo) {
-                    Object.assign(rapportinoData, { isTrasferta: isManualEntry, oraInizio: isManualEntry ? null : oraInizio, oraFine: isManualEntry ? null : oraFine, pausa: isManualEntry ? null : pausa, oreLavoro, veicoloId, naveId, luogoId, descrizioneBreve, lavoroEseguito, materialiImpiegati, altriTecniciIds });
+                    rapportinoData = { ...rapportinoData, isTrasferta: isManualEntry, oraInizio: isManualEntry ? null : oraInizio, oraFine: isManualEntry ? null : oraFine, pausa: isManualEntry ? null : pausa, oreLavoro, veicoloId, naveId, luogoId, descrizioneBreve, lavoroEseguito, materialiImpiegati, altriTecniciIds };
                 } else {
-                    Object.assign(rapportinoData, { oreLavoro: 0, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [] });
+                    rapportinoData = { ...rapportinoData, oreLavoro: 0, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [] };
                 }
 
-                if (isEditMode) {
-                    await updateDoc(doc(db, 'rapportini', reportId!), rapportinoData);
+                if (isOnline) {
+                    const dataToSave = {
+                        ...rapportinoData,
+                        data: Timestamp.fromDate(rapportinoData.data!),
+                        createdAt: Timestamp.now()
+                    };
+
+                    if (isEditMode) {
+                        await updateDoc(doc(firestoreDb, 'rapportini', reportId!), dataToSave);
+                        showSnackbar("Rapportino aggiornato con successo!", "success");
+                    } else {
+                        await addDoc(collection(firestoreDb, 'rapportini'), dataToSave);
+                        showSnackbar("Rapportino creato con successo!", "success");
+                    }
                 } else {
-                    rapportinoData.createdAt = Timestamp.now();
-                    await addDoc(collection(db, 'rapportini'), rapportinoData);
+                    if (isEditMode) {
+                        showSnackbar("La modifica dei report non è disponibile offline.", "warning");
+                        setIsSaving(false);
+                        return;
+                    }
+                    await aggiungiAllaCoda(rapportinoData);
+                    showSnackbar("Sei offline. Il rapportino è stato salvato localmente e sarà inviato più tardi.", "info");
                 }
-                alert(`Rapportino ${isEditMode ? 'aggiornato' : 'creato'} con successo!`);
                 navigate('/lista-report');
             }
         } catch (error) {
             console.error("Errore salvataggio: ", error);
-            alert("Errore durante il salvataggio.");
+            showSnackbar("Errore durante il salvataggio.", "error");
         } finally {
             setIsSaving(false);
         }
     };
 
-    if (pageLoading || collectionsLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress />;</Box>;
+    if (pageLoading || collectionsLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
@@ -208,16 +232,8 @@ const NuovoReportPage: React.FC = () => {
                         {!isEditMode && ( <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', mt: 1 }}> <FormControlLabel control={<Switch checked={isPeriodo} onChange={e => setIsPeriodo(e.target.checked)} disabled={isSaving} />} label="Inserisci per un periodo di più giorni" /> </Alert> )}
                         {isPeriodo && !isEditMode ? (
                             <Grid container spacing={2}>
-                                <Grid
-                                    size={{
-                                        xs: 12,
-                                        sm: 6
-                                    }}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
-                                <Grid
-                                    size={{
-                                        xs: 12,
-                                        sm: 6
-                                    }}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid size={{ xs: 12, sm: 6 }}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid size={{ xs: 12, sm: 6 }}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
                             </Grid>
                         ) : ( <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || isSaving} slotProps={{ textField: { fullWidth: true, required: true } }} /> )}
                         <TextField label="Tecnico Responsabile" value={user?.email || '...'} fullWidth disabled />
@@ -230,21 +246,9 @@ const NuovoReportPage: React.FC = () => {
                         {isLavorativo && !isPeriodo && ( <>
                                 <FormControlLabel control={<Switch checked={isManualEntry} onChange={e => setIsManualEntry(e.target.checked)} disabled={isReadOnly} />} label="Inserimento Manuale Ore" />
                                 <Grid container spacing={2}>{!isManualEntry ? ( <>
-                                            <Grid
-                                                size={{
-                                                    xs: 12,
-                                                    sm: 4
-                                                }}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid
-                                                size={{
-                                                    xs: 12,
-                                                    sm: 4
-                                                }}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
-                                            <Grid
-                                                size={{
-                                                    xs: 12,
-                                                    sm: 4
-                                                }}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
+                                            <Grid size={{ xs: 12, sm: 4 }}><FormControl fullWidth><InputLabel>Inizio</InputLabel><Select value={oraInizio || ''} label="Inizio" onChange={e => setOraInizio(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid size={{ xs: 12, sm: 4 }}><FormControl fullWidth><InputLabel>Fine</InputLabel><Select value={oraFine || ''} label="Fine" onChange={e => setOraFine(e.target.value)} disabled={isReadOnly}>{timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl></Grid>
+                                            <Grid size={{ xs: 12, sm: 4 }}><FormControl fullWidth><InputLabel>Pausa</InputLabel><Select value={pausa ?? ''} label="Pausa" onChange={e => setPausa(Number(e.target.value))} disabled={isReadOnly}><MenuItem value={0}>0 min</MenuItem><MenuItem value={30}>30 min</MenuItem><MenuItem value={60}>60 min</MenuItem></Select></FormControl></Grid>
                                             <Grid size={12}><TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled /></Grid>
                                         </> ) : ( <Grid size={12}><FormControl fullWidth required sx={{ minWidth: 160 }}><InputLabel>Totale Ore Lavorate</InputLabel><Select value={oreLavoro ?? ''} label="Totale Ore Lavorate" onChange={e => setOreLavoro(Number(e.target.value))} disabled={isReadOnly} MenuProps={{ PaperProps: { sx: { maxHeight: 300, '& .MuiList-root': { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0px 8px', }, }, }, }}>{manualTotalHoursOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}</Select></FormControl></Grid> )}
                                 </Grid>

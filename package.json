@@ -22,6 +22,8 @@
     "class-variance-authority": "^0.7.1",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
+    "dexie": "^4.3.0",
+    "dexie-react-hooks": "^4.2.0",
     "firebase": "^12.8.0",
     "formik": "^2.4.9",
     "formik-mui": "^5.0.0-alpha.1",
