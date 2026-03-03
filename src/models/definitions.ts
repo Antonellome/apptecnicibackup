@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 // Zod schema for validation, mirroring the Rapportino interface
@@ -166,6 +165,15 @@ export interface WebAppUser extends BaseEntity {
 
 export interface Qualifica extends BaseEntity {
     nome: string;
+}
+
+export interface Notifica extends BaseEntity {
+  title: string;
+  body: string;
+  recipientId: string;
+  senderId: string;
+  createdAt: any; // Firestore Timestamp
+  isRead: boolean;
 }
 
 // Utility and Form-related interfaces

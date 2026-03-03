@@ -1,8 +1,9 @@
 import React from 'react';
-import { Box, Paper, Typography, ButtonBase } from '@mui/material';
+import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useNotifications } from '@/contexts/NotificationContext';
 import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
@@ -11,6 +12,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { unreadCount } = useNotifications();
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
@@ -18,7 +20,15 @@ const HomePage: React.FC = () => {
         { title: 'Nuovo report', path: '/report/nuovo', icon: <PostAddIcon sx={iconStyles} /> },
         { title: 'Report', path: '/lista-report', icon: <ArticleIcon sx={iconStyles} /> },
         { title: 'Report mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={iconStyles} /> },
-        { title: 'Notifiche', path: '/notifiche', icon: <NotificationsIcon sx={iconStyles} /> },
+        { 
+            title: 'Notifiche', 
+            path: '/notifiche', 
+            icon: (
+                <Badge badgeContent={unreadCount} color="error" showZero={false}>
+                    <NotificationsIcon sx={iconStyles} />
+                </Badge>
+            ) 
+        },
     ];
 
     return (
