@@ -14,10 +14,12 @@ import NotifichePage from './pages/NotifichePage'; // <-- IMPORTA LA PAGINA NOTI
 import { GlobalDataProvider } from './contexts/GlobalDataProvider';
 import { SnackbarProvider } from './contexts/SnackbarContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import PWAUpdater from './components/PWAUpdater'; // <-- IMPORTA PWAUPDATER
 
 const App: React.FC = () => {
   return (
     <SnackbarProvider>
+      <PWAUpdater />
       <GlobalDataProvider>
         <NotificationProvider>
           <Routes>
