@@ -39,7 +39,7 @@ const NotifichePage: React.FC = () => {
 
     const handleDelete = async (id: string) => {
         try {
-            await deleteDoc(doc(firestoreDb, 'notifications', id));
+            await deleteDoc(doc(firestoreDb, 'notificheRichieste', id));
             showSnackbar("Notifica eliminata con successo.", "success");
         } catch (error) {
             console.error("Errore eliminazione notifica:", error);

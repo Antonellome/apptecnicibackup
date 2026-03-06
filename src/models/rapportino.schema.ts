@@ -2,27 +2,38 @@
 import { z } from 'zod';
 import dayjs from 'dayjs';
 
-// Schema di validazione definitivo.
-// Vengono resi obbligatori SOLO i 2 campi minimi per evitare crash al salvataggio:
-// - data: La sua assenza causa un crash irreversibile.
-// - giornataId: Essenziale per la logica dell'applicazione.
-// Tutto il resto è facoltativo.
-
+// Schema di validazione aggiornato per supportare le ore multi-tecnico.
 export const createRapportinoSchema = () => {
     return z.object({
         // CAMPI OBBLIGATORI MINIMI
         data: z.instanceof(dayjs.Dayjs, { message: "La data è un campo obbligatorio." }),
         giornataId: z.string().min(1, "Il tipo di giornata è un campo obbligatorio."),
 
-        // TUTTI GLI ALTRI CAMPI SONO FACOLTATIVI
+        // CAMPI FACOLTATIVI
         tecnicoScriventeId: z.string().optional(),
         
         inserimentoManualeOre: z.boolean().optional(),
-        // Corretto per accettare stringhe, risolvendo il crash di rendering.
         oraInizio: z.string().optional(),
         oraFine: z.string().optional(),
         pausa: z.number().optional(),
-        oreLavorate: z.number().optional(),
+
+        // ===== MODIFICA STRUTTURALE PER ORE MULTI-TECNICO =====
+        
+        // [NUOVO CAMPO] Contiene il dettaglio ore per ogni tecnico.
+        // Questa è la nuova fonte della verità.
+        dettaglioOreTecnici: z.array(
+            z.object({
+                tecnicoId: z.string(),
+                ore: z.number()
+            })
+        ).optional(),
+
+        // [CAMPO "PONTE"] Mantenuto per retrocompatibilità.
+        // L'App Master e il Report Mensile continueranno a leggerlo senza crashare.
+        // Verrà popolato con la somma delle ore prese da 'dettaglioOreTecnici'.
+        oreLavoro: z.number().optional(),
+
+        // ==========================================================
 
         naveId: z.any().optional(),
         luogoId: z.any().optional(),

@@ -1,14 +1,8 @@
 // CIAO. Questo file definisce il contesto e l'hook per l'autenticazione in modo robusto.
-import { useState, useEffect, createContext, ReactNode, useMemo, useCallback } from 'react';
+import { useState, useEffect, createContext, ReactNode, useMemo, useCallback, useContext } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/utils/firebase';
-import { doc, getDoc, DocumentReference } from 'firebase/firestore';
-
-// Rappresenta l'oggetto categoria, una volta risolto il riferimento
-export interface Categoria {
-    id: string;
-    nome: string;
-}
+import { doc, getDoc } from 'firebase/firestore';
 
 // Rappresenta il profilo completo dell'utente
 export interface UserProfile {
@@ -17,7 +11,9 @@ export interface UserProfile {
     nome: string;
     cognome: string;
     attivo: boolean;
-    categoria?: Categoria;
+    id_categoria?: string;
+    nomeCategoria?: string;
+    ruolo?: string;
 }
 
 // Definisce la forma del contesto di autenticazione
@@ -46,37 +42,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       if (currentUser) {
           try {
-              const userDocRef = doc(db, 'tecnici', currentUser.uid);
-              const userDocSnap = await getDoc(userDocRef);
+              // 1. Carica il documento da tecnici/{uid}
+              const tecnicoDocRef = doc(db, 'tecnici', currentUser.uid);
+              const tecnicoSnap = await getDoc(tecnicoDocRef);
 
-              if (userDocSnap.exists()) {
-                  const userData = userDocSnap.data();
-                  let categoriaData: Categoria | undefined = undefined;
+              if (tecnicoSnap.exists()) {
+                  const tecnicoData = tecnicoSnap.data();
+                  const id_categoria = tecnicoData.id_categoria;
+                  let nomeCategoriaStr = '';
 
-                  if (userData.categoria && userData.categoria instanceof DocumentReference) {
-                      const categoriaRef = userData.categoria as DocumentReference;
-                      const categoriaSnap = await getDoc(categoriaRef);
-                      if (categoriaSnap.exists()) {
-                          categoriaData = {
-                              id: categoriaSnap.id,
-                              nome: categoriaSnap.data().nome
-                          };
+                  // 2. Se id_categoria esiste, esegui subito la lettura del nome dalla collezione categorie
+                  if (id_categoria && typeof id_categoria === 'string') {
+                      try {
+                          const catDocRef = doc(db, 'categorie', id_categoria);
+                          const catDoc = await getDoc(catDocRef);
+
+                          if (catDoc.exists()) {
+                              nomeCategoriaStr = catDoc.data().nome || '';
+                              console.log(`[Identita] Categoria pronta: [${nomeCategoriaStr}]`);
+                          }
+                      } catch (err) {
+                          console.error("[Auth] Errore risoluzione categoria:", err);
                       }
                   }
 
+                  // 3. Solo dopo aver ottenuto il nome (o averci provato), aggiorna userProfile
                   setUserProfile({
                       uid: currentUser.uid,
                       email: currentUser.email || '',
-                      nome: userData.nome,
-                      cognome: userData.cognome,
-                      attivo: userData.attivo,
-                      categoria: categoriaData
+                      nome: tecnicoData.nome || '',
+                      cognome: tecnicoData.cognome || '',
+                      attivo: tecnicoData.attivo || false,
+                      id_categoria: id_categoria || '',
+                      nomeCategoria: nomeCategoriaStr,
+                      ruolo: tecnicoData.ruolo
                   });
+                  
+                  console.log(`[Auth] Profilo completo pronto per: ${currentUser.email}`);
               } else {
                   setUserProfile(null);
               }
           } catch (error) {
-              console.error("Errore nel caricamento del profilo utente:", error);
+              console.error("[Auth] Errore caricamento profilo:", error);
               setUserProfile(null);
           }
       } else {
@@ -112,4 +119,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuth deve essere usato all\'interno di un AuthProvider');
+    }
+    return context;
 };

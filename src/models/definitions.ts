@@ -69,38 +69,49 @@ export interface Tecnico extends BaseEntity {
   lastModified?: any;
 }
 
+export interface UserProfile {
+    uid: string;
+    email: string;
+    nome: string;
+    cognome: string;
+    attivo: boolean;
+    id_categoria?: string;
+    nomeCategoria?: string;
+    ruolo?: string;
+}
+
 export interface Rapportino extends BaseEntity {
-  nome: string; // Added to satisfy GenericItem constraint
-  tecnicoScriventeId: string;
-  data: any; // Firestore Timestamp
+  nome: string; // Ripristinato come obbligatorio per compatibilità con GenericItem
+  tecnicoId?: string; 
+  tecnicoScriventeId?: string;
+  data: any; 
   tipoGiornataId: string;
-  oraInizio?: any; // Firestore Timestamp
-  oraFine?: any; // Firestore Timestamp
+  oraInizio?: string | null;
+  oraFine?: string | null;
   oreLavoro: number;
   oreViaggio?: number;
-  kmInizio?: number; // Maintained for compatibility if needed
-  kmFine?: number; // Maintained for compatibility if needed
+  kmInizio?: number;
+  kmFine?: number; 
   kmPercorsi?: number;
-  pausa?: number;
+  pausa?: number | null;
   lavoroEseguito?: string;
   materialiImpiegati?: string;
   problemiRiscontrati?: string;
   note?: string;
-  presenze?: string[]; // Array of Tecnico IDs
-  allegati?: string[]; // Array of URLs
+  presenze?: string[];
+  allegati?: string[];
   stato: 'bozza' | 'inviato' | 'approvato' | 'rifiutato';
   isTrasferta: boolean;
-  veicoloId?: string;
-  clienteId?: string;
+  veicoloId?: string | null;
+  clienteId?: string | null;
   destinazione?: string;
-
-  // Fields from older definitions that might still be in use somewhere
-  naveId?: string;
-  luogoId?: string;
+  naveId?: string | null;
+  luogoId?: string | null;
   descrizioneBreve?: string;
   altriTecniciIds?: string[];
-  createdAt?: any; // Firestore Timestamp
-  tecnicoId?: string; // Legacy, prefer tecnicoScriventeId
+  dettaglioOreTecnici?: { tecnicoId: string; ore: number }[];
+  createdAt?: any; 
+  updatedAt?: any; 
 }
 
 // Interfaces for related data

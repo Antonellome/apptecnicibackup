@@ -77,3 +77,50 @@ export const checkAbsences = functions.region('europe-west1').pubsub
 
         return null;
     });
+
+/**
+ * Cloud Function che gestisce l'invio delle notifiche push tramite FCM Topic.
+ * Si attiva alla creazione di un nuovo documento nella collezione 'notificheRichieste'.
+ */
+export const sendPushNotifications = functions.region('europe-west1').firestore
+    .document('notificheRichieste/{notificaId}')
+    .onCreate(async (snapshot, context) => {
+        const data = snapshot.data();
+        if (!data) {
+            functions.logger.error("Nessun dato trovato nel documento creato.");
+            return null;
+        }
+
+        const { title, body, to_ids = [], topics = [] } = data;
+
+        if (!title || !body) {
+            functions.logger.warn("Titolo o corpo mancante. Invio annullato.");
+            return null;
+        }
+
+        // Uniamo gli UID dei tecnici (trattandoli come topic personali) e i topic delle categorie
+        const targetTopics = Array.from(new Set([...to_ids, ...topics]));
+
+        if (targetTopics.length === 0) {
+            functions.logger.info("Nessun destinatario (UID o categoria) specificato.");
+            return null;
+        }
+
+        functions.logger.info(`Avvio invio notifiche push per ${targetTopics.length} canali.`, { notificaId: context.params.notificaId });
+
+        const sendPromises = targetTopics.map(async (topic) => {
+            try {
+                const message = {
+                    notification: { title, body },
+                    topic: topic,
+                };
+                const response = await admin.messaging().send(message);
+                functions.logger.info(`Notifica inviata con successo al topic: ${topic}`, { response });
+            } catch (error) {
+                functions.logger.error(`Errore durante l'invio al topic: ${topic}`, error);
+            }
+        });
+
+        await Promise.all(sendPromises);
+        return null;
+    });

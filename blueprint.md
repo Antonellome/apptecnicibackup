@@ -11,6 +11,14 @@ Ogni modifica al codice deve essere trattata come una mossa in una partita a sca
 
 ---
 
+# Protocollo di Comunicazione AI
+
+## Regola del "CIAO"
+
+Ogni singola risposta dell'AI deve iniziare con la parola **"CIAO"**. Questa regola funge da checksum per verificare la continuità del contesto. L'omissione di "CIAO" indica una potenziale perdita di contesto e deve essere immediatamente corretta.
+
+---
+
 # R.I.S.O. - Blueprint Applicazione Tecnici
 
 Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.O." (Report Individuali Sincronizzati Online) per tecnici.
@@ -58,9 +66,9 @@ La navigazione dell'applicazione è gestita tramite `react-router-dom` e si sudd
 
 ## Note Tecniche di Sviluppo
 
-### Guida all'Utilizzo del Componente Grid di MUI (v2+)
+### Guida all'Utilizzo del Componente Grid di MUI (v7+)
 
-Per evitare errori di layout ricorrenti, è **obbligatorio** seguire le seguenti linee guida quando si utilizza il componente `Grid` di Material-UI. Questa applicazione utilizza la versione moderna del componente (`Grid` v2), che ha sostituito il vecchio `GridLegacy`.
+Per evitare errori di layout ricorrenti, è **obbligatorio** seguire le seguenti linee guida quando si utilizza il componente `Grid` di Material-UI. Questa applicazione utilizza la versione moderna del componente, che ha sostituito il vecchio `GridLegacy`.
 
 #### 1. Importazione Corretta
 Utilizzare sempre l'importazione diretta dal pacchetto `@mui/material`.
@@ -70,17 +78,47 @@ Utilizzare sempre l'importazione diretta dal pacchetto `@mui/material`.
 **NON** utilizzare `@mui/material/GridLegacy`.
 
 #### 2. Rimozione di Prop Obsolete
-- La prop **`item` è stata rimossa**. Nella nuova versione, tutti i componenti `Grid` sono considerati *item* per impostazione predefinita.
-- La prop **`zeroMinWidth` è stata rimossa** e può essere tranquillamente eliminata.
+- La prop **`item` è stata rimossa**. Tutti i `Grid` sono considerati *item*.
+- La prop **`zeroMinWidth` è stata rimossa**.
 
-#### 3. Nuova Sintassi per le Dimensioni (`size`)
-Le prop per definire le dimensioni sui breakpoint (es. `xs`, `sm`, `md`) sono state sostituite dalla singola prop `size`, che accetta un oggetto o un valore singolo.
+#### 3. Sintassi Corretta per le Dimensioni (`size`)
+Le props dei breakpoint (`xs`, `sm`, etc.) sono state **sostituite** dalla prop `size`.
 
-- **Per breakpoint multipli:**
+- **Per breakpoint multipli (SINTASSI OBBLIGATORIA):**
   `<Grid size={{ xs: 12, sm: 6 }}>`
 
 - **Per un valore unico su tutti i breakpoint:**
   `<Grid size={6}>`
+
+- **Per auto-layout (equivalente al vecchio `xs` booleano):**
+  `<Grid size="grow">`
+
+**ATTENZIONE:** L'uso delle prop dirette come `<Grid xs={12}>` è **ERRATO** e appartiene a versioni precedenti. Causa errori di compilazione.
+
+#### 4. Gestione del `container`
+- La prop `container` rimane invariata per definire il contenitore della griglia.
+
+#### 5. Esempio Pratico Completo
+
+'''jsx
+import Grid from '@mui/material/Grid'; // Import corretto
+
+function MyComponent() {
+  return (
+    // Il contenitore
+    <Grid container spacing={2}>
+      // Figlio 1 (la prop 'item' non serve)
+      <Grid size={{ xs: 12, md: 8 }}>
+        {/* Contenuto... */}
+      </Grid>
+      // Figlio 2
+      <Grid size={{ xs: 6, md: 4 }}>
+        {/* Contenuto... */}
+      </Grid>
+    </Grid>
+  );
+}
+'''
 
 ---
 
