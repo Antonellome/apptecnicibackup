@@ -203,7 +203,7 @@ const NuovoReportPage: React.FC = () => {
                 const days = eachDayOfInterval({ start: dataInizio, end: dataFine });
                 days.forEach(day => {
                     const newReportRef = doc(collection(firestoreDb, 'rapportini'));
-                    const rapportinoData: Partial<Rapportino> = { tipoGiornataId, data: Timestamp.fromDate(day), tecnicoId: loggedInTecnicoId, presenze: [loggedInTecnicoId], createdAt: Timestamp.now(), oreLavoro: 0 };
+                    const rapportinoData: Partial<Rapportino> = { nome: 'Rapportino di periodo', tipoGiornataId, data: Timestamp.fromDate(day), tecnicoId: loggedInTecnicoId, presenze: [loggedInTecnicoId], createdAt: Timestamp.now(), oreLavoro: 0 };
                     batch.set(newReportRef, rapportinoData);
                 });
                 await batch.commit();
@@ -215,6 +215,7 @@ const NuovoReportPage: React.FC = () => {
                 const oreLavoroTotali = dettaglioOreTecniciToSave.reduce((sum, item) => sum + item.ore, 0);
 
                 let rapportinoData: Partial<Rapportino> = {
+                    nome: 'Rapportino giornaliero',
                     data: Timestamp.fromDate(data!),
                     tipoGiornataId,
                     tecnicoId: loggedInTecnicoId,
@@ -281,8 +282,8 @@ const NuovoReportPage: React.FC = () => {
                          {!isEditMode && ( <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', mt: 1 }}> <FormControlLabel control={<Switch checked={isPeriodo} onChange={e => setIsPeriodo(e.target.checked)} disabled={isSaving} />} label="Inserisci per un periodo di più giorni" /> </Alert> )}
                         {isPeriodo && !isEditMode ? (
                             <Grid container spacing={2}>
-                                <Grid xs={12} sm={6}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
-                                <Grid xs={12} sm={6}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid size={{ xs: 12, sm: 6 }}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid size={{ xs: 12, sm: 6 }}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
                             </Grid>
                         ) : ( <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || isSaving} slotProps={{ textField: { fullWidth: true, required: true } }} /> )}
                         <TextField label="Tecnico Responsabile" value={user?.email || '...'} fullWidth disabled />

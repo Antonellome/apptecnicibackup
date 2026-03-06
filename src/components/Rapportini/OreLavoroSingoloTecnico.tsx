@@ -114,7 +114,7 @@ const OreLavoroSingoloTecnico: React.FC<Props> = ({ datiOre, onUpdate, isReadOnl
                 {datiOre.nome} {isScrivente && '(Responsabile)'}
             </Typography>
             <Grid container spacing={2}>
-                <Grid xs={12}>
+                <Grid size={12}>
                     <FormControlLabel
                         control={<Switch checked={isManual} onChange={(e) => setIsManual(e.target.checked)} disabled={isReadOnly || !isScrivente} />}
                         label={isScrivente ? "Inserimento Manuale per Tutti" : "Inserimento Manuale Ore"}
@@ -122,7 +122,7 @@ const OreLavoroSingoloTecnico: React.FC<Props> = ({ datiOre, onUpdate, isReadOnl
                 </Grid>
                 {!isManual ? (
                     <>
-                        <Grid xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth>
                                 <InputLabel>Inizio</InputLabel>
                                 <Select value={oraInizio || ''} label="Inizio" onChange={(e) => setOraInizio(e.target.value)} disabled={isReadOnly}>
@@ -130,7 +130,7 @@ const OreLavoroSingoloTecnico: React.FC<Props> = ({ datiOre, onUpdate, isReadOnl
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth>
                                 <InputLabel>Fine</InputLabel>
                                 <Select value={oraFine || ''} label="Fine" onChange={(e) => setOraFine(e.target.value)} disabled={isReadOnly}>
@@ -138,7 +138,7 @@ const OreLavoroSingoloTecnico: React.FC<Props> = ({ datiOre, onUpdate, isReadOnl
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth>
                                 <InputLabel>Pausa</InputLabel>
                                 <Select value={pausa ?? ''} label="Pausa" onChange={(e) => setPausa(Number(e.target.value))} disabled={isReadOnly}>
@@ -150,12 +150,12 @@ const OreLavoroSingoloTecnico: React.FC<Props> = ({ datiOre, onUpdate, isReadOnl
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid xs={12}>
+                        <Grid size={12}>
                             <TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled />
                         </Grid>
                     </>
                 ) : (
-                    <Grid xs={12}>
+                    <Grid size={12}>
                         <FormControl fullWidth required>
                             <InputLabel>Totale Ore</InputLabel>
                             <Select
