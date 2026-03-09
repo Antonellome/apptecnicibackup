@@ -1,22 +1,54 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permesso universale di lettura per utenti autenticati (necessario per menu, profili, etc)
-    match /{document=**} {
-      allow read: if request.auth != null;
+
+    // --- Funzioni Helper --- 
+    function getMasterUserData() {
+      return get(/databases/$(database)/documents/webAppUsers/$(request.auth.uid)).data;
     }
-    // Sblocca i rapportini
-    match /rapportini/{id} {
-      allow read, write: if request.auth != null;
+    function isAdmin() {
+      // Questa funzione ora funziona perché la regola su webAppUsers/{userId} qui sotto
+      // permette l'operazione di get() necessaria.
+      return request.auth != null && getMasterUserData().ruolo == 'admin';
     }
-    // Sblocca DEFINITIVAMENTE le notifiche (Sincro Master)
-    // Permette delete e update a tutti gli utenti autenticati per evitare il blocco degli array to_ids
+    function isMasterUser() {
+      return request.auth != null && getMasterUserData().ruolo == 'user';
+    }
+    function isTecnicoAbilitato() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/tecnici/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/tecnici/$(request.auth.uid)).data.attivo == true;
+    }
+
+    // --- Regole Specifiche (hanno la precedenza) ---
+
+    // REGOLA CHIAVE PER ROMPERE IL CIRCOLO VIZIOSO
+    match /webAppUsers/{userId} {
+      // Permetti a un utente di leggere SOLO il proprio documento per verificare il ruolo.
+      allow get: if request.auth != null && request.auth.uid == userId;
+      // L'admin può scrivere e listare tutti gli utenti master.
+      allow list, write: if isAdmin();
+    }
+
+    // Regole per l'app dei tecnici
+    match /tecnici/{tecnicoUid} {
+        allow read, write: if request.auth.uid == tecnicoUid;
+    }
+    match /{path=**}/rapportini/{rapportinoId} {
+      allow create: if isTecnicoAbilitato() && request.resource.data.tecnicoId == request.auth.uid;
+      allow read, update, delete: if isTecnicoAbilitato() && resource.data.tecnicoId == request.auth.uid;
+    }
     match /notificheRichieste/{id} {
-      allow read, create, update, delete: if request.auth != null;
+      allow read, write: if isTecnicoAbilitato();
     }
-    // Permessi per i tecnici
-    match /tecnici/{id} {
-      allow read, write: if request.auth != null;
+
+    // --- Regole Globali (valgono per tutto il resto) ---
+    match /{path=**} {
+      // L'admin e il visualizzatore possono leggere tutto.
+      // Il tecnico può leggere le collezioni necessarie (es. clienti, veicoli).
+      allow read: if isAdmin() || isMasterUser() || isTecnicoAbilitato();
+      // Solo l'admin può scrivere ovunque (tranne dove specificato sopra).
+      allow write: if isAdmin();
     }
   }
 }

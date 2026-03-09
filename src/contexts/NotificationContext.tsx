@@ -23,41 +23,27 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-// 1. Definisci let notificationsStore FUORI dal componente per la persistenza assoluta
 let notificationsStore: Notifica[] = [];
-
-const normalizeToTopic = (categoryName: string): string => {
-    let normalized = categoryName.toLowerCase();
-    if (normalized.endsWith('a')) {
-        normalized = normalized.slice(0, -1) + 'i';
-    }
-    return normalized.replace(/[^a-z0-9-_.~%]+/g, '_').replace(/\s+/g, '_');
-};
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, userProfile } = useAuth();
-  // 2. Usa lo store esterno come valore iniziale
   const [notifications, setNotifications] = useState<Notifica[]>(notificationsStore);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // 3. Funzione sync che aggiorna lo store esterno e lo stato locale
   const sync = useCallback((newDocs: Notifica[]) => {
     const combinedMap = new Map<string, Notifica>();
     
-    // Unisce i nuovi documenti allo store esistente
     notificationsStore.forEach(n => combinedMap.set(n.id, n));
     newDocs.forEach(n => combinedMap.set(n.id, n));
     
     const finalArray = Array.from(combinedMap.values());
     
-    // Ordinamento cronologico decrescente
     finalArray.sort((a, b) => {
-      const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds * 1000 || 0);
-      const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds * 1000 || 0);
+      const timeA = a.createdAt?.seconds * 1000 || 0;
+      const timeB = b.createdAt?.seconds * 1000 || 0;
       return timeB - timeA;
     });
 
-    // 6. Inserisci i log
     console.log(`[Master-Sync] Stato aggiornato. Totale: ${finalArray.length}`);
     
     notificationsStore = finalArray;
@@ -68,13 +54,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     notifications.filter(n => !n.isRead).length, 
   [notifications]);
 
-  // 4. Implementa i due useEffect indipendenti
-  
-  // Effetto A: Notifiche nominali (UID)
   useEffect(() => {
     if (!user?.uid) {
       notificationsStore = [];
       setNotifications([]);
+      setLoading(false);
       return;
     }
 
@@ -98,27 +82,28 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => unsubscribe();
   }, [user?.uid, sync]);
 
-  // Effetto B: Notifiche categoria (topics)
   useEffect(() => {
-    if (!user?.uid || !userProfile?.nomeCategoria) return;
+    // La query dipende dall'ID della categoria letto direttamente dal profilo
+    if (!user?.uid || !userProfile?.categoriaId) return;
 
     const notificationsRef = collection(db, 'notificheRichieste');
-    const topicName = normalizeToTopic(userProfile.nomeCategoria);
     
+    // --- CORREZIONE FINALE E DEFINITIVA ---
+    // La query ora usa il campo corretto 'to_categories' E il campo corretto 'userProfile.categoriaId'
     const qCategory = query(
       notificationsRef,
-      where('topics', 'array-contains', topicName)
+      where('to_categories', 'array-contains', userProfile.categoriaId)
     );
 
     const unsubscribe = onSnapshot(qCategory, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notifica));
       sync(docs);
     }, (error: FirestoreError) => {
-      console.error("Errore query categoria:", error);
+      console.error("Errore query categoria (necessario indice?):", error);
     });
 
     return () => unsubscribe();
-  }, [user?.uid, userProfile?.nomeCategoria, sync]);
+  }, [user?.uid, userProfile?.categoriaId, sync]);
 
   const markAsRead = async (notificationId: string) => {
     if (!notificationId) return;
@@ -135,7 +120,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     try {
       const docRef = doc(db, 'notificheRichieste', notificationId);
       await deleteDoc(docRef);
-      // Aggiorna lo store locale dopo l'eliminazione
+      
       const updated = notificationsStore.filter(n => n.id !== notificationId);
       notificationsStore = updated;
       setNotifications(updated);

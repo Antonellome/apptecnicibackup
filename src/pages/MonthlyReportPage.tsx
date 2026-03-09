@@ -74,12 +74,12 @@ const MonthlyReportPage = () => {
           getDocs(collection(db, 'tecnici'))
         ]);
 
-        const reportList = reportSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Rapportino[];
+        const reportList = reportSnapshot.docs.map(doc => ({ ...(doc.data() as Omit<Rapportino, 'id'>), id: doc.id }));
 
         const tipiGiornataMap = new Map<string, TipoGiornata>();
         const tipiGiornataList: TipoGiornata[] = [];
         tipiGiornataSnapshot.forEach(doc => {
-          const data = { ...doc.data(), id: doc.id } as TipoGiornata;
+          const data = { ...(doc.data() as Omit<TipoGiornata, 'id'>), id: doc.id };
           tipiGiornataMap.set(doc.id, data);
           tipiGiornataList.push(data);
         });
@@ -87,18 +87,19 @@ const MonthlyReportPage = () => {
 
         const tecniciMap = new Map<string, Tecnico>();
         tecniciSnapshot.forEach(doc => {
-            const data = { ...doc.data(), id: doc.id } as Tecnico;
+            const data = { ...(doc.data() as Omit<Tecnico, 'id'>), id: doc.id };
             tecniciMap.set(doc.id, data);
         });
 
         const enrichedReports = reportList.map(report => {
           const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId);
-          const tecnicoScrivente = tecniciMap.get(report.tecnicoId || report.tecnicoScriventeId);
+          const tecnicoId = report.tecnicoId || report.tecnicoScriventeId;
+          const tecnicoScrivente = tecnicoId ? tecniciMap.get(tecnicoId) : undefined;
           const presenze = report.presenze?.map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
 
           return {
             ...report,
-            data: (report.data as Timestamp).toDate(),
+            data: (report.data as unknown as Timestamp).toDate(),
             oraInizio: convertTimestamp(report.oraInizio),
             oraFine: convertTimestamp(report.oraFine),
             tipoGiornata: tipoGiornata || { id: 'non-definito', nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help' },

@@ -17,7 +17,7 @@ import {
   InputLabel,
   ListItemButton,
 } from '@mui/material';
-import { collection, getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { Rapportino } from '@/models/definitions';
@@ -27,7 +27,8 @@ import { useGlobalData } from '@/contexts/GlobalDataProvider';
 
 const ReportListPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  // CIAO. Utilizzo il nuovo userProfile per accedere a tecnicoId.
+  const { userProfile } = useAuth(); 
   const { tipiGiornata, loading: dataLoading } = useGlobalData();
 
   const [reports, setReports] = useState<Rapportino[]>([]);
@@ -38,7 +39,8 @@ const ReportListPage = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    if (user?.uid && !dataLoading) {
+    // CIAO. La dipendenza ora è userProfile.tecnicoId, non più user.uid.
+    if (userProfile?.tecnicoId && !dataLoading) {
       const fetchReports = async () => {
         setLoading(true);
         setError('');
@@ -46,9 +48,10 @@ const ReportListPage = () => {
           const startDate = new Date(selectedYear, selectedMonth, 1);
           const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59);
     
+          // CIAO. La query è stata aggiornata per usare la collection group e filtrare per tecnicoId.
           const reportsQuery = query(
-            collection(db, 'rapportini'),
-            where('tecnicoId', '==', user.uid),
+            collectionGroup(db, 'rapportini'), // Query su collection group
+            where('tecnicoId', '==', userProfile.tecnicoId), // Filtro corretto
             where('data', '>=', Timestamp.fromDate(startDate)),
             where('data', '<=', Timestamp.fromDate(endDate)),
             orderBy('data', 'desc')
@@ -69,7 +72,7 @@ const ReportListPage = () => {
     
         } catch (err) {
           console.error("Errore nel caricamento dei report:", err);
-          setError('Impossibile caricare la lista dei report.');
+          setError('Impossibile caricare la lista dei report. Potrebbe essere necessario un deploy degli indici.');
         } finally {
           setLoading(false);
         }
@@ -77,7 +80,7 @@ const ReportListPage = () => {
 
       fetchReports();
     }
-  }, [user?.uid, selectedMonth, selectedYear, dataLoading]);
+  }, [userProfile?.tecnicoId, selectedMonth, selectedYear, dataLoading]);
 
   const getTipoGiornataNome = (tipoId: string): string => {
     const tipo = tipiGiornata.find(t => t.id === tipoId);

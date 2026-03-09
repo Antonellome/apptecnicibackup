@@ -1,7 +1,5 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Grid,
     FormControlLabel,
     Switch,
     FormControl,
@@ -11,45 +9,53 @@ import {
     TextField,
     Typography,
     Paper,
+    SelectChangeEvent
 } from '@mui/material';
+import Grid from '@mui/material/Grid'; // Import corretto per MUI v7
 
-// Definizioni di tipi per le props
+// --- Definizioni e Tipi ---
 interface OreLavoroData {
     tecnicoId: string;
     nome: string;
     isManual: boolean;
     oraInizio: string | null;
     oraFine: string | null;
-    pausa: number | null;
-    ore: number | null;
+    pausa: number | null; // in minuti
+    ore: number | null; // in ore (es. 8.5)
 }
 
 interface Props {
     datiOre: OreLavoroData;
     onUpdate: (data: OreLavoroData) => void;
     isReadOnly: boolean;
-    isScrivente: boolean; // Per distinguere il tecnico principale
+    isScrivente: boolean;
 }
 
-// Opzioni per i selettori di tempo
+// --- Funzioni Helper (pure, fuori dal componente) ---
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
     const h = Math.floor(i / 2).toString().padStart(2, '0');
     const m = (i % 2 === 0 ? '00' : '30');
     return `${h}:${m}`;
 });
 
-const generateManualHoursOptions = () => {
-    const options = [];
-    for (let i = 0.5; i <= 24; i += 0.5) {
-        options.push({ value: i, label: i.toString().replace('.5', ':30') });
-    }
-    return options;
-};
-const manualTotalHoursOptions = generateManualHoursOptions();
+const manualTotalHoursOptions = Array.from({ length: 48 }, (_, i) => {
+    const ore = (i + 1) * 0.5;
+    return { value: ore, label: ore.toString().replace('.5', ':30') };
+});
 
 const formatOreLavorate = (ore: number | null): string => {
-    if (ore === null || ore <= 0) return '0';
-    return ore.toString().replace('.5', ':30');
+    if (ore === null || ore <= 0) {
+        return '0';
+    }
+
+    if (ore <= 8) {
+        const hours = Math.floor(ore);
+        const minutes = (ore % 1) * 60;
+        return `${hours}:${minutes.toString().padStart(2, '0')}`;
+    } else {
+        const straordinario = ore - 8;
+        return `8+${straordinario}`;
+    }
 };
 
 const parseTime = (timeStr: string | null): number => {
@@ -58,74 +64,63 @@ const parseTime = (timeStr: string | null): number => {
     return hours * 60 + minutes;
 };
 
+// --- Componente Principale ---
 const OreLavoroSingoloTecnico: React.FC<Props> = ({ datiOre, onUpdate, isReadOnly, isScrivente }) => {
-    const [isManual, setIsManual] = useState(datiOre.isManual);
-    const [oraInizio, setOraInizio] = useState(datiOre.oraInizio);
-    const [oraFine, setOraFine] = useState(datiOre.oraFine);
-    const [pausa, setPausa] = useState(datiOre.pausa);
-    const [oreLavoro, setOreLavoro] = useState(datiOre.ore);
 
-    const memoizedOnUpdate = useCallback(onUpdate, []);
+    const [datiInterni, setDatiInterni] = useState<OreLavoroData>(datiOre);
 
-    // Calcolo automatico delle ore
     useEffect(() => {
-        let newOre: number;
-        if (isManual) {
-            newOre = oreLavoro || 0;
-        } else {
-            const start = parseTime(oraInizio);
-            const end = parseTime(oraFine);
-            const breakTime = pausa || 0;
-            const duration = end > start ? end - start - breakTime : 0;
-            newOre = Math.max(0, duration / 60);
-        }
-        
-        if (newOre !== oreLavoro) {
-            setOreLavoro(newOre);
-        }
-
-    }, [oraInizio, oraFine, pausa, isManual, oreLavoro]);
-
-    // Propagazione degli aggiornamenti al componente padre
-    useEffect(() => {
-        memoizedOnUpdate({
-            ...datiOre,
-            isManual,
-            oraInizio,
-            oraFine,
-            pausa,
-            ore: oreLavoro,
-        });
-    }, [isManual, oraInizio, oraFine, pausa, oreLavoro, memoizedOnUpdate, datiOre]);
-    
-    // Sincronizza lo stato se le props cambiano dall'esterno
-    useEffect(() => {
-        setIsManual(datiOre.isManual);
-        setOraInizio(datiOre.oraInizio);
-        setOraFine(datiOre.oraFine);
-        setPausa(datiOre.pausa);
-        setOreLavoro(datiOre.ore);
+        setDatiInterni(datiOre);
     }, [datiOre]);
 
+    const oreCalcolate = useMemo(() => {
+        if (datiInterni.isManual) {
+            return datiInterni.ore;
+        }
+        const start = parseTime(datiInterni.oraInizio);
+        const end = parseTime(datiInterni.oraFine);
+        const breakTime = datiInterni.pausa || 0;
+
+        if (end <= start) return 0;
+        
+        const durationInMinutes = end - start - breakTime;
+        return Math.max(0, durationInMinutes / 60);
+
+    }, [datiInterni.isManual, datiInterni.oraInizio, datiInterni.oraFine, datiInterni.pausa, datiInterni.ore]);
+
+    useEffect(() => {
+        const finalData = { ...datiInterni, ore: oreCalcolate };
+        if (JSON.stringify(finalData) !== JSON.stringify(datiOre)) {
+            onUpdate(finalData);
+        }
+    }, [datiInterni, oreCalcolate, onUpdate, datiOre]);
+
+    const handleFieldChange = (field: keyof OreLavoroData, value: any) => {
+        setDatiInterni(prev => ({ ...prev, [field]: value }));
+    };
+    
+    const handleSelectChange = (field: keyof OreLavoroData) => (event: SelectChangeEvent<any>) => {
+        handleFieldChange(field, event.target.value);
+    };
 
     return (
         <Paper elevation={2} sx={{ p: 2, mb: 2, borderLeft: isScrivente ? '4px solid' : 'none', borderColor: 'primary.main' }}>
             <Typography variant="h6" component="div" sx={{ mb: 2 }}>
-                {datiOre.nome} {isScrivente && '(Responsabile)'}
+                {datiInterni.nome} {isScrivente && '(Responsabile)'}
             </Typography>
-            <Grid container spacing={2}>
-                <Grid size={12}>
+            <Grid container spacing={2} alignItems="center">
+                <Grid size={{ xs: 12 }}>
                     <FormControlLabel
-                        control={<Switch checked={isManual} onChange={(e) => setIsManual(e.target.checked)} disabled={isReadOnly || !isScrivente} />}
+                        control={<Switch checked={datiInterni.isManual} onChange={(e) => handleFieldChange('isManual', e.target.checked)} disabled={isReadOnly || !isScrivente} />}
                         label={isScrivente ? "Inserimento Manuale per Tutti" : "Inserimento Manuale Ore"}
                     />
                 </Grid>
-                {!isManual ? (
+                {!datiInterni.isManual ? (
                     <>
                         <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth>
                                 <InputLabel>Inizio</InputLabel>
-                                <Select value={oraInizio || ''} label="Inizio" onChange={(e) => setOraInizio(e.target.value)} disabled={isReadOnly}>
+                                <Select value={datiInterni.oraInizio || ''} label="Inizio" onChange={handleSelectChange('oraInizio')} disabled={isReadOnly}>
                                     {timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
                                 </Select>
                             </FormControl>
@@ -133,35 +128,37 @@ const OreLavoroSingoloTecnico: React.FC<Props> = ({ datiOre, onUpdate, isReadOnl
                         <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth>
                                 <InputLabel>Fine</InputLabel>
-                                <Select value={oraFine || ''} label="Fine" onChange={(e) => setOraFine(e.target.value)} disabled={isReadOnly}>
+                                <Select value={datiInterni.oraFine || ''} label="Fine" onChange={handleSelectChange('oraFine')} disabled={isReadOnly}>
                                     {timeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
                                 </Select>
                             </FormControl>
                         </Grid>
                         <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth>
-                                <InputLabel>Pausa</InputLabel>
-                                <Select value={pausa ?? ''} label="Pausa" onChange={(e) => setPausa(Number(e.target.value))} disabled={isReadOnly}>
-                                    <MenuItem value={0}>0 min</MenuItem>
-                                    <MenuItem value={30}>30 min</MenuItem>
-                                    <MenuItem value={60}>60 min</MenuItem>
-                                    <MenuItem value={90}>90 min</MenuItem>
-                                    <MenuItem value={120}>120 min</MenuItem>
+                                <InputLabel>Pausa (min)</InputLabel>
+                                <Select value={datiInterni.pausa ?? ''} label="Pausa (min)" onChange={(e) => handleFieldChange('pausa', Number(e.target.value))} disabled={isReadOnly}>
+                                    <MenuItem value={0}>0</MenuItem>
+                                    <MenuItem value={15}>15</MenuItem>
+                                    <MenuItem value={30}>30</MenuItem>
+                                    <MenuItem value={45}>45</MenuItem>
+                                    <MenuItem value={60}>60</MenuItem>
+                                    <MenuItem value={90}>90</MenuItem>
+                                    <MenuItem value={120}>120</MenuItem>
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={12}>
-                            <TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreLavoro)} fullWidth disabled />
+                        <Grid size={{ xs: 12 }} sx={{mt: 2}}>
+                            <TextField label="Totale Ore Calcolato" value={formatOreLavorate(oreCalcolate)} fullWidth InputProps={{ readOnly: true }} variant="filled" />
                         </Grid>
                     </>
                 ) : (
-                    <Grid size={12}>
+                    <Grid size={{ xs: 12 }}>
                         <FormControl fullWidth required>
                             <InputLabel>Totale Ore</InputLabel>
                             <Select
-                                value={oreLavoro ?? ''}
+                                value={datiInterni.ore ?? ''}
                                 label="Totale Ore"
-                                onChange={(e) => setOreLavoro(Number(e.target.value))}
+                                onChange={(e) => handleFieldChange('ore', Number(e.target.value))}
                                 disabled={isReadOnly}
                             >
                                 {manualTotalHoursOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}

@@ -1,9 +1,9 @@
-
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { collection, onSnapshot, DocumentData } from 'firebase/firestore';
+import { db } from '@/firebase';
 import type { Rapportino, Tecnico, Ditta, Categoria, Veicolo, Cliente, TipoGiornata, Nave, Luogo, WebAppUser, Qualifica, Documento } from '@/models/definitions';
 
+// --- Interfaces ---
 export interface IDataContext {
   rapportini: Rapportino[];
   tecnici: Tecnico[];
@@ -23,8 +23,10 @@ export interface IDataContext {
   loading: boolean;
 }
 
+// --- Context ---
 const DataContext = createContext<IDataContext | undefined>(undefined);
 
+// --- Hook ---
 export const useGlobalData = () => {
   const context = useContext(DataContext);
   if (!context) {
@@ -33,6 +35,27 @@ export const useGlobalData = () => {
   return context;
 };
 
+// --- Helper per Snapshot ---
+const createSnapshotListener = <T extends DocumentData>(
+    collectionName: string, 
+    setter: React.Dispatch<React.SetStateAction<T[]>>,
+    onLoad: () => void, 
+    onError: (error: Error) => void
+) => {
+    const collRef = collection(db, collectionName);
+    return onSnapshot(collRef, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as unknown as T[];
+        setter(data);
+        onLoad();
+    }, (error) => {
+        console.error(`Errore nel caricamento di ${collectionName}:`, error);
+        onError(error);
+        onLoad(); // Contiamo anche i fallimenti per sbloccare il loading
+    });
+};
+
+
+// --- Provider ---
 export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [rapportini, setRapportini] = useState<Rapportino[]>([]);
   const [tecnici, setTecnici] = useState<Tecnico[]>([]);
@@ -47,55 +70,51 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [qualifiche, setQualifiche] = useState<Qualifica[]>([]);
   const [documenti, setDocumenti] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
-    const collections: { name: keyof IDataContext; setter: React.Dispatch<React.SetStateAction<any[]>> }[] = [
-      { name: 'rapportini', setter: setRapportini },
-      { name: 'tecnici', setter: setTecnici },
-      { name: 'ditte', setter: setDitte },
-      { name: 'categorie', setter: setCategorie },
-      { name: 'veicoli', setter: setVeicoli },
-      { name: 'clienti', setter: setClienti },
-      { name: 'tipiGiornata', setter: setTipiGiornata },
-      { name: 'navi', setter: setNavi },
-      { name: 'luoghi', setter: setLuoghi },
-      { name: 'webAppUsers', setter: setWebAppUsers },
-      { name: 'qualifiche', setter: setQualifiche },
-      { name: 'documenti', setter: setDocumenti },
+    const collectionNames = [
+        'rapportini', 'tecnici', 'ditte', 'categorie', 'veicoli', 'clienti', 
+        'tipiGiornata', 'navi', 'luoghi', 'webAppUsers', 'qualifiche', 'documenti'
     ];
+    let pendingLoads = collectionNames.length;
 
-    let initialLoads = collections.length;
-
-    const unsubscribes = collections.map(({ name, setter }) => {
-      const collRef = collection(db, name as string);
-      return onSnapshot(collRef, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setter(data as any[]);
-        if (initialLoads > 0) {
-            initialLoads--;
-            if (initialLoads === 0) {
-                setLoading(false);
-            }
-        }
-      }, (error) => {
-        console.error(`Error fetching ${name}:`, error);
-        initialLoads--;
-        if (initialLoads === 0) {
+    const handleLoad = () => {
+        pendingLoads--;
+        if (pendingLoads === 0) {
             setLoading(false);
         }
-      });
-    });
+    };
+
+    const handleError = (error: Error) => {
+        setErrors(prev => [...prev, error.message]);
+    };
+
+    const unsubscribes = [
+        createSnapshotListener<Rapportino>('rapportini', setRapportini, handleLoad, handleError),
+        createSnapshotListener<Tecnico>('tecnici', setTecnici, handleLoad, handleError),
+        createSnapshotListener<Ditta>('ditte', setDitte, handleLoad, handleError),
+        createSnapshotListener<Categoria>('categorie', setCategorie, handleLoad, handleError),
+        createSnapshotListener<Veicolo>('veicoli', setVeicoli, handleLoad, handleError),
+        createSnapshotListener<Cliente>('clienti', setClienti, handleLoad, handleError),
+        createSnapshotListener<TipoGiornata>('tipiGiornata', setTipiGiornata, handleLoad, handleError),
+        createSnapshotListener<Nave>('navi', setNavi, handleLoad, handleError),
+        createSnapshotListener<Luogo>('luoghi', setLuoghi, handleLoad, handleError),
+        createSnapshotListener<WebAppUser>('webAppUsers', setWebAppUsers, handleLoad, handleError),
+        createSnapshotListener<Qualifica>('qualifiche', setQualifiche, handleLoad, handleError),
+        createSnapshotListener<Documento>('documenti', setDocumenti, handleLoad, handleError),
+    ];
 
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, []);
+  }, []); // L'array vuoto è FONDAMENTALE e ora sicuro.
 
   const ditteMap = useMemo(() => new Map(ditte.map(d => [d.id, d])), [ditte]);
   const categorieMap = useMemo(() => new Map(categorie.map(c => [c.id, c])), [categorie]);
   const tecniciMap = useMemo(() => new Map(tecnici.map(t => [t.id, t])), [tecnici]);
 
-  const value: IDataContext = {
+  const value = useMemo(() => ({
     rapportini,
     tecnici,
     ditte,
@@ -112,7 +131,12 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     categorieMap,
     tecniciMap,
     loading,
-  };
+    errors, // Anche gli errori sono disponibili nel contesto, se servono
+  }), [
+    rapportini, tecnici, ditte, categorie, veicoli, clienti, tipiGiornata, 
+    navi, luoghi, webAppUsers, qualifiche, documenti, 
+    ditteMap, categorieMap, tecniciMap, loading, errors
+  ]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

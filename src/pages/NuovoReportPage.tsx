@@ -3,8 +3,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
-    Switch, FormControlLabel, Autocomplete, Button, CircularProgress, Grid, Alert, Divider, Box
+    Switch, FormControlLabel, Autocomplete, Button, CircularProgress, Grid, Alert, Divider, Box,
+    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
@@ -66,6 +69,11 @@ const NuovoReportPage: React.FC = () => {
     const [dataInizio, setDataInizio] = useState<Date | null>(new Date());
     const [dataFine, setDataFine] = useState<Date | null>(new Date());
     const [dettaglioOre, setDettaglioOre] = useState<DettaglioOreData[]>([]);
+    
+    // State for modal
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingTecnico, setEditingTecnico] = useState<DettaglioOreData | null>(null);
+    const [tempDettaglioOre, setTempDettaglioOre] = useState<DettaglioOreData | null>(null);
 
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
     const memoizedShowSnackbar = useCallback(showSnackbar, []);
@@ -155,6 +163,25 @@ const NuovoReportPage: React.FC = () => {
         loadReport();
     }, [isEditMode, reportId, navigate, collectionsLoading, tecnici, tipiGiornata, loggedInTecnicoId, memoizedShowSnackbar, tecnicoScrivente]);
 
+    const handleOpenModal = (tecnico: DettaglioOreData) => {
+        setEditingTecnico(tecnico);
+        setTempDettaglioOre(tecnico); // Initialize temp state for modal
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setEditingTecnico(null);
+        setTempDettaglioOre(null);
+    };
+    
+    const handleSaveFromModal = () => {
+        if (tempDettaglioOre) {
+            handleOreUpdate(tempDettaglioOre);
+        }
+        handleCloseModal();
+    };
+
 
     const altriTecniciIds = useMemo(() => dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId), [dettaglioOre, loggedInTecnicoId]);
     const otherTecnicos = useMemo(() => sortedTecnici.filter(t => t.id !== loggedInTecnicoId), [sortedTecnici, loggedInTecnicoId]);
@@ -166,8 +193,20 @@ const NuovoReportPage: React.FC = () => {
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
         setDettaglioOre(prevDettagli => {
             const newDettagli = prevDettagli.map(d => d.tecnicoId === updatedData.tecnicoId ? updatedData : d);
+            // If the author's hours are updated, apply them to all other technicians as well
             if (updatedData.tecnicoId === loggedInTecnicoId) {
-                return newDettagli.map(d => d.tecnicoId === loggedInTecnicoId ? d : { ...d, ...updatedData, tecnicoId: d.tecnicoId, nome: d.nome });
+                return newDettagli.map(d => {
+                    if (d.tecnicoId === loggedInTecnicoId) return d; // Keep author's own update
+                    // For others, copy the times but keep their own ID and name
+                    return { 
+                        ...d, 
+                        isManual: updatedData.isManual,
+                        oraInizio: updatedData.oraInizio,
+                        oraFine: updatedData.oraFine,
+                        pausa: updatedData.pausa,
+                        ore: updatedData.ore
+                    };
+                });
             }
             return newDettagli;
         });
@@ -177,17 +216,31 @@ const NuovoReportPage: React.FC = () => {
         const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
         if (!scrivente) return;
 
-        const nuoviDettagli = nuoviTecniciSelezionati.map(t => ({
-            tecnicoId: t.id,
-            nome: `${t.cognome} ${t.nome}`.trim(),
-            isManual: scrivente.isManual,
-            oraInizio: scrivente.oraInizio,
-            oraFine: scrivente.oraFine,
-            pausa: scrivente.pausa,
-            ore: scrivente.ore
-        }));
+        const nuoviDettagli = nuoviTecniciSelezionati.map(t => {
+            // Check if this technician already has details, if so, keep them
+            const existingDetail = dettaglioOre.find(d => d.tecnicoId === t.id);
+            if (existingDetail) {
+                return existingDetail;
+            }
+            // Otherwise, create new details based on the author's
+            return {
+                tecnicoId: t.id,
+                nome: `${t.cognome} ${t.nome}`.trim(),
+                isManual: scrivente.isManual,
+                oraInizio: scrivente.oraInizio,
+                oraFine: scrivente.oraFine,
+                pausa: scrivente.pausa,
+                ore: scrivente.ore
+            };
+        });
+
         setDettaglioOre([scrivente, ...nuoviDettagli]);
     };
+
+    const removeTecnico = (tecnicoIdToRemove: string) => {
+        setDettaglioOre(prev => prev.filter(d => d.tecnicoId !== tecnicoIdToRemove));
+    };
+
 
     const handleSubmit = async () => {
         if ((!data && !isPeriodo) || !tipoGiornataId || !loggedInTecnicoId) { memoizedShowSnackbar("Compila i campi obbligatori (Data e Tipo Giornata).", "warning"); return; }
@@ -271,6 +324,8 @@ const NuovoReportPage: React.FC = () => {
     };
 
     if (pageLoading || collectionsLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
+    
+    const scriventeDettaglio = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
@@ -296,24 +351,50 @@ const NuovoReportPage: React.FC = () => {
                         {isLavorativo && !isPeriodo && (
                             <>
                                 <Divider sx={{ my: 1 }}><Typography variant="overline">Dettaglio Ore Lavoro</Typography></Divider>
-                                {dettaglioOre.map((dett) => (
+                                
+                                {scriventeDettaglio && (
                                     <OreLavoroSingoloTecnico
-                                        key={dett.tecnicoId}
-                                        datiOre={dett}
+                                        key={scriventeDettaglio.tecnicoId}
+                                        datiOre={scriventeDettaglio}
                                         onUpdate={handleOreUpdate}
                                         isReadOnly={isReadOnly}
-                                        isScrivente={dett.tecnicoId === loggedInTecnicoId}
+                                        isScrivente={true}
                                     />
-                                ))}
+                                )}
+
                                 <Autocomplete
                                     multiple
                                     options={otherTecnicos}
                                     getOptionLabel={o => `${o.cognome} ${o.nome}`}
                                     value={selectedTecnicos}
                                     onChange={handleAltriTecniciChange}
-                                    renderInput={params => <TextField {...params} label="Altri Tecnici Presenti" />}
+                                    renderInput={params => <TextField {...params} label="Aggiungi altri tecnici presenti" />}
                                     disabled={isReadOnly}
                                 />
+
+                                {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
+                                     <Paper key={dett.tecnicoId} variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                                        <Box>
+                                            <Typography variant="body1" fontWeight="bold">{dett.nome}</Typography>
+                                             <Chip
+                                                label={dett.isManual 
+                                                    ? `Ore manuali: ${dett.ore || 0}` 
+                                                    : `Orario: ${dett.oraInizio || 'N/A'} - ${dett.oraFine || 'N/A'} (${dett.ore || 0} ore)`
+                                                }
+                                                size="small"
+                                            />
+                                        </Box>
+                                        <Box>
+                                            <IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={isReadOnly}>
+                                                <EditIcon />
+                                            </IconButton>
+                                            <IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={isReadOnly}>
+                                                <DeleteIcon />
+                                            </IconButton>
+                                        </Box>
+                                    </Paper>
+                                ))}
+
                                 <Divider sx={{ my: 1 }}><Typography variant="overline">Dettagli Intervento</Typography></Divider>
                                 <FormControl fullWidth><InputLabel>Nave</InputLabel><Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuna</em></MenuItem>{sortedNavi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}</Select></FormControl>
                                 <FormControl fullWidth><InputLabel>Luogo</InputLabel><Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value)} disabled={isReadOnly}><MenuItem value=""><em>Nessuno</em></MenuItem>{sortedLuoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}</Select></FormControl>
@@ -330,6 +411,28 @@ const NuovoReportPage: React.FC = () => {
                     </Box>
                 </Paper>
             </Box>
+
+            {/* Modal for Editing Technician Hours */}
+            <Dialog open={isModalOpen} onClose={handleCloseModal} maxWidth="sm" fullWidth>
+                <DialogTitle>Modifica orario di {editingTecnico?.nome}</DialogTitle>
+                <DialogContent>
+                    {tempDettaglioOre && (
+                        <Box sx={{pt: 2}}>
+                             <OreLavoroSingoloTecnico
+                                datiOre={tempDettaglioOre}
+                                onUpdate={setTempDettaglioOre} // Update temp state
+                                isReadOnly={false}
+                                isScrivente={false} // Always false in modal
+                            />
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseModal}>Annulla</Button>
+                    <Button onClick={handleSaveFromModal} variant="contained">Salva Orario</Button>
+                </DialogActions>
+            </Dialog>
+
         </LocalizationProvider>
     );
 };

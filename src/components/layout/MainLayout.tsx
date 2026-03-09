@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, IconButton, Chip } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,51 +13,66 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
-import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SyncIcon from '@mui/icons-material/Sync';
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
     const { logout } = useAuth();
     const { showSnackbar } = useSnackbar();
+    const isSyncing = useRef(false); // Ref per evitare sincronizzazioni multiple
 
-    // Hook di Dexie per sapere in tempo reale quanti rapportini sono in coda
     const rapportiniInSospeso = useLiveQuery(() => db.rapportiniInSospeso.count(), []);
 
-    // Effetto per la sincronizzazione automatica
+    const handleSync = useCallback(async (isManualTrigger = false) => {
+        if (isSyncing.current) {
+            if (isManualTrigger) showSnackbar("Sincronizzazione già in corso.", "info");
+            return;
+        }
+        if (!navigator.onLine) {
+            if (isManualTrigger) showSnackbar('Impossibile sincronizzare: sei offline.', 'warning');
+            return;
+        }
+        
+        const count = await db.rapportiniInSospeso.count();
+        if (count === 0) {
+            if (isManualTrigger) showSnackbar('Nessun dato da sincronizzare.', 'success');
+            return;
+        }
+
+        isSyncing.current = true;
+        if (isManualTrigger) showSnackbar('Sincronizzazione avviata...', 'info');
+        
+        try {
+            await sincronizzaConFirebase();
+            if (isManualTrigger) showSnackbar(`Sincronizzazione completata! ${count} record inviati.`, 'success');
+        } catch (error) { 
+            showSnackbar('Errore durante la sincronizzazione.', 'error');
+            console.error("Errore di sincronizzazione:", error);
+        } finally {
+            isSyncing.current = false;
+        }
+    }, [showSnackbar]);
+
+
     useEffect(() => {
-        const handleOnline = () => {
-            showSnackbar('Sei di nuovo online. Provo a sincronizzare i dati...', 'info');
-            sincronizzaConFirebase();
-        };
+        const onOnline = () => handleSync(false); // Non è un trigger manuale
+
+        // Esegui la sincronizzazione al primo caricamento se si è online
+        onOnline();
 
         // Aggiungi listener per l'evento 'online'
-        window.addEventListener('online', handleOnline);
-
-        // Esegui la sincronizzazione al primo caricamento dell'app se si è online
-        if (navigator.onLine) {
-            sincronizzaConFirebase();
-        }
+        window.addEventListener('online', onOnline);
 
         // Cleanup: rimuovi il listener quando il componente viene smontato
         return () => {
-            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('online', onOnline);
         };
-    }, [showSnackbar]);
+    }, [handleSync]); // La dipendenza è stabile grazie a useCallback
 
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
-
-    const handleForceSync = () => {
-        if (navigator.onLine) {
-            showSnackbar('Sincronizzazione manuale avviata...', 'info');
-            sincronizzaConFirebase();
-        } else {
-            showSnackbar('Impossibile sincronizzare. Controlla la tua connessione.', 'warning');
-        }
-    }
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'background.default' }}>
@@ -75,20 +90,15 @@ const MainLayout: React.FC = () => {
                     <Box sx={{ flexGrow: 1 }} />
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {/* Mostra questo Chip solo se ci sono rapportini in attesa */}
                         {rapportiniInSospeso !== undefined && rapportiniInSospeso > 0 && (
                             <Chip 
-                                icon={<CloudOffIcon />}
-                                label={`${rapportiniInSospeso} in attesa`}
+                                icon={<SyncIcon />} // Icona più appropriata
+                                label={`${rapportiniInSospeso} in coda`}
                                 color="warning"
-                                onClick={handleForceSync}
+                                onClick={() => handleSync(true)} // È un trigger manuale
                                 clickable
                                 size="small"
-                                onMouseEnter={() => (document.body.style.cursor = 'pointer')}
-                                onMouseLeave={() => (document.body.style.cursor = 'default')}
-                                deleteIcon={<SyncIcon />}
-                                onDelete={handleForceSync} // Permette di cliccare anche sull'icona di sync
-                                title="Ci sono rapportini salvati localmente. Clicca per provare a sincronizzare."
+                                title="Ci sono rapportini salvati localmente. Clicca per forzare la sincronizzazione."
                             />
                         )}
 
