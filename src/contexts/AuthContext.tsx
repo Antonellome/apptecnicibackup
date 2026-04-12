@@ -41,15 +41,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       if (currentUser) {
           try {
-              // 1. Usa l'UID dell'utente per leggere direttamente il documento del suo profilo.
-              // Questa è la best practice: l'ID del documento è l'UID dell'utente.
               const tecnicoDocRef = doc(db, 'tecnici', currentUser.uid);
               const tecnicoDocSnap = await getDoc(tecnicoDocRef);
 
               if (tecnicoDocSnap.exists()) {
                   const tecnicoData = tecnicoDocSnap.data();
                   
-                  // 2. Se id_categoria esiste, risolvi il nome della categoria.
                   const id_categoria = tecnicoData.id_categoria;
                   let nomeCategoriaStr = '';
                   if (id_categoria && typeof id_categoria === 'string') {
@@ -64,11 +61,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                       }
                   }
 
-                  // 3. Costruisci il profilo utente completo.
                   setUserProfile({
                       uid: currentUser.uid,
                       email: currentUser.email || '',
-                      tecnicoId: tecnicoDocSnap.id, // L'ID del documento è l'UID stesso
+                      tecnicoId: tecnicoDocSnap.id,
                       nome: tecnicoData.nome || '',
                       cognome: tecnicoData.cognome || '',
                       attivo: tecnicoData.attivo || false,
@@ -76,7 +72,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                       nomeCategoria: nomeCategoriaStr,
                   });
 
-                  console.log(`[Auth] Profilo tecnico caricato direttamente per UID: ${currentUser.uid}`);
+                  // console.log(`[Auth] Profilo tecnico caricato direttamente per UID: ${currentUser.uid}`);
 
               } else {
                   console.error(`[Auth] Documento non trovato in 'tecnici' per l'UID: ${currentUser.uid}. L'utente non è configurato come tecnico.`);
@@ -87,7 +83,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               setUserProfile(null);
           }
       } else {
-          setUserProfile(null); // Nessun utente loggato
+          setUserProfile(null);
       }
       
       setLoading(false);

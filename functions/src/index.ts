@@ -1,182 +1,204 @@
-import * as admin from "firebase-admin";
+
 import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+import { eachDayOfInterval, isWithinInterval, endOfMonth } from "date-fns";
 
+// Inizializza l'SDK Admin di Firebase.
 admin.initializeApp();
-
 const db = admin.firestore();
 
-/**
- * Cloud Function that handles sending push notifications via FCM.
- * It is triggered on the creation of a new document in the 'notificheRichieste' collection.
- * It resolves category IDs and user IDs into FCM tokens for targeted delivery.
- */
-export const sendPushNotifications = functions.region('europe-west1').firestore
-    .document('notificheRichieste/{notificaId}')
-    .onCreate(async (snapshot, context) => {
-        const data = snapshot.data();
-        if (!data) {
-            functions.logger.error("No data found in the trigger document.", { notificaId: context.params.notificaId });
-            return null;
-        }
+// --- TIPI E INTERFACCE ---
+interface Rapportino {
+  id: string;
+  tecnicoId: string;
+  tipoGiornataId: string;
+  oreLavoro: number;
+  data: admin.firestore.Timestamp;
+  dataInizio?: admin.firestore.Timestamp;
+  dataFine?: admin.firestore.Timestamp;
+}
 
-        const { title, body, to_ids = [], to_categories = [] } = data;
+interface TipoGiornata {
+  id: string;
+  nome: string;
+}
 
-        if (!title || !body) {
-            functions.logger.warn("Notification is missing title or body.", { notificaId: context.params.notificaId });
-            await snapshot.ref.update({ status: 'error', error: 'Missing title or body' });
-            return null;
-        }
+// =================================================================================================
+// FUNZIONE DI AGGREGAZIONE DATI MASTER
+// =================================================================================================
+export const getMasterData = functions.region("europe-west1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "L'utente deve essere autenticato.");
+  }
+  functions.logger.info(`Inizio recupero dati master per l'utente: ${context.auth.uid}`);
+  try {
+    const [clientiSnap, naviSnap, luoghiSnap, categorieSnap, ditteSnap, tecniciSnap, tipiGiornataSnap, veicoliSnap] = await Promise.all([
+      db.collection("clienti").get(), db.collection("navi").get(), db.collection("luoghi").get(),
+      db.collection("categorie").get(), db.collection("ditte").get(), db.collection("tecnici").get(),
+      db.collection("tipiGiornata").get(), db.collection("veicoli").get(),
+    ]);
+    const masterData = {
+      clienti: clientiSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      navi: naviSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      luoghi: luoghiSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      categorie: categorieSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      ditte: ditteSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      tecnici: tecniciSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      tipiGiornata: tipiGiornataSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      veicoli: veicoliSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    };
+    functions.logger.info("Recupero dati master completato.");
+    return masterData;
+  } catch (error) {
+    functions.logger.error("Errore recupero dati master:", error);
+    throw new functions.https.HttpsError("internal", "Impossibile recuperare i dati master.");
+  }
+});
 
-        const tokens: Set<string> = new Set();
-        
-        functions.logger.info(`Processing notification request ${context.params.notificaId}`, { title, to_ids, to_categories });
+// =================================================================================================
+// FUNZIONE PER GENERARE IL RIEPILOGO MENSILE (SU RICHIESTA)
+// =================================================================================================
+export const generateMonthlySummary = functions.region("europe-west1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "L'utente deve essere autenticato per generare un riepilogo.");
+  }
 
-        try {
-            // 1. Get tokens from direct user IDs
-            if (to_ids.length > 0) {
-                const userTokensPromises = to_ids.map(async (uid: string) => {
-                    try {
-                        const userDoc = await db.collection('tecnici').doc(uid).get();
-                        const userData = userDoc.data();
-                        if (userData && userData.fcmToken) {
-                            return userData.fcmToken;
-                        }
-                        functions.logger.warn(`No FCM token found for user ID: ${uid}`);
-                        return null;
-                    } catch (error) {
-                        functions.logger.error(`Error fetching user document for ID: ${uid}`, error);
-                        return null;
-                    }
-                });
-                const resolvedUserTokens = await Promise.all(userTokensPromises);
-                resolvedUserTokens.forEach((token: string | null) => token && tokens.add(token));
-            }
+  const { year, month } = data;
+  if (typeof year !== 'number' || typeof month !== 'number') {
+    throw new functions.https.HttpsError("invalid-argument", "I parametri 'year' e 'month' devono essere numeri.");
+  }
 
-            // 2. Get tokens from category IDs
-            if (to_categories.length > 0) {
-                const categoryTokensPromises = to_categories.map(async (categoryId: string) => {
-                    try {
-                        // CORREZIONE ASSOLUTA: Utilizzo del campo 'categoriaId' corretto, come scoperto da ispezione Firestore.
-                        const querySnapshot = await db.collection('tecnici').where('categoriaId', '==', categoryId).get();
-                        if (querySnapshot.empty) {
-                            functions.logger.info(`No technicians found for category ID: ${categoryId}`);
-                            return [];
-                        }
-                        const categoryTokens = querySnapshot.docs
-                            .map(doc => doc.data().fcmToken)
-                            .filter((token): token is string => !!token);
-                        return categoryTokens;
-                    } catch (error) {
-                        functions.logger.error(`Error querying technicians for category ID: ${categoryId}`, error);
-                        return [];
-                    }
-                });
-                const resolvedCategoryTokensArrays = await Promise.all(categoryTokensPromises);
-                resolvedCategoryTokensArrays.forEach(arr => arr.forEach((token: string) => tokens.add(token)));
-            }
+  const tecnicoId = context.auth.uid; // Assumiamo che l'UID dell'utente sia l'ID del tecnico
+  functions.logger.info(`Richiesta di generazione riepilogo per tecnico: ${tecnicoId}, Mese: ${month + 1}/${year}`);
 
-            const uniqueTokens = Array.from(tokens);
+  try {
+    await recalculateAndSaveSummary(tecnicoId, year, month);
+    functions.logger.info(`Riepilogo generato con successo per tecnico: ${tecnicoId}`);
+    return { success: true, message: "Riepilogo generato e salvato correttamente." };
+  } catch (error) {
+    functions.logger.error(`Errore durante la generazione del riepilogo per ${tecnicoId}:`, error);
+    throw new functions.https.HttpsError("internal", "Si è verificato un errore interno durante la generazione del riepilogo.");
+  }
+});
 
-            if (uniqueTokens.length === 0) {
-                functions.logger.warn("No valid FCM tokens found for the specified recipients.", { notificaId: context.params.notificaId });
-                await snapshot.ref.update({ status: 'completed_no_tokens' });
-                return null;
-            }
 
-            // 3. Send multicast message
-            const message = {
-                notification: { title, body },
-                tokens: uniqueTokens,
-            };
+// =================================================================================================
+// TRIGGER PER AGGREGAZIONE RAPPORTINI
+// =================================================================================================
+export const rapportiniTrigger = functions.region("europe-west1").firestore.document("rapportini/{rapportinoId}").onWrite(async (change, context) => {
+  functions.logger.info(`Trigger attivato per rapportino: ${context.params.rapportinoId}`);
+  const monthsToRecalculate = new Set<string>();
+  const beforeData = change.before.exists ? change.before.data() as Rapportino : null;
+  const afterData = change.after.exists ? change.after.data() as Rapportino : null;
 
-            functions.logger.info(`Sending notification to ${uniqueTokens.length} tokens.`, { notificaId: context.params.notificaId });
+  if (beforeData) {
+    const date = beforeData.data.toDate();
+    monthsToRecalculate.add(`${date.getFullYear()}-${date.getMonth()}_${beforeData.tecnicoId}`);
+    if (beforeData.dataInizio && beforeData.dataFine) {
+      eachDayOfInterval({ start: beforeData.dataInizio.toDate(), end: beforeData.dataFine.toDate() }).forEach(day => {
+        monthsToRecalculate.add(`${day.getFullYear()}-${day.getMonth()}_${beforeData.tecnicoId}`);
+      });
+    }
+  }
 
-            const response = await admin.messaging().sendEachForMulticast(message);
+  if (afterData) {
+    const date = afterData.data.toDate();
+    monthsToRecalculate.add(`${date.getFullYear()}-${date.getMonth()}_${afterData.tecnicoId}`);
+    if (afterData.dataInizio && afterData.dataFine) {
+      eachDayOfInterval({ start: afterData.dataInizio.toDate(), end: afterData.dataFine.toDate() }).forEach(day => {
+        monthsToRecalculate.add(`${day.getFullYear()}-${day.getMonth()}_${afterData.tecnicoId}`);
+      });
+    }
+  }
 
-            functions.logger.info(`FCM multicast response: ${response.successCount} successful, ${response.failureCount} failed.`, { notificaId: context.params.notificaId });
+  const recalculationPromises = Array.from(monthsToRecalculate).map(key => {
+    const [yearMonth, tecnicoId] = key.split("_");
+    const [year, month] = yearMonth.split("-").map(Number);
+    return recalculateAndSaveSummary(tecnicoId, year, month);
+  });
 
-            if (response.failureCount > 0) {
-                const failedTokens: string[] = [];
-                response.responses.forEach((resp, idx) => {
-                    if (!resp.success) {
-                        failedTokens.push(uniqueTokens[idx]);
-                    }
-                });
-                functions.logger.error("Failed to send to some tokens.", { failedTokens });
-            }
-            
-            await snapshot.ref.update({ status: 'completed', sentAt: admin.firestore.FieldValue.serverTimestamp() });
+  await Promise.all(recalculationPromises);
+  functions.logger.info("Ricalcoli completati.");
+});
 
-        } catch (error) {
-            functions.logger.error("An unexpected error occurred while sending notifications:", error, { notificaId: context.params.notificaId });
-            await snapshot.ref.update({ status: 'error', error: (error as Error).message });
-        }
+async function recalculateAndSaveSummary(tecnicoId: string, year: number, month: number) {
+  const summaryId = `${year}-${String(month + 1).padStart(2, "0")}_${tecnicoId}`;
+  functions.logger.info(`Inizio ricalcolo per: ${summaryId}`);
 
-        return null;
+  const tipiGiornataSnap = await db.collection("tipiGiornata").get();
+  const tipiGiornataNonLavorativi = new Map<string, string>();
+  tipiGiornataSnap.forEach(doc => {
+    const tipo = doc.data() as TipoGiornata;
+    const lowerCaseName = tipo.nome.toLowerCase();
+    if (["ferie", "malattia", "permesso", "legge 104"].some(kw => lowerCaseName.includes(kw))) {
+      tipiGiornataNonLavorativi.set(doc.id, lowerCaseName.includes("ferie") ? "ferie" : "altro");
+    }
+  });
+
+  const monthStartDate = new Date(year, month, 1);
+  const monthEndDate = endOfMonth(monthStartDate);
+  const monthStartTimestamp = admin.firestore.Timestamp.fromDate(monthStartDate);
+  const monthEndTimestamp = admin.firestore.Timestamp.fromDate(monthEndDate);
+
+  const singleDayReportsSnap = await db.collection("rapportini").where("tecnicoId", "==", tecnicoId).where("dataInizio", "==", null).where("data", ">=", monthStartTimestamp).where("data", "<=", monthEndTimestamp).get();
+  const periodReportsSnap = await db.collection("rapportini").where("tecnicoId", "==", tecnicoId).where("dataFine", "!=", null).where("dataInizio", "<=", monthEndTimestamp).where("dataFine", ">=", monthStartTimestamp).get();
+
+  let totalOreLavoro = 0, totalGiorniFerie = 0, totalGiorniAltro = 0;
+
+  singleDayReportsSnap.forEach(doc => {
+    const r = doc.data() as Rapportino;
+    totalOreLavoro += r.oreLavoro || 0;
+    if (tipiGiornataNonLavorativi.has(r.tipoGiornataId)) {
+      const tipo = tipiGiornataNonLavorativi.get(r.tipoGiornataId);
+      if (tipo === "ferie") totalGiorniFerie += 1; else totalGiorniAltro += 1;
+    }
+  });
+
+  periodReportsSnap.forEach(doc => {
+    const r = doc.data() as Rapportino;
+    if (!r.dataInizio || !r.dataFine) return;
+    const tipoAssenza = tipiGiornataNonLavorativi.get(r.tipoGiornataId);
+    if (!tipoAssenza) return;
+    eachDayOfInterval({ start: r.dataInizio.toDate(), end: r.dataFine.toDate() }).forEach(giorno => {
+      if (isWithinInterval(giorno, { start: monthStartDate, end: monthEndDate })) {
+        if (tipoAssenza === "ferie") totalGiorniFerie += 1; else totalGiorniAltro += 1;
+      }
     });
+  });
 
+  const summaryData = {
+    tecnicoId, anno: year, mese: month + 1,
+    totalOreLavoro: parseFloat(totalOreLavoro.toFixed(2)),
+    totalGiorniFerie, totalGiorniAltro,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
 
+  await db.collection("riepiloghiMensili").doc(summaryId).set(summaryData, { merge: true });
+  functions.logger.info(`Riepilogo salvato per ${summaryId}:`, summaryData);
+}
+
+// =================================================================================================
+// NUOVO TRIGGER PER IMPOSTARE LA SCADENZA DEI CHECK-IN
+// =================================================================================================
 /**
- * Cloud Function schedulata per controllare le assenze ingiustificate dei tecnici.
- * Si attiva ogni giorno feriale (lunedì-venerdì) alle 9:00.
+ * Si attiva alla creazione di un nuovo check-in.
+ * Aggiunge automaticamente un campo `expireAt` al documento, impostato a 24 ore dopo
+ * la data del check-in, per abilitare la policy di cancellazione automatica (TTL).
  */
-export const checkAbsences = functions.region('europe-west1').pubsub
-    .schedule('every mon,tue,wed,thu,fri 09:00')
-    .timeZone('Europe/Rome')
-    .onRun(async () => {
-        functions.logger.info("Esecuzione controllo assenze ingiustificate.");
+export const checkInTrigger = functions.region("europe-west1").firestore
+  .document("checkin_giornalieri/{checkinId}")
+  .onCreate(async (snap, context) => {
+      const checkinData = snap.data();
+      const checkinDate = (checkinData.data as admin.firestore.Timestamp).toDate();
 
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(today.getDate() - 1);
+      // Imposta la scadenza a 24 ore dopo la data del check-in
+      const expireAt = new Date(checkinDate.getTime());
+      expireAt.setHours(expireAt.getHours() + 24);
 
-        if (today.getDay() === 1) { 
-            functions.logger.info("Oggi è lunedì, il controllo per domenica viene saltato.");
-            return null;
-        }
-        if (today.getDay() === 6 || today.getDay() === 0) {
-            functions.logger.info("Il controllo non viene eseguito nel weekend.");
-            return null;
-        }
+      functions.logger.info(`Impostazione scadenza per check-in ${context.params.checkinId} a ${expireAt.toISOString()}`);
 
-        const yesterdayString = yesterday.toISOString().split('T')[0];
-
-        try {
-            const tecniciSnapshot = await db.collection('tecnici').where('attivo', '==', true).get();
-            if (tecniciSnapshot.empty) {
-                functions.logger.info("Nessun tecnico attivo trovato.");
-                return null;
-            }
-
-            const promises = tecniciSnapshot.docs.map(async (tecnicoDoc) => {
-                const tecnico = tecnicoDoc.data();
-                const tecnicoId = tecnicoDoc.id;
-
-                const rapportinoId = `${yesterdayString}_${tecnicoId}`;
-                const rapportinoRef = db.collection('rapportini').doc(rapportinoId);
-                const rapportinoDoc = await rapportinoRef.get();
-
-                if (!rapportinoDoc.exists) {
-                    functions.logger.warn(`Assenza ingiustificata per ${tecnico.nome} ${tecnico.cognome} (ID: ${tecnicoId}) per il giorno ${yesterdayString}.`);
-
-                    const notification = {
-                        title: "Assenza Ingiustificata Rilevata",
-                        body: `Il tecnico ${tecnico.nome} ${tecnico.cognome} non ha compilato il rapportino per il giorno ${yesterdayString}.`,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        to_categories: ['admin'],
-                        readBy: {}
-                    };
-
-                    await db.collection('notifiche').add(notification);
-                }
-            });
-
-            await Promise.all(promises);
-            functions.logger.info("Controllo assenze completato.");
-
-        } catch (error) {
-            functions.logger.error("Errore durante il controllo delle assenze:", error);
-        }
-
-        return null;
-    });
+      // Aggiorna il documento con il campo di scadenza
+      return snap.ref.update({ 
+          expireAt: admin.firestore.Timestamp.fromDate(expireAt) 
+      });
+  });

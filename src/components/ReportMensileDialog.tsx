@@ -14,7 +14,8 @@ import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
 import type { EnrichedRapportino, Tecnico, TipoGiornata } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
-import { useGlobalData } from '@/contexts/GlobalDataProvider';
+// CORREZIONE: Sostituzione del provider obsoleto con MasterDataProvider
+import { useMasterData } from '@/contexts/MasterDataProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -37,7 +38,9 @@ interface ReportMensileDialogProps {
 
 const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tipiGiornata, tariffe }) => {
   const { user } = useAuth();
-  const { tecnici, navi, luoghi } = useGlobalData();
+  // CORREZIONE: Utilizzo del nuovo hook useMasterData
+  const { masterData } = useMasterData();
+  const { tecnici, navi, luoghi } = masterData;
 
   const selectedTecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
 

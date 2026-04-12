@@ -8,6 +8,7 @@ import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import WhereToVoteIcon from '@mui/icons-material/WhereToVote';
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
@@ -17,7 +18,7 @@ const HomePage: React.FC = () => {
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
     const dashboardItems = [
-        { title: 'Nuovo report', path: '/report/nuovo', icon: <PostAddIcon sx={iconStyles} /> },
+        { title: 'Nuovo report', path: '/nuovo-report', icon: <PostAddIcon sx={iconStyles} /> },
         { title: 'Report', path: '/lista-report', icon: <ArticleIcon sx={iconStyles} /> },
         { title: 'Report mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={iconStyles} /> },
         { 
@@ -65,15 +66,10 @@ const HomePage: React.FC = () => {
                 
                 <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ maxWidth: '500px', mb: 4 }}>
                     {dashboardItems.map((item) => (
+                        // CORREZIONE DEFINITIVA SECONDO BLUEPRINT
                         <Grid size={6} key={item.title}>
                             <ButtonBase
-                                onClick={() => {
-                                    if (item.path.startsWith('http')) {
-                                        window.open(item.path, '_blank');
-                                    } else {
-                                        navigate(item.path);
-                                    }
-                                }}
+                                onClick={() => navigate(item.path)}
                                 sx={{
                                     width: '100%',
                                     borderRadius: '16px',
@@ -104,6 +100,40 @@ const HomePage: React.FC = () => {
                         </Grid>
                     ))}
                 </Grid>
+
+                {/* Pulsante Check-in */}
+                <Box sx={{ width: '100%', maxWidth: '500px', px: { xs: 0.5, sm: 1 }, mb: 4 }}>
+                    <ButtonBase
+                        onClick={() => navigate('/check-in')}
+                        sx={{
+                            width: '100%',
+                            borderRadius: '16px',
+                            transition: 'transform 0.2s ease-in-out',
+                            '&:hover': { transform: 'scale(1.02)' },
+                        }}
+                    >
+                        <Paper
+                            elevation={8}
+                            sx={{
+                                backgroundColor: '#0D47A1',
+                                color: 'white',
+                                width: '100%',
+                                py: 3,
+                                display: 'flex',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '16px',
+                                gap: 2,
+                            }}
+                        >
+                            <WhereToVoteIcon sx={{ fontSize: 'clamp(30px, 8vw, 40px)' }} />
+                            <Typography variant="h5" component="h2" sx={{ fontWeight: '500' }}>
+                                Check-in
+                            </Typography>
+                        </Paper>
+                    </ButtonBase>
+                </Box>
                 
                 <Box 
                     sx={{

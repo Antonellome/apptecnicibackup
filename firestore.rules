@@ -34,10 +34,24 @@ service cloud.firestore {
     match /tecnici/{tecnicoUid} {
         allow read, write: if request.auth.uid == tecnicoUid;
     }
+
     match /{path=**}/rapportini/{rapportinoId} {
+      // Un tecnico può CREARE un rapportino solo per se stesso.
       allow create: if isTecnicoAbilitato() && request.resource.data.tecnicoId == request.auth.uid;
-      allow read, update, delete: if isTecnicoAbilitato() && resource.data.tecnicoId == request.auth.uid;
+
+      // L'Admin può LEGGERE tutto. Il tecnico può leggere solo i propri.
+      allow read: if isAdmin() || (isTecnicoAbilitato() && resource.data.tecnicoId == request.auth.uid);
+
+      // L'Admin può sempre MODIFICARE/CANCELLARE.
+      // Il tecnico può farlo solo sui propri rapportini del mese corrente.
+      allow update, delete: if isAdmin() || (
+                               isTecnicoAbilitato() &&
+                               resource.data.tecnicoId == request.auth.uid &&
+                               resource.data.data.month() == request.time.month() &&
+                               resource.data.data.year() == request.time.year()
+                             );
     }
+
     match /notificheRichieste/{id} {
       allow read, write: if isTecnicoAbilitato();
     }

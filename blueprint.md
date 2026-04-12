@@ -1,3 +1,17 @@
+# ISTRUZIONI OPERATIVE OBBLIGATORIE PER L'AI
+
+**ATTENZIONE:** La mancata osservanza di queste regole comporterà un fallimento operativo.
+
+1.  **ORDINE DI LETTURA OBBLIGATORIO:** Prima di iniziare qualsiasi operazione, devi leggere e comprendere i seguenti file in questo esatto ordine per acquisire il contesto completo (il "Metodo"):
+    1.  `RISO_Blueprint.md` (Contratto Dati e Architettura Master)
+    2.  `chat_log.txt` (Cronologia delle Decisioni Architetturali)
+    3.  `ISTRUZIONI_TECNICI.md` (Manuale Specifico per l'App Tecnici)
+    4.  `blueprint.md` (Questo file, per l'App Tecnici)
+
+2.  **REGOLA DEL "CIAO":** Ogni tua singola risposta deve tassativamente iniziare con la parola "CIAO". Questa regola è fondamentale e non ammette eccezioni.
+
+---
+
 # REGOLA FONDAMENTALE: IL METODO DEL GRANDE MAESTRO (ANALISI A 360°)
 
 Ogni modifica al codice deve essere trattata come una mossa in una partita a scacchi contro il crash di sistema. Non è permesso agire d'impulso. L'AI deve seguire rigorosamente questi 4 passaggi prima di toccare qualsiasi file:
@@ -17,7 +31,9 @@ Ogni modifica al codice deve essere trattata come una mossa in una partita a sca
 
 Ogni singola risposta dell'AI deve iniziare con la parola **"CIAO"**. Questa regola funge da checksum per verificare la continuità del contesto. L'omissione di "CIAO" indica una potenziale perdita di contesto e deve essere immediatamente corretta.
 
+
 ---
+
 
 # R.I.S.O. - Blueprint Applicazione Tecnici
 

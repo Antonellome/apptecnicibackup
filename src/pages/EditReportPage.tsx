@@ -1,8 +1,8 @@
 import React from 'react';
 import ReportFormPage from './ReportFormPage';
 
-const NuovoReportPage: React.FC = () => {
+const EditReportPage: React.FC = () => {
     return <ReportFormPage />;
 };
 
-export default NuovoReportPage;
+export default EditReportPage;

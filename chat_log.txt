@@ -1,0 +1,103 @@
+# REGOLE OPERATIVE FONDAMENTALI (NON RIMUOVERE, NON MODIFICARE)
+
+---
+
+## 1. Regola del "Maestro di Scacchi" (Metodologia Primaria)
+- **1. Studio (Analisi):** Analizzo in profondità la richiesta, il contesto e i file.
+- **2. Creazione (Strategia):** Sviluppo la soluzione tecnicamente più robusta.
+- **3. Anticipazione (Pre-flight Check):** Simulo l'impatto e prevedo gli errori.
+- **4. Scrittura (Esecuzione):** Eseguo il comando solo dopo aver completato le fasi precedenti.
+- **5. Vai (Verifica e Prossima Mossa):** Verifico e procedo senza attendere.
+
+## 2. Regola della "Verifica Obbligatoria" (Il Principio di Realtà)
+- **Azione Obbligatoria:** Prima di ogni scrittura (`write_file`), è **obbligatorio** verificare lo stato reale con `grep`. L'output di `read_file` può essere obsoleto.
+
+## 3. Regola del "CIAO"
+- Ogni mia singola risposta deve tassativamente iniziare con la parola "CIAO".
+
+## 4. Regola del "Refactoring sull'Esistente"
+- **Principio:** Non creare da zero se esiste già una base. L'approccio primario è **modificare e adattare** i componenti e le pagine esistenti per allinearli alle nuove specifiche, rispettando il lavoro già svolto.
+
+## 5. Regola della "Struttura Intoccabile" (Corollario alla Regola #4)
+- **Principio Assoluto:** La struttura di navigazione e l'alberatura delle pagine esistenti (es. la pagina 'Tecnici' come entità a sé stante) sono un punto fermo e non devono essere alterate. Il lavoro consiste nel **correggere, potenziare e rifattorizzare** la logica e i componenti *all'interno* di queste pagine.
+- **Divieto:** È vietato spostare, rimuovere o accorpare pagine principali. L'architettura informativa corrente dell'applicazione è il riferimento immutabile.
+
+---
+
+# R.I.S.O. - Blueprint di Progetto
+
+*Per un approfondimento dettagliato delle decisioni architetturali, consultare il file `chat_log.txt`.*
+
+## Reset Architetturale e Nuovo Vocabolario [CICLO ATTUALE]
+
+### Il Nuovo Vocabolario Unico
+
+| Termine | Descrizione | Collezione Firestore | Sezione nell'App Master |
+| :--- | :--- | :--- | :--- |
+| **Amministratore** | Utente ufficio con pieni poteri sull'App Master. | `amministratori` | `Impostazioni > Amministratori` |
+| **Tecnico** | Anagrafica dell'operaio con stato di accesso integrato. | `tecnici` | **`Tecnici` (Pagina Principale Unificata)** |
+
+## Architettura Applicativa
+
+### Flusso 1: Check-in Giornaliero
+- **Scopo:** Tracciamento rapido della posizione di inizio lavoro dei tecnici.
+- **App Tecnici:** Sezione "Check-in" con campi `data`, `nave`, `luogo`.
+- **App Master:** Pagina "Presenze" > tab "Check-in" con la lista dei check-in odierni.
+- **Regola Dati:** I documenti nella collezione `checkin_giornalieri` **devono** scadere e auto-eliminarsi dopo 24 ore tramite una **policy TTL** di Firestore.
+
+### Flusso 2: Rapportini
+- **Scopo:** Compilazione e gestione dei rapportini di lavoro.
+- **Logica:** Gestito tramite la `syncDataTrigger` per la sincronizzazione.
+
+### Flusso 3: Notifiche Amministrative
+- **Scopo:** Invio di comunicazioni dall'App Master ai Tecnici.
+- **Payload:** `data`, `titolo`, `oggetto`, `mittente` (specificando destinatari singoli, per categoria o tutti).
+- **Logica:** Gestito tramite la `syncDataTrigger`.
+
+## Architettura Backend (Cloud Functions)
+
+### Funzione 1: `syncDataTrigger`
+- **Stato:** Da implementare.
+- **Tipo:** Automatica (Background Trigger).
+- **Scopo:** Gestire **TUTTA** la logica di business e sincronizzazione dati in tempo reale per: **Check-in**, **Rapportini**, e **Notifiche**.
+
+### Funzione 2: `manageAccess`
+- **Stato:** Da rifattorizzare.
+- **Tipo:** Su Richiesta (Callable).
+- **Scopo:** Endpoint sicuro per la gestione di **Amministratori** e **Utenti Abilitati**.
+
+## Programma di Lavoro Dettagliato
+
+- **Fase 0: Documentazione [COMPLETATA]**
+- **Fase 1: Tabula Rasa (SOLO Database):** Eliminare le collezioni Firestore errate.
+- **Fase 2: Rifondazione del Backend:** Riscrivere le Cloud Functions in `functions/src/index.ts`.
+- **Fase 3: Refactoring Frontend MASTER:** **Modificare** l'app React esistente per allinearla al Nuovo Vocabolario.
+- **Fase 4: Refactoring Frontend TECNICI:** **Modificare** l'app mobile esistente usando le specifiche nel `chat_log.txt`.
+
+---
+
+### INIZIO LOG CHAT DI DESIGN ARCHITETTURALE
+
+**USER:** che casino cazzo. ricreiamo tutto ma diversamente... scegli i termini, cancella le collezioni superflue... e definiamo quelle corrette, che ne dici?
+
+**ASSISTANT:** CIAO. Hai ragione, di nuovo. La confusione terminologica è la fonte di tutti questi errori. Accetto la tua proposta al 100%. **Basta confusione. Reset totale.**
+
+**USER:** procedi e aggiungi tutto al chat_log nel blueprint, poi per coerenza esiste il chat_log.txt... riscrivilo con una copia del chat_log in blueprint...
+
+**ASSISTANT:** CIAO. Perfetto. Decisione presa. Procedo con il reset totale. Eseguo il tuo ordine di aggiornare la documentazione.
+
+**USER:** si parla anche delle notifiche e del check-in?
+
+**ASSISTANT:** CIAO. Domanda giustissima. Ti confermo che **sono assolutamente inclusi nel piano di reset**... Includo questa precisazione nel log.
+
+**USER:** no maspetta. il check-in sarà una funzione separata ai rapportini... la pagina presenze visualizzerà... dati non dovranno rimanere nel database oltre le 24 ore...
+
+**ASSISTANT:** CIAO. Perfetto. Grazie. Questo non è un chiarimento, è una specifica fondamentale che cambia e migliora nettamente il piano... Ricapitolo tutto e propongo la soluzione tecnica della TTL di Firestore.
+
+**USER:** ultima cosa la pagina presenze esiste non va creata ma modificata, come il resto dell'app, va modificata esiste piu o meno tutto
+
+**ASSISTANT:** CIAO. Ricevuto. Correzione fondamentale. Chiedo scusa. La mia tendenza a voler "creare da zero" è un errore. Ho capito: **Modificare, non ricreare.** La pagina "Presenze" esiste, così come gran parte della struttura. Il mio compito è adattare e rifattorizzare l'esistente. Grazie per la precisazione, è vitale. Procedo ora a scrivere i documenti finali incorporando quest'ultima regola.
+
+**-- VECCHI LOG --**
+
+[Conversazioni precedenti sul design architetturale, RBAC, Sync Manifest, modello Ibrido vs. Pull, e la decisione finale sulle due Cloud Functions]
