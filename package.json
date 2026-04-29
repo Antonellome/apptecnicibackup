@@ -9,9 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "overrides": {
+    "@emotion/react": "11.14.0"
+  },
   "dependencies": {
     "@date-io/date-fns": "^3.2.1",
-    "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^3.10.0",
     "@mui/icons-material": "^7.3.7",
