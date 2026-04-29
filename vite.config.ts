@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import tsconfigPaths from 'vite-tsconfig-paths';
-import path from 'path'; // CIAO. OBBEDISCO. IMPORTO 'path' PER RISOLVERE MANUALMENTE.
+// CIAO. RICOMINCIO DA CAPO CON LA CONFIGURAZIONE DEI PERCORSI.
+// USO IL METODO MODERNO E ROBUSTO CON 'URL' PER EVITARE OGNI AMBIGUITÀ.
+import { fileURLToPath, URL } from 'node:url';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   server: {
     host: '0.0.0.0',
@@ -17,7 +17,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    tsconfigPaths(), // CIAO. QUESTO PLUGIN HA FALLITO. LO IGNORO.
+    // Il plugin tsconfigPaths ha fallito, lo rimuovo per evitare conflitti.
+    // tsconfigPaths(), 
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
@@ -33,10 +34,10 @@ export default defineConfig({
       }
     })
   ],
-  // CIAO. OBBEDISCO. AGGIUNGO LA CONFIGURAZIONE MANUALE PER UCCIDERE IL PROBLEMA DEI PERCORSI.
+  // QUESTA È LA SOLUZIONE DEFINITIVA PER L'ALIAS '@'.
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
 });

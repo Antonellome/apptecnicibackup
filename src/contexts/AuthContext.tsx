@@ -1,22 +1,22 @@
-// CIAO. Questo file definisce il contesto e l'hook per l'autenticazione in modo robusto.
 import { useState, useEffect, createContext, ReactNode, useMemo, useCallback, useContext } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/utils/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
-// Rappresenta il profilo completo del tecnico
+// --- INTERFACCIA CORRETTA CON OGGETTO CATEGORIA ANNIDATO ---
 export interface UserProfile {
-    uid: string; // UID di autenticazione Firebase
+    uid: string;
     email: string;
-    tecnicoId: string; // Coincide con l'UID
+    tecnicoId: string;
     nome: string;
     cognome: string;
     attivo: boolean;
-    id_categoria?: string;
-    nomeCategoria?: string;
+    categoria?: {
+        id: string;
+        nome: string;
+    };
 }
 
-// Definisce la forma del contesto di autenticazione
 export interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
@@ -25,10 +25,8 @@ export interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
 }
 
-// Crea il contesto
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Il provider che avvolgerà l'applicazione
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -46,10 +44,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
               if (tecnicoDocSnap.exists()) {
                   const tecnicoData = tecnicoDocSnap.data();
-                  
-                  const id_categoria = tecnicoData.id_categoria;
-                  let nomeCategoriaStr = '';
-                  if (id_categoria && typeof id_categoria === 'string') {
+                  const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
+
+                  // --- COSTRUZIONE DELL'OGGETTO CATEGORIA CORRETTO ---
+                  let categoriaObj: { id: string; nome: string; } | undefined = undefined;
+
+                  if (id_categoria) {
+                      let nomeCategoriaStr = '';
                       try {
                           const catDocRef = doc(db, 'categorie', id_categoria);
                           const catDoc = await getDoc(catDocRef);
@@ -59,27 +60,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                       } catch (err) {
                           console.error("[Auth] Errore nel risolvere la categoria:", err);
                       }
+                      categoriaObj = { id: id_categoria, nome: nomeCategoriaStr };
                   }
 
-                  setUserProfile({
+                  const profile: UserProfile = {
                       uid: currentUser.uid,
                       email: currentUser.email || '',
                       tecnicoId: tecnicoDocSnap.id,
                       nome: tecnicoData.nome || '',
                       cognome: tecnicoData.cognome || '',
                       attivo: tecnicoData.attivo || false,
-                      id_categoria: id_categoria || '',
-                      nomeCategoria: nomeCategoriaStr,
-                  });
-
-                  // console.log(`[Auth] Profilo tecnico caricato direttamente per UID: ${currentUser.uid}`);
+                      categoria: categoriaObj, // Assegno l'oggetto annidato
+                  };
+                  setUserProfile(profile);
 
               } else {
-                  console.error(`[Auth] Documento non trovato in 'tecnici' per l'UID: ${currentUser.uid}. L'utente non è configurato come tecnico.`);
+                  console.error(`[Auth] Documento non trovato per UID: ${currentUser.uid}.`);
                   setUserProfile(null);
               }
           } catch (error) {
-              console.error("[Auth] Errore critico durante il caricamento del profilo tecnico:", error);
+              console.error("[Auth] Errore critico caricamento profilo:", error);
               setUserProfile(null);
           }
       } else {

@@ -1,122 +1,131 @@
+
 /**
  * @file MasterDataProvider.tsx
- * @description Questo file definisce un contesto React e un provider per la gestione dei "dati master" dell'applicazione.
+ * @description Questo file definisce il provider per i "dati master", allineato all'architettura R.I.S.O.
  *
- * OBIETTIVO E ARCHITETTURA:
- * In linea con le direttive del "Manuale Operativo" (ISTRUZIONI_TECNICI.md), questo provider ha il compito ESCLUSIVO
- * di recuperare i dati anagrafici (es. Clienti, Navi, Luoghi) che cambiano raramente.
+ * ARCHITETTURA RETTIFICATA:
+ * Come da analisi e correzione di rotta, questo provider abbandona l'uso di Cloud Functions
+ * per il recupero dati. Ora legge i dati anagrafici DIRETTAMENTE dalle collezioni Firestore.
  *
  * PRINCIPIO CHIAVE:
- * 1. EFFICIENZA: Invece di aprire molteplici listener su Firestore, viene eseguita UNA SOLA chiamata
- *    alla Cloud Function `getMasterData` per recuperare tutti i dati necessari in un colpo solo.
- * 2. CENTRALIZZAZIONE: Fornisce un unico punto di verità ("Single Source of Truth") per i dati master,
- *    rendendoli disponibili a tutta l'applicazione tramite l'hook `useMasterData`.
- * 3. DIPENDENZA DALL'AUTH: Il recupero dei dati viene attivato SOLO dopo che l'utente ha effettuato
- *    correttamente il login, come indicato dall' `AuthProvider`.
- *
- * Questo approccio sostituisce il vecchio `GlobalDataProvider` che caricava in modo inefficiente tutte le collezioni
- * all'avvio, causando lentezza e violando le regole architetturali.
+ * 1. EFFICIENZA: Utilizza Promise.all per eseguire query parallele e recuperare tutte le anagrafiche
+ *    necessarie in un unico "giro" asincrono all'avvio dell'app.
+ * 2. CENTRALIZZAZIONE: Rimane il Single Source of Truth per i dati master.
+ * 3. DIPENDENZA DALL'AUTH: Il recupero si attiva solo dopo il login dell'utente.
  */
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/firebase'; // Accesso diretto al DB
+import { useAuth } from '@/contexts/AuthContext';
+import { Tecnico, Cliente, Sede, TipoGiornata, Veicolo, Luogo, Nave } from '@/models/definitions';
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { useAuth } from '@/hooks/useAuth'; // Dipendenza fondamentale per sapere quando l'utente è loggato
-import type { Cliente, Nave, Luogo, Categoria, Ditta, Tecnico, TipoGiornata, Veicolo } from '@/models/definitions';
-
-// --- 1. Interfacce e Tipi ---
-// Definisce la forma dei dati che la Cloud Function `getMasterData` dovrebbe restituire.
+// Interfaccia che definisce la struttura dei dati master
 export interface MasterData {
-  clienti: Cliente[];
-  navi: Nave[];
-  luoghi: Luogo[];
-  categorie: Categoria[];
-  ditte: Ditta[];
-  tecnici: Tecnico[];
-  tipiGiornata: TipoGiornata[];
-  veicoli: Veicolo[];
+    tecnici: Tecnico[];
+    clienti: Cliente[];
+    sedi: Sede[];
+    tipiGiornata: TipoGiornata[];
+    veicoli: Veicolo[];
+    luoghi: Luogo[];
+    navi: Nave[];
 }
 
-// Definisce la forma del nostro contesto: i dati più lo stato di caricamento/errore.
-export interface IMasterDataContext {
-  masterData: MasterData | null;
-  loading: boolean;
-  error: Error | null;
-  refetch: () => void; // Funzione per forzare un nuovo caricamento
+// Interfaccia per il valore del contesto
+interface MasterDataContextValue {
+    masterData: MasterData | null;
+    loading: boolean;
+    error: Error | null;
+    refetch: () => void;
 }
 
-// --- 2. Creazione del Contesto ---
-// Viene creato con `undefined` come valore di default. Se usato fuori dal Provider, lancerà un errore.
-const MasterDataContext = createContext<IMasterDataContext | undefined>(undefined);
+// Creazione del contesto
+const MasterDataContext = createContext<MasterDataContextValue | undefined>(undefined);
 
-// --- 3. Hook Personalizzato (`useMasterData`) ---
-// Questo è il modo in cui i componenti accederanno ai dati.
-// Semplifica l'uso del contesto e garantisce che venga usato correttamente.
+// Hook per l'utilizzo del contesto
 export const useMasterData = () => {
-  const context = useContext(MasterDataContext);
-  if (context === undefined) {
-    throw new Error('useMasterData deve essere usato all\'interno di un MasterDataProvider');
-  }
-  return context;
+    const context = useContext(MasterDataContext);
+    if (!context) {
+        throw new Error("useMasterData deve essere utilizzato all'interno di un MasterDataProvider");
+    }
+    return context;
 };
 
-// --- 4. Il Provider Component (`MasterDataProvider`) ---
-export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth(); // Recuperiamo l'utente dal contesto di autenticazione.
-  const [masterData, setMasterData] = useState<MasterData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<Error | null>(null);
-  // Un trigger per forzare il re-fetch dei dati
-  const [fetchTrigger, setFetchTrigger] = useState(0); 
+// Props del provider
+interface MasterDataProviderProps {
+    children: ReactNode;
+}
 
-  // La funzione per forzare il ricaricamento
-  const refetch = () => setFetchTrigger(prev => prev + 1);
+export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children }) => {
+    const { user } = useAuth();
+    const [masterData, setMasterData] = useState<MasterData | null>(null);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [error, setError] = useState<Error | null>(null);
+    const [fetchTrigger, setFetchTrigger] = useState<number>(0);
 
-  // L'effetto che recupera i dati.
-  // Si attiva quando l'utente cambia (login/logout) o quando `fetchTrigger` viene incrementato.
-  useEffect(() => {
-    // Se non c'è un utente loggato, non fare nulla e resetta lo stato.
-    if (!user) {
-      setMasterData(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    const fetchMasterData = async () => {
+        if (!user) {
+            setLoading(false);
+            return;
+        };
 
-    // Funzione asincrona per chiamare la Cloud Function.
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      // console.log("MasterDataProvider: Inizio recupero dati master...");
+        setLoading(true);
+        setError(null);
 
-      try {
-        const functions = getFunctions();
-        const getMasterData = httpsCallable<void, MasterData>(functions, 'getMasterData');
-        const result = await getMasterData();
-        setMasterData(result.data);
-        // console.log("MasterDataProvider: Dati master recuperati con successo.", result.data);
-      } catch (err: any) {
-        console.error("MasterDataProvider: Errore nel recupero dei dati master.", err);
-        setMasterData(null);
-      } finally {
-        setLoading(false);
-      }
+        try {
+            // Funzione helper per recuperare una collezione
+            const fetchCollection = async <T,>(collectionName: string): Promise<T[]> => {
+                const querySnapshot = await getDocs(collection(db, collectionName));
+                return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+            };
+
+            // Esecuzione delle query in parallelo
+            const [
+                tecnici,
+                clienti,
+                sedi,
+                tipiGiornata,
+                veicoli,
+                luoghi,
+                navi
+            ] = await Promise.all([
+                fetchCollection<Tecnico>('tecnici'),
+                fetchCollection<Cliente>('clienti'),
+                fetchCollection<Sede>('sedi'),
+                fetchCollection<TipoGiornata>('tipiGiornata'),
+                fetchCollection<Veicolo>('veicoli'),
+                fetchCollection<Luogo>('luoghi'),
+                fetchCollection<Nave>('navi'),
+            ]);
+
+            setMasterData({
+                tecnici,
+                clienti,
+                sedi,
+                tipiGiornata,
+                veicoli,
+                luoghi,
+                navi,
+            });
+
+        } catch (err) {
+            console.error("MasterDataProvider: Errore nel recupero dei dati master.", err);
+            setError(err instanceof Error ? err : new Error('Errore sconosciuto nel recupero dei dati master'));
+        } finally {
+            setLoading(false);
+        }
     };
 
-    fetchData();
+    useEffect(() => {
+        fetchMasterData();
+    }, [user, fetchTrigger]);
 
-  }, [user, fetchTrigger]); // Dipendenze dell'effetto
+    const refetch = () => setFetchTrigger(prev => prev + 1);
 
-  // Memoizziamo il valore del contesto per evitare re-render non necessari
-  const value = useMemo(() => ({
-    masterData,
-    loading,
-    error,
-    refetch
-  }), [masterData, loading, error]);
+    const value = { masterData, loading, error, refetch };
 
-  return (
-    <MasterDataContext.Provider value={value}>
-      {children}
-    </MasterDataContext.Provider>
-  );
+    return (
+        <MasterDataContext.Provider value={value}>
+            {children}
+        </MasterDataContext.Provider>
+    );
 };

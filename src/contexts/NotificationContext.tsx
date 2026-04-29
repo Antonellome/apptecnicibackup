@@ -1,15 +1,19 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  doc, 
-  updateDoc, 
+// CIAO. QUESTA È LA VERSIONE CON LA DEPENDENCY ARRAY CORRETTA E SPECIFICA.
+// Ascolto i valori primitivi (uid, categoria.id) per evitare problemi di riferimento.
+
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
   deleteDoc,
-  FirestoreError 
+  or,
+  Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { db } from '@/utils/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { Notifica } from '@/models/definitions';
 
@@ -19,135 +23,97 @@ interface NotificationContextType {
   markAsRead: (notificationId: string) => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
   loading: boolean;
+  error: string | null;
+  refetch: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-let notificationsStore: Notifica[] = [];
-
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user, userProfile } = useAuth();
-  const [notifications, setNotifications] = useState<Notifica[]>(notificationsStore);
-  const [loading, setLoading] = useState<boolean>(true);
+  const { user, userProfile, loading: authLoading } = useAuth();
+  const [notifications, setNotifications] = useState<Notifica[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
 
-  const sync = useCallback((newDocs: Notifica[]) => {
-    const combinedMap = new Map<string, Notifica>();
-    
-    notificationsStore.forEach(n => combinedMap.set(n.id, n));
-    newDocs.forEach(n => combinedMap.set(n.id, n));
-    
-    const finalArray = Array.from(combinedMap.values());
-    
-    finalArray.sort((a, b) => {
-      const timeA = a.createdAt?.seconds * 1000 || 0;
-      const timeB = b.createdAt?.seconds * 1000 || 0;
-      return timeB - timeA;
-    });
-
-    console.log(`[Master-Sync] Stato aggiornato. Totale: ${finalArray.length}`);
-    
-    notificationsStore = finalArray;
-    setNotifications(finalArray);
-  }, []);
-
-  const unreadCount = useMemo(() => 
-    notifications.filter(n => !n.isRead).length, 
-  [notifications]);
+  const refetch = () => setFetchTrigger(prev => prev + 1);
 
   useEffect(() => {
-    if (!user?.uid) {
-      notificationsStore = [];
-      setNotifications([]);
-      setLoading(false);
-      return;
-    }
+    const fetchNotifications = async () => {
+      if (authLoading || !user?.uid || !userProfile?.categoria?.id) {
+        setLoading(false);
+        setNotifications([]);
+        return;
+      }
 
-    setLoading(true);
-    const notificationsRef = collection(db, 'notificheRichieste');
-    
-    const qPersonal = query(
-      notificationsRef,
-      where('to_ids', 'array-contains', user.uid)
-    );
+      setLoading(true);
+      setError(null);
 
-    const unsubscribe = onSnapshot(qPersonal, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notifica));
-      sync(docs);
-      setLoading(false);
-    }, (error: FirestoreError) => {
-      console.error("Errore query personale:", error);
-      setLoading(false);
-    });
+      try {
+        const finalQuery = query(
+          collection(db, 'notificheRichieste'),
+          or(
+            where('to_ids', 'array-contains', user.uid),
+            where('to_category_ids', 'array-contains', userProfile.categoria.id),
+            where('sendToAll', '==', true)
+          )
+        );
 
-    return () => unsubscribe();
-  }, [user?.uid, sync]);
+        const snapshot = await getDocs(finalQuery);
+        
+        const docs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+          } as Notifica;
+        });
 
-  useEffect(() => {
-    // La query dipende dall'ID della categoria letto direttamente dal profilo
-    if (!user?.uid || !userProfile?.categoriaId) return;
+        docs.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+        setNotifications(docs);
 
-    const notificationsRef = collection(db, 'notificheRichieste');
-    
-    // --- CORREZIONE FINALE E DEFINITIVA ---
-    // La query ora usa il campo corretto 'to_categories' E il campo corretto 'userProfile.categoriaId'
-    const qCategory = query(
-      notificationsRef,
-      where('to_categories', 'array-contains', userProfile.categoriaId)
-    );
+      } catch (err: any) {
+        console.error("[DIAGNOSTICA] Query fallita! L'indice composito è quasi certamente mancante.", err.message);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(qCategory, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notifica));
-      sync(docs);
-    }, (error: FirestoreError) => {
-      console.error("Errore query categoria (necessario indice?):", error);
-    });
+    fetchNotifications();
 
-    return () => unsubscribe();
-  }, [user?.uid, userProfile?.categoriaId, sync]);
+  }, [authLoading, user?.uid, userProfile?.categoria?.id, fetchTrigger]);
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
   const markAsRead = async (notificationId: string) => {
-    if (!notificationId) return;
     try {
-      const docRef = doc(db, 'notificheRichieste', notificationId);
-      await updateDoc(docRef, { isRead: true });
+      await updateDoc(doc(db, 'notificheRichieste', notificationId), { isRead: true });
+      setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
     } catch (err) {
-      console.error("Errore aggiornamento lettura:", err);
+      console.error("Errore marcatura come letto:", err);
     }
   };
 
   const deleteNotification = async (notificationId: string) => {
-    if (!notificationId) return;
     try {
-      const docRef = doc(db, 'notificheRichieste', notificationId);
-      await deleteDoc(docRef);
-      
-      const updated = notificationsStore.filter(n => n.id !== notificationId);
-      notificationsStore = updated;
-      setNotifications(updated);
+      await deleteDoc(doc(db, 'notificheRichieste', notificationId));
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
     } catch (err) {
       console.error("Errore eliminazione:", err);
     }
   };
 
-  const value = {
-    notifications,
-    unreadCount,
-    markAsRead,
-    deleteNotification,
-    loading
-  };
+  const value = { notifications, unreadCount, markAsRead, deleteNotification, loading, error, refetch };
 
-  return (
-    <NotificationContext.Provider value={value}>
-      {children}
-    </NotificationContext.Provider>
-  );
+  return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 };
 
-export const useNotifications = () => {
+export const useNotifications = (): NotificationContextType => {
   const context = useContext(NotificationContext);
   if (context === undefined) {
-    throw new Error('useNotifications deve essere utilizzato all\'interno di un NotificationProvider');
+    throw new Error('useNotifications deve essere usato dentro un NotificationProvider');
   }
   return context;
 };

@@ -12,9 +12,8 @@ import {
 } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
-import type { EnrichedRapportino, Tecnico, TipoGiornata } from '@/models/definitions';
+import type { EnrichedRapportino, Tecnico } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
-// CORREZIONE: Sostituzione del provider obsoleto con MasterDataProvider
 import { useMasterData } from '@/contexts/MasterDataProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
@@ -27,30 +26,41 @@ const Transition = React.forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
+// --- CORREZIONE --- 
+// Rimuovo `tipiGiornata` dalle props. Il componente è ora autosufficiente.
 interface ReportMensileDialogProps {
   open: boolean;
   onClose: () => void;
   reports: EnrichedRapportino[];
   currentMonth: Date;
-  tipiGiornata: TipoGiornata[];
   tariffe: Record<string, number>;
 }
 
-const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tipiGiornata, tariffe }) => {
+// --- CORREZIONE --- 
+// Rimuovo `tipiGiornata` dai parametri destrutturati.
+const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tariffe }) => {
   const { user } = useAuth();
-  // CORREZIONE: Utilizzo del nuovo hook useMasterData
+  
+  // --- CORREZIONE --- 
+  // Ora `tipiGiornata` arriva da qui, l'unica fonte di verità per questi dati.
   const { masterData } = useMasterData();
-  const { tecnici, navi, luoghi } = masterData;
+  const { tecnici, navi, luoghi, tipiGiornata } = masterData;
 
   const selectedTecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
 
   const enrichedReportsWithGuadagno = useMemo(() => {
+      // Aggiungo un controllo robusto per evitare crash se i dati non sono ancora pronti.
+      if (!tipiGiornata || tipiGiornata.length === 0) return [];
+
       const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t]));
+      
+      // La logica di fallback per le tariffe rimane, ma ora usa `tipiGiornata` dal contesto.
       const defaultTariffe = tipiGiornata.reduce((acc, tipo) => {
           acc[tipo.nome] = 10.00;
           return acc;
       }, {} as Record<string, number>);
 
+      // La logica delle tariffe che hai voluto è preservata: usa quelle dal localStorage se ci sono.
       const finalTariffe = Object.keys(tariffe).length > 0 ? tariffe : defaultTariffe;
 
       return reports.map(report => {
@@ -62,6 +72,8 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
               guadagno: guadagno,
           };
       });
+  // --- CORREZIONE --- 
+  // Aggiungo `tipiGiornata` (dal contesto) all'array di dipendenze.
   }, [reports, tariffe, tipiGiornata]);
 
   const totalGuadagno = useMemo(() => {

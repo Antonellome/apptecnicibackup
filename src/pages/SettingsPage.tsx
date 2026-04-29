@@ -37,44 +37,43 @@ const SettingsPage: React.FC = () => {
 
         setIsLoading(true);
 
-        // 1. Imposta il default a 10.00 per TUTTI i tipi di giornata.
+        const storageKey = `tariffe_${user.uid}`;
+        const savedTariffeJSON = localStorage.getItem(storageKey);
+
+        // Prepara le tariffe di default usando i tipi di giornata globali.
         const defaultTariffe = tipiGiornata.reduce((acc, tipo) => {
-            acc[tipo.nome] = '10.00';
+            acc[tipo.nome] = 10.00; // Valore numerico
+            return acc;
+        }, {} as Record<string, number>);
+
+        let finalTariffe: Record<string, number>;
+
+        if (savedTariffeJSON) {
+            // Se esistono dati salvati, usali.
+            const savedTariffe = JSON.parse(savedTariffeJSON);
+            // Unisci i default con i salvati per coprire eventuali nuovi tipi di giornata.
+            finalTariffe = { ...defaultTariffe, ...savedTariffe };
+        } else {
+            // **ECCO LA CORREZIONE**
+            // Se non c'è NULLA nel localStorage, usiamo i default E LI SALVIAMO SUBITO.
+            finalTariffe = defaultTariffe;
+            localStorage.setItem(storageKey, JSON.stringify(finalTariffe));
+        }
+
+        // Converti i valori numerici in stringhe formattate per la visualizzazione.
+        const displayTariffe = Object.entries(finalTariffe).reduce((acc, [key, value]) => {
+            acc[key] = value.toFixed(2);
             return acc;
         }, {} as Record<string, string>);
 
-        // 2. Carica le tariffe salvate da localStorage.
-        let savedTariffe: Record<string, number> = {};
-        try {
-            const savedTariffeJSON = localStorage.getItem(`tariffe_${user.uid}`);
-            if (savedTariffeJSON) {
-                savedTariffe = JSON.parse(savedTariffeJSON);
-            }
-        } catch (error) {
-            console.error("Errore nel caricamento delle tariffe da localStorage:", error);
-        }
-
-        // 3. Unisci i default con i valori salvati. Quelli salvati hanno la precedenza.
-        const finalTariffe = { ...defaultTariffe };
-        for (const nomeTipo in savedTariffe) {
-            if (Object.prototype.hasOwnProperty.call(finalTariffe, nomeTipo)) {
-                finalTariffe[nomeTipo] = String(savedTariffe[nomeTipo].toFixed(2));
-            }
-        }
-
-        setTariffe(finalTariffe);
+        setTariffe(displayTariffe);
         setIsLoading(false);
 
     }, [user, tipiGiornata, globalLoading]);
 
 
     const handleTariffaChange = (id: string, value: string) => {
-        // L'utente può inserire la virgola, ma la convertiamo subito in punto
-        // per la validazione e per la logica interna.
         const valueWithDot = value.replace(',', '.');
-
-        // La regex valida che ci sia al massimo un punto decimale
-        // e solo numeri.
         if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
             setTariffe(prev => ({ ...prev, [id]: valueWithDot }));
             setIsDirty(true);
@@ -188,7 +187,7 @@ const SettingsPage: React.FC = () => {
                     <Typography variant="h6">Guida all&apos;Uso dell&apos;App</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                    <Typography paragraph>Benvenuto! Quest&apos;app ti aiuta a tracciare i tuoi report di lavoro giornalieri.</Typography>
+                    <Typography paragraph>Benvenuto! Quest'app ti aiuta a tracciare i tuoi report di lavoro giornalieri.</Typography>
                     <Typography paragraph><b>Home:</b> Dalla dashboard puoi creare un nuovo report o visualizzare quelli esistenti.</Typography>
                     <Typography paragraph><b>Impostazioni:</b> Qui puoi configurare le tariffe e recuperare la password.</Typography>
                 </AccordionDetails>

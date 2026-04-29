@@ -1,6 +1,5 @@
 import React from 'react';
-import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import { Box, Paper, Typography, ButtonBase, Badge, Grid } from '@mui/material'; // <-- CORREZIONE: RIPRISTINATO GRID STABILE
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -19,16 +18,16 @@ const HomePage: React.FC = () => {
 
     const dashboardItems = [
         { title: 'Nuovo report', path: '/nuovo-report', icon: <PostAddIcon sx={iconStyles} /> },
-        { title: 'Report', path: '/lista-report', icon: <ArticleIcon sx={iconStyles} /> },
-        { title: 'Report mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={iconStyles} /> },
+        { title: 'I miei Report', path: '/lista-report', icon: <ArticleIcon sx={iconStyles} /> },
+        { title: 'Report Mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={iconStyles} /> },
         { 
-            title: 'Notifiche', 
-            path: '/notifiche', 
+            title: 'Notifiche',
+            path: '/notifiche',
             icon: (
-                <Badge badgeContent={unreadCount} color="error" showZero={false}>
+                <Badge badgeContent={unreadCount} color="error">
                     <NotificationsIcon sx={iconStyles} />
                 </Badge>
-            ) 
+            )
         },
     ];
 
@@ -66,8 +65,8 @@ const HomePage: React.FC = () => {
                 
                 <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ maxWidth: '500px', mb: 4 }}>
                     {dashboardItems.map((item) => (
-                        // CORREZIONE DEFINITIVA SECONDO BLUEPRINT
-                        <Grid size={6} key={item.title}>
+                        // CORREZIONE: Usata la sintassi corretta per Grid v1
+                        (<Grid key={item.title} size={6}>
                             <ButtonBase
                                 onClick={() => navigate(item.path)}
                                 sx={{
@@ -97,7 +96,7 @@ const HomePage: React.FC = () => {
                                     </Typography>
                                 </Paper>
                             </ButtonBase>
-                        </Grid>
+                        </Grid>)
                     ))}
                 </Grid>
 
