@@ -1,5 +1,8 @@
+// CIAO. QUESTA È LA VERSIONE RIFATTORIZZATA E PULITA SECONDO LA SINTASSI V2.
 
-import * as functions from "firebase-functions";
+import { logger, setGlobalOptions } from "firebase-functions/v2";
+import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
+import { onDocumentWritten, onDocumentCreated, FirestoreEvent, Change, DocumentSnapshot, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import { eachDayOfInterval, isWithinInterval, endOfMonth } from "date-fns";
 
@@ -7,7 +10,10 @@ import { eachDayOfInterval, isWithinInterval, endOfMonth } from "date-fns";
 admin.initializeApp();
 const db = admin.firestore();
 
-// --- TIPI E INTERFACCE ---
+// SINTASSI V2: Imposta le opzioni globali, come la regione, una sola volta.
+setGlobalOptions({ region: "europe-west1" });
+
+// --- TIPI E INTERFACCE (invariato) ---
 interface Rapportino {
   id: string;
   tecnicoId: string;
@@ -24,13 +30,13 @@ interface TipoGiornata {
 }
 
 // =================================================================================================
-// FUNZIONE DI AGGREGAZIONE DATI MASTER
+// FUNZIONE DI AGGREGAZIONE DATI MASTER (SINTASSI V2)
 // =================================================================================================
-export const getMasterData = functions.region("europe-west1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "L'utente deve essere autenticato.");
+export const getMasterData = onCall(async (request: CallableRequest) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "L'utente deve essere autenticato.");
   }
-  functions.logger.info(`Inizio recupero dati master per l'utente: ${context.auth.uid}`);
+  logger.info(`Inizio recupero dati master per l'utente: ${request.auth.uid}`);
   try {
     const [clientiSnap, naviSnap, luoghiSnap, categorieSnap, ditteSnap, tecniciSnap, tipiGiornataSnap, veicoliSnap] = await Promise.all([
       db.collection("clienti").get(), db.collection("navi").get(), db.collection("luoghi").get(),
@@ -47,49 +53,49 @@ export const getMasterData = functions.region("europe-west1").https.onCall(async
       tipiGiornata: tipiGiornataSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       veicoli: veicoliSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
     };
-    functions.logger.info("Recupero dati master completato.");
+    logger.info("Recupero dati master completato.");
     return masterData;
   } catch (error) {
-    functions.logger.error("Errore recupero dati master:", error);
-    throw new functions.https.HttpsError("internal", "Impossibile recuperare i dati master.");
+    logger.error("Errore recupero dati master:", error);
+    throw new HttpsError("internal", "Impossibile recuperare i dati master.");
   }
 });
 
 // =================================================================================================
-// FUNZIONE PER GENERARE IL RIEPILOGO MENSILE (SU RICHIESTA)
+// FUNZIONE PER GENERARE IL RIEPILOGO MENSILE (SINTASSI V2)
 // =================================================================================================
-export const generateMonthlySummary = functions.region("europe-west1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "L'utente deve essere autenticato per generare un riepilogo.");
+export const generateMonthlySummary = onCall(async (request: CallableRequest<{ year: number, month: number }>) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "L'utente deve essere autenticato per generare un riepilogo.");
   }
 
-  const { year, month } = data;
+  const { year, month } = request.data;
   if (typeof year !== 'number' || typeof month !== 'number') {
-    throw new functions.https.HttpsError("invalid-argument", "I parametri 'year' e 'month' devono essere numeri.");
+    throw new HttpsError("invalid-argument", "I parametri 'year' e 'month' devono essere numeri.");
   }
 
-  const tecnicoId = context.auth.uid; // Assumiamo che l'UID dell'utente sia l'ID del tecnico
-  functions.logger.info(`Richiesta di generazione riepilogo per tecnico: ${tecnicoId}, Mese: ${month + 1}/${year}`);
+  const tecnicoId = request.auth.uid;
+  logger.info(`Richiesta di generazione riepilogo per tecnico: ${tecnicoId}, Mese: ${month + 1}/${year}`);
 
   try {
     await recalculateAndSaveSummary(tecnicoId, year, month);
-    functions.logger.info(`Riepilogo generato con successo per tecnico: ${tecnicoId}`);
+    logger.info(`Riepilogo generato con successo per tecnico: ${tecnicoId}`);
     return { success: true, message: "Riepilogo generato e salvato correttamente." };
   } catch (error) {
-    functions.logger.error(`Errore durante la generazione del riepilogo per ${tecnicoId}:`, error);
-    throw new functions.https.HttpsError("internal", "Si è verificato un errore interno durante la generazione del riepilogo.");
+    logger.error(`Errore durante la generazione del riepilogo per ${tecnicoId}:`, error);
+    throw new HttpsError("internal", "Si è verificato un errore interno durante la generazione del riepilogo.");
   }
 });
 
-
 // =================================================================================================
-// TRIGGER PER AGGREGAZIONE RAPPORTINI
+// TRIGGER PER AGGREGAZIONE RAPPORTINI (SINTASSI V2)
 // =================================================================================================
-export const rapportiniTrigger = functions.region("europe-west1").firestore.document("rapportini/{rapportinoId}").onWrite(async (change, context) => {
-  functions.logger.info(`Trigger attivato per rapportino: ${context.params.rapportinoId}`);
+export const rapportiniTrigger = onDocumentWritten("rapportini/{rapportinoId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined>) => {
+  logger.info(`Trigger attivato per rapportino: ${event.params.rapportinoId}`);
+  
   const monthsToRecalculate = new Set<string>();
-  const beforeData = change.before.exists ? change.before.data() as Rapportino : null;
-  const afterData = change.after.exists ? change.after.data() as Rapportino : null;
+  const beforeData = event.data?.before?.data() as Rapportino | undefined;
+  const afterData = event.data?.after?.data() as Rapportino | undefined;
 
   if (beforeData) {
     const date = beforeData.data.toDate();
@@ -118,12 +124,12 @@ export const rapportiniTrigger = functions.region("europe-west1").firestore.docu
   });
 
   await Promise.all(recalculationPromises);
-  functions.logger.info("Ricalcoli completati.");
+  logger.info("Ricalcoli completati.");
 });
 
 async function recalculateAndSaveSummary(tecnicoId: string, year: number, month: number) {
-  const summaryId = `${year}-${String(month + 1).padStart(2, "0")}_${tecnicoId}`;
-  functions.logger.info(`Inizio ricalcolo per: ${summaryId}`);
+    const summaryId = `${year}-${String(month + 1).padStart(2, "0")}_${tecnicoId}`;
+  logger.info(`Inizio ricalcolo per: ${summaryId}`);
 
   const tipiGiornataSnap = await db.collection("tipiGiornata").get();
   const tipiGiornataNonLavorativi = new Map<string, string>();
@@ -174,31 +180,28 @@ async function recalculateAndSaveSummary(tecnicoId: string, year: number, month:
   };
 
   await db.collection("riepiloghiMensili").doc(summaryId).set(summaryData, { merge: true });
-  functions.logger.info(`Riepilogo salvato per ${summaryId}:`, summaryData);
+  logger.info(`Riepilogo salvato per ${summaryId}:`, summaryData);
 }
 
 // =================================================================================================
-// NUOVO TRIGGER PER IMPOSTARE LA SCADENZA DEI CHECK-IN
+// TRIGGER PER IMPOSTARE LA SCADENZA DEI CHECK-IN (SINTASSI V2)
 // =================================================================================================
-/**
- * Si attiva alla creazione di un nuovo check-in.
- * Aggiunge automaticamente un campo `expireAt` al documento, impostato a 24 ore dopo
- * la data del check-in, per abilitare la policy di cancellazione automatica (TTL).
- */
-export const checkInTrigger = functions.region("europe-west1").firestore
-  .document("checkin_giornalieri/{checkinId}")
-  .onCreate(async (snap, context) => {
-      const checkinData = snap.data();
-      const checkinDate = (checkinData.data as admin.firestore.Timestamp).toDate();
+export const checkInTrigger = onDocumentCreated("checkin_giornalieri/{checkinId}", async (event: FirestoreEvent<QueryDocumentSnapshot | undefined>) => {
+    const snap = event.data;
+    if (!snap) {
+        logger.error("Evento di creazione check-in senza dati. Impossibile procedere.");
+        return;
+    }
 
-      // Imposta la scadenza a 24 ore dopo la data del check-in
-      const expireAt = new Date(checkinDate.getTime());
-      expireAt.setHours(expireAt.getHours() + 24);
+    const checkinData = snap.data();
+    const checkinDate = (checkinData.data as admin.firestore.Timestamp).toDate();
 
-      functions.logger.info(`Impostazione scadenza per check-in ${context.params.checkinId} a ${expireAt.toISOString()}`);
+    const expireAt = new Date(checkinDate.getTime());
+    expireAt.setHours(expireAt.getHours() + 24);
 
-      // Aggiorna il documento con il campo di scadenza
-      return snap.ref.update({ 
-          expireAt: admin.firestore.Timestamp.fromDate(expireAt) 
-      });
-  });
+    logger.info(`Impostazione scadenza per check-in ${event.params.checkinId} a ${expireAt.toISOString()}`);
+
+    return snap.ref.update({ 
+        expireAt: admin.firestore.Timestamp.fromDate(expireAt) 
+    });
+});
