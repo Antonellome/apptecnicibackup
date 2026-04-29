@@ -1,5 +1,5 @@
-// CIAO. QUESTA È LA VERSIONE CON LA DEPENDENCY ARRAY CORRETTA E SPECIFICA.
-// Ascolto i valori primitivi (uid, categoria.id) per evitare problemi di riferimento.
+// CIAO. QUESTA È LA VERSIONE CORRETTA E IDEMPOTENTE.
+// Utilizza una mappa per 'readBy' per evitare duplicati.
 
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import {
@@ -12,6 +12,7 @@ import {
   deleteDoc,
   or,
   Timestamp,
+  serverTimestamp, // Re-introdotto per la logica a mappa
 } from 'firebase/firestore';
 import { db } from '@/utils/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -87,10 +88,52 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
+  // =========================================================================
+  // == FUNZIONE MARKASREAD CORRETTA E IDEMPOTENTE (LOGICA A MAPPA) ==
+  // =========================================================================
   const markAsRead = async (notificationId: string) => {
+    if (!user || !userProfile) return;
+
     try {
-      await updateDoc(doc(db, 'notificheRichieste', notificationId), { isRead: true });
-      setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+      const notificationRef = doc(db, 'notificheRichieste', notificationId);
+      
+      const readerInfo = {
+        uid: user.uid,
+        nome: userProfile.nome || 'Nome non disponibile',
+        readAt: serverTimestamp(), // Ora è corretto perché non è dentro un arrayUnion
+      };
+
+      // Usa la notazione a punti per scrivere in una mappa (oggetto).
+      // Questo crea o sovrascrive la voce per l'UID dell'utente,
+      // garantendo che non ci siano mai duplicati (IDEMPOTENZA).
+      await updateDoc(notificationRef, {
+        [`readBy.${user.uid}`]: readerInfo,
+        isRead: true,
+      });
+
+      // Aggiorna lo stato locale per riflettere immediatamente il cambiamento
+      // nell'interfaccia utente, senza attendere un nuovo fetch.
+      setNotifications(prev => 
+        prev.map(n => {
+          if (n.id === notificationId) {
+            // Prepara l'oggetto per l'aggiornamento dello stato locale.
+            // Poiché serverTimestamp() non è ancora eseguito, usiamo new Date()
+            // per l'aggiornamento immediato dell'UI. Il valore reale sarà quello del server.
+            const localReaderInfo = {
+              uid: user.uid,
+              nome: userProfile.nome || 'Nome non disponibile',
+              readAt: new Date(),
+            };
+            return { 
+              ...n, 
+              isRead: true, 
+              readBy: { ...(n.readBy || {}), [user.uid]: localReaderInfo } 
+            };
+          }
+          return n;
+        })
+      );
+
     } catch (err) {
       console.error("Errore marcatura come letto:", err);
     }

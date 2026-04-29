@@ -199,6 +199,17 @@ Questa pagina consente la creazione e la modifica dei rapportini di lavoro. Supp
     - Eliminazione singola per notifiche già lette.
     - Ordinamento cronologico decrescente.
 
+### 9.1. Tracciamento Lettura Notifiche (Idempotente e a Costo Zero)
+- **Obiettivo:** Permettere all'App Master di sapere chi ha letto una notifica e quando, garantendo che ogni lettura sia registrata una sola volta (idempotenza) e senza costi di elaborazione backend.
+- **Architettura:** Scrittura Diretta (App Tecnici) / Lettura Diretta (App Master).
+- **Struttura Dati:** Il campo `readBy` nel documento `notificheRichieste` è una **mappa (oggetto)**, non un array.
+- **Flusso di Scrittura (App Tecnici):**
+    1.  La funzione `markAsRead` nel `NotificationContext` viene eseguita.
+    2.  Utilizza la notazione a punti per scrivere o sovrascrivere un campo all'interno della mappa `readBy`. La chiave del campo è l'UID del tecnico.
+    3.  La sintassi dell'aggiornamento è: `updateDoc(ref, { ['readBy.' + user.uid]: readerInfo, isRead: true })`.
+    4.  L'oggetto salvato (`readerInfo`) ha la seguente struttura: `{ uid: string, nome: string, readAt: Timestamp }`.
+- **Contratto Dati per App Master:** L'App Master leggerà il documento della notifica. Il campo `readBy` sarà un oggetto. Per ottenere l'elenco dei lettori, dovrà iterare sui valori dell'oggetto (es: `Object.values(notifica.readBy)`).
+
 ---
 
 ## NOTA DI STATO DEL PROGETTO
