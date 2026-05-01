@@ -65,16 +65,17 @@ export const veicoloConverter = createConverter<Veicolo>({
 export const rapportoConverter = createConverter<Report>({
     nome: '',
     data: Timestamp.now(),
-    tecnicoScriventeId: '',
+    tecnicoId: '',
     tipoGiornataId: '', 
     oreLavoro: 8,
-    stato: 'bozza',
     isTrasferta: false,
     descrizioneBreve: undefined,
     naveId: undefined,
     luogoId: undefined,
     oraInizio: undefined,
-    oraFine: undefined
+    oraFine: undefined,
+    presenze: [],
+    createdAt: Timestamp.now(),
 });
 
 export const dittaConverter = createConverter<Ditta>({

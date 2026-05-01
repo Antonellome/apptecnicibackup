@@ -1,21 +1,16 @@
-// CIAO. QUESTA È LA VERSIONE CORRETTA E IDEMPOTENTE.
-// Utilizza una mappa per 'readBy' per evitare duplicati.
-
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
 import {
   collection,
   query,
   where,
-  getDocs,
+  onSnapshot,
   doc,
   updateDoc,
   deleteDoc,
   or,
-  Timestamp,
-  serverTimestamp, // Re-introdotto per la logica a mappa
 } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
-import { useAuth } from '@/hooks/useAuth';
+import { db } from '@/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { Notifica } from '@/models/definitions';
 
 interface NotificationContextType {
@@ -37,106 +32,76 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [error, setError] = useState<string | null>(null);
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
-  const refetch = () => setFetchTrigger(prev => prev + 1);
+  const refetch = useCallback(() => setFetchTrigger(prev => prev + 1), []);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      if (authLoading || !user?.uid || !userProfile?.categoria?.id) {
-        setLoading(false);
-        setNotifications([]);
-        return;
-      }
+    if (authLoading || !user || !userProfile?.categoria?.id) {
+      setLoading(false);
+      setNotifications([]);
+      return;
+    }
 
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      try {
-        const finalQuery = query(
-          collection(db, 'notificheRichieste'),
-          or(
-            where('to_ids', 'array-contains', user.uid),
-            where('to_category_ids', 'array-contains', userProfile.categoria.id),
-            where('sendToAll', '==', true)
-          )
-        );
+    const finalQuery = query(
+      collection(db, 'notificheRichieste'),
+      or(
+        where('to_ids', 'array-contains', user.uid),
+        where('to_category_ids', 'array-contains', userProfile.categoria.id),
+        where('sendToAll', '==', true)
+      )
+    );
 
-        const snapshot = await getDocs(finalQuery);
-        
+    const unsubscribe = onSnapshot(finalQuery,
+      (snapshot) => {
         const docs = snapshot.docs.map(doc => {
           const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+          return { 
+              id: doc.id, 
+              ...data, 
+              createdAt: data.createdAt, // Manteniamo il formato che arriva da firestore
+              readBy: data.readBy || {}
           } as Notifica;
         });
 
-        docs.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+        docs.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
         setNotifications(docs);
-
-      } catch (err: any) {
-        console.error("[DIAGNOSTICA] Query fallita! L'indice composito è quasi certamente mancante.", err.message);
-        setError(err.message);
-      } finally {
+        setLoading(false);
+      },
+      (err: any) => {
+        console.error("Errore nel listener delle notifiche (Verificare Indice Firestore):", err);
+        setError(err.message || 'Errore sconosciuto');
         setLoading(false);
       }
-    };
+    );
 
-    fetchNotifications();
+    return () => unsubscribe();
+  }, [user, userProfile, authLoading, fetchTrigger]);
 
-  }, [authLoading, user?.uid, userProfile?.categoria?.id, fetchTrigger]);
+  const unreadCount = useMemo(() => {
+      if (!user) return 0;
+      return notifications.filter(n => !n.readBy || !n.readBy[user.uid]).length;
+  }, [notifications, user]);
 
-  const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
-
-  // =========================================================================
-  // == FUNZIONE MARKASREAD CORRETTA E IDEMPOTENTE (LOGICA A MAPPA) ==
-  // =========================================================================
   const markAsRead = async (notificationId: string) => {
-    if (!user || !userProfile) return;
+      if (!user) return;
+      try {
+          const notificationRef = doc(db, 'notificheRichieste', notificationId);
+          // Aggiorna il campo mappa 'readBy' con l'uid dell'utente
+          // La notazione a punti è fondamentale per aggiornare un campo in una mappa
+          await updateDoc(notificationRef, { [`readBy.${user.uid}`]: true });
 
-    try {
-      const notificationRef = doc(db, 'notificheRichieste', notificationId);
-      
-      const readerInfo = {
-        uid: user.uid,
-        nome: userProfile.nome || 'Nome non disponibile',
-        readAt: serverTimestamp(), // Ora è corretto perché non è dentro un arrayUnion
-      };
-
-      // Usa la notazione a punti per scrivere in una mappa (oggetto).
-      // Questo crea o sovrascrive la voce per l'UID dell'utente,
-      // garantendo che non ci siano mai duplicati (IDEMPOTENZA).
-      await updateDoc(notificationRef, {
-        [`readBy.${user.uid}`]: readerInfo,
-        isRead: true,
-      });
-
-      // Aggiorna lo stato locale per riflettere immediatamente il cambiamento
-      // nell'interfaccia utente, senza attendere un nuovo fetch.
-      setNotifications(prev => 
-        prev.map(n => {
-          if (n.id === notificationId) {
-            // Prepara l'oggetto per l'aggiornamento dello stato locale.
-            // Poiché serverTimestamp() non è ancora eseguito, usiamo new Date()
-            // per l'aggiornamento immediato dell'UI. Il valore reale sarà quello del server.
-            const localReaderInfo = {
-              uid: user.uid,
-              nome: userProfile.nome || 'Nome non disponibile',
-              readAt: new Date(),
-            };
-            return { 
-              ...n, 
-              isRead: true, 
-              readBy: { ...(n.readBy || {}), [user.uid]: localReaderInfo } 
-            };
-          }
-          return n;
-        })
-      );
-
-    } catch (err) {
-      console.error("Errore marcatura come letto:", err);
-    }
+          // Aggiornamento locale per una UI reattiva
+          setNotifications(prev => prev.map(n => 
+              n.id === notificationId 
+                  ? { ...n, readBy: { ...n.readBy, [user.uid]: true } } 
+                  : n
+          ));
+      } catch (err) {
+          console.error("Errore durante l'aggiornamento della notifica:", err);
+          // Qui potresti voler mostrare uno snackbar di errore
+      }
   };
 
   const deleteNotification = async (notificationId: string) => {
@@ -144,7 +109,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       await deleteDoc(doc(db, 'notificheRichieste', notificationId));
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
     } catch (err) {
-      console.error("Errore eliminazione:", err);
+      console.error("Errore durante l'eliminazione della notifica:", err);
     }
   };
 

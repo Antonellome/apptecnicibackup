@@ -1,6 +1,8 @@
+
+import { useMemo } from 'react';
 import { Box, Typography, Divider } from '@mui/material';
-import type { Tecnico, FormField } from '@/models/definitions';
-import { useGlobalData } from '@/contexts/GlobalDataProvider';
+import type { Tecnico, FormField, Ditta, Categoria } from '@/models/definitions';
+import { useMasterData } from '@/contexts/MasterDataProvider'; // AGGIORNATO
 import { safeGetDayjs } from '@/utils/dateUtils';
 import logo from '@/assets/react.svg';
 
@@ -9,6 +11,7 @@ interface PrintableTechnicianListProps {
     fields: FormField[];
 }
 
+// Oggetto per abbreviazioni, più manutenibile
 const abbreviations: Record<string, string> = {
     'Ditta Appartenenza': 'Ditta',
     'Categoria': 'Cat.',
@@ -26,28 +29,56 @@ const abbreviations: Record<string, string> = {
 };
 
 const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps) => {
-    const { ditteMap, categorieMap } = useGlobalData();
+    // USARE L'HOOK CORRETTO
+    const { masterData } = useMasterData();
 
-    const getDisplayValue = (field: FormField, value: Tecnico[keyof Tecnico]): string | null => {
+    // Creare mappe solo una volta
+    const ditteMap = useMemo(() => 
+        masterData?.ditte.reduce((acc, d) => {
+            acc.set(d.id, d);
+            return acc;
+        }, new Map<string, Ditta>()) 
+    , [masterData?.ditte]);
+
+    const categorieMap = useMemo(() => 
+        masterData?.categorie.reduce((acc, c) => {
+            acc.set(c.id, c);
+            return acc;
+        }, new Map<string, Categoria>()) 
+    , [masterData?.categorie]);
+
+
+    // Funzione robusta per ottenere il valore da visualizzare
+    const getDisplayValue = (field: FormField, value: any): string | null => {
         if (value === null || typeof value === 'undefined' || value === '') return null;
-        // CIAO: Corretto il confronto del tipo
-        if (field.type === 'boolean') return value ? 'Sì' : 'No';
+
+        // Gestione booleani
+        if (typeof value === 'boolean') {
+            return value ? 'Sì' : 'No';
+        }
+
+        // Gestione date
         if (field.type === 'date') {
             const date = safeGetDayjs(value as string);
             return date ? date.format('DD/MM/YYYY') : null;
         }
+        
+        // Gestione FK
         if (field.name === 'dittaId') return ditteMap?.get(value as string)?.nome || null;
         if (field.name === 'categoriaId') return categorieMap?.get(value as string)?.nome || null;
+        
+        // Gestione select generiche
         if (field.type === 'select' && field.options) {
-            return field.options.find(opt => opt.value === value)?.label || String(value);
+            const foundOption = field.options.find(opt => opt.id === value); // Confronta per id
+            return foundOption?.nome || String(value);
         }
+
         const stringValue = String(value);
         return stringValue.trim() === '' ? null : stringValue;
     };
 
-    // CIAO: Corretto il nome del campo in `noteInterne`
     const nameFields = ['nome', 'cognome'];
-    const noteField = fields.find(f => f.name === 'noteInterne');
+    const noteField = fields.find(f => f.name === 'noteInterne'); // Assumiamo si chiami così
     const otherFields = fields.filter(f => !nameFields.includes(f.name) && f.name !== 'noteInterne');
 
     return (
@@ -59,10 +90,10 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
                     <Typography variant="caption">R.I.S.O. Masre Office - Report Individuali Sincronizzati Online</Typography>
                 </Box>
             </Box>
+
             {data.map((tecnico, index) => {
                 const fullName = `${tecnico.cognome || ''}, ${tecnico.nome || ''}`.replace(/^,|,$/g, '').trim();
-                // CIAO: Corretto il nome della proprietà in `noteInterne`
-                const noteValue = tecnico.noteInterne;
+                const noteValue = tecnico.noteInterne as string; // Cast per sicurezza
 
                 return (
                     <Box key={tecnico.id} sx={{ pageBreakInside: 'avoid', pt: 1, pb: 1 }}>
@@ -97,7 +128,7 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
                                 </Typography>
                                 {noteValue ? (
                                     <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.875rem' }}>
-                                        {(noteValue as string).split('\n').map((line: string, i: number) => (
+                                        {noteValue.split('\n').map((line: string, i: number) => (
                                             line.trim() && <li key={i}>{line.trim()}</li>
                                         ))}
                                     </ul>

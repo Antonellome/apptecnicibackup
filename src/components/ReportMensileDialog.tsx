@@ -9,6 +9,9 @@ import {
   Toolbar,
   IconButton,
   Typography,
+  Box,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
@@ -26,8 +29,6 @@ const Transition = React.forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-// --- CORREZIONE --- 
-// Rimuovo `tipiGiornata` dalle props. Il componente è ora autosufficiente.
 interface ReportMensileDialogProps {
   open: boolean;
   onClose: () => void;
@@ -36,35 +37,35 @@ interface ReportMensileDialogProps {
   tariffe: Record<string, number>;
 }
 
-// --- CORREZIONE --- 
-// Rimuovo `tipiGiornata` dai parametri destrutturati.
+// =========================================================================
+// --- APPLICAZIONE DELLA STRATEGIA DI UNIFICAZIONE DATI ---
+// =========================================================================
 const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tariffe }) => {
   const { user } = useAuth();
   
-  // --- CORREZIONE --- 
-  // Ora `tipiGiornata` arriva da qui, l'unica fonte di verità per questi dati.
-  const { masterData } = useMasterData();
-  const { tecnici, navi, luoghi, tipiGiornata } = masterData;
+  // 1. UTILIZZO DEL PROVIDER CANONICO: Recupero dati e stati dal nostro Single Source of Truth.
+  const { masterData, loading, error } = useMasterData();
 
-  const selectedTecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
+  // 2. CALCOLI MEMORIZZATI: La logica di arricchimento viene eseguita solo quando i dati necessari sono pronti.
+  const { enrichedReportsWithGuadagno, totalGuadagno, selectedTecnico } = useMemo(() => {
+      // 3. GUARDIA DI CONTROLLO (NULL-SAFETY): Se i dati master non sono ancora caricati, si esce immediatamente.
+      // Questa è la correzione cruciale che previene il crash.
+      if (!masterData) {
+          return { enrichedReportsWithGuadagno: [], totalGuadagno: 0, selectedTecnico: null };
+      }
 
-  const enrichedReportsWithGuadagno = useMemo(() => {
-      // Aggiungo un controllo robusto per evitare crash se i dati non sono ancora pronti.
-      if (!tipiGiornata || tipiGiornata.length === 0) return [];
-
-      const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t]));
+      const { tecnici, tipiGiornata } = masterData;
       
-      // La logica di fallback per le tariffe rimane, ma ora usa `tipiGiornata` dal contesto.
       const defaultTariffe = tipiGiornata.reduce((acc, tipo) => {
           acc[tipo.nome] = 10.00;
           return acc;
       }, {} as Record<string, number>);
 
-      // La logica delle tariffe che hai voluto è preservata: usa quelle dal localStorage se ci sono.
       const finalTariffe = Object.keys(tariffe).length > 0 ? tariffe : defaultTariffe;
 
-      return reports.map(report => {
-          const tipo = tipiGiornataMap.get(report.tipoGiornataId);
+      const calculatedReports = reports.map(report => {
+          // CORREZIONE: Il report in ingresso è già un EnrichedRapportino, quindi usiamo l'oggetto tipoGiornata direttamente.
+          const tipo = report.tipoGiornata;
           const tariffa = tipo ? (finalTariffe[tipo.nome] ?? 0) : 0;
           const guadagno = (report.oreLavoro ?? 0) * tariffa;
           return {
@@ -72,20 +73,49 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
               guadagno: guadagno,
           };
       });
-  // --- CORREZIONE --- 
-  // Aggiungo `tipiGiornata` (dal contesto) all'array di dipendenze.
-  }, [reports, tariffe, tipiGiornata]);
 
-  const totalGuadagno = useMemo(() => {
-      return enrichedReportsWithGuadagno.reduce((sum, report) => sum + (report.guadagno ?? 0), 0);
-  }, [enrichedReportsWithGuadagno]);
+      const total = calculatedReports.reduce((sum, report) => sum + (report.guadagno ?? 0), 0);
+      const tecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
+
+      return { enrichedReportsWithGuadagno: calculatedReports, totalGuadagno: total, selectedTecnico: tecnico };
+
+  }, [masterData, reports, tariffe, user?.uid]); // Dipendenza esplicita da masterData
 
   const anno = currentMonth.getFullYear();
   const mese = currentMonth.getMonth() + 1;
   const monthString = format(currentMonth, 'MMMM yyyy', { locale: it });
 
-  if (!open || !selectedTecnico) {
+  // Se il dialog non è aperto, non renderizzare nulla.
+  if (!open) {
     return null;
+  }
+  
+  // --- VISTA DI CONTENUTO CONDIZIONALE ---
+  // Mostra stati diversi in base al caricamento o a errori.
+  const renderContent = () => {
+    if (loading) {
+        return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box>;
+    }
+
+    if (error) {
+        return <Alert severity="error">Errore nel caricamento dei dati master: {error.message}</Alert>;
+    }
+
+    if (!selectedTecnico) {
+        return <Alert severity="warning">Impossibile trovare i dati del tecnico. Prova a ricaricare.</Alert>;
+    }
+
+    return (
+        <GeneratedReportView 
+            rapportini={enrichedReportsWithGuadagno}
+            tecnico={selectedTecnico}
+            navi={masterData?.navi ?? []}
+            luoghi={masterData?.luoghi ?? []}
+            anno={anno}
+            mese={mese}
+            totalGuadagno={totalGuadagno}
+        />
+    );
   }
 
   return (
@@ -101,20 +131,12 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
             <CloseIcon />
           </IconButton>
           <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-            Consuntivo per {selectedTecnico?.nome} {selectedTecnico?.cognome} - {monthString}
+            {selectedTecnico ? `Consuntivo per ${selectedTecnico.nome} ${selectedTecnico.cognome}` : 'Consuntivo'} - {monthString}
           </Typography>
         </Toolbar>
       </AppBar>
       <DialogContent>
-        <GeneratedReportView 
-            rapportini={enrichedReportsWithGuadagno}
-            tecnico={selectedTecnico}
-            navi={navi}
-            luoghi={luoghi}
-            anno={anno}
-            mese={mese}
-            totalGuadagno={totalGuadagno}
-        />
+        {renderContent()}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Chiudi</Button>

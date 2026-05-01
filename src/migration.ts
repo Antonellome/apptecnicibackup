@@ -61,7 +61,10 @@ const migrateData = async () => {
 
   } catch (error) {
     console.error("Errore durante la migrazione: ", error);
-    return `Errore durante la migrazione: ${error.message}`;
+    if (error instanceof Error) {
+        return `Errore durante la migrazione: ${error.message}`;
+    }
+    return "Errore durante la migrazione: si è verificato un errore sconosciuto.";
   }
 };
 

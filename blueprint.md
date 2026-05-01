@@ -138,6 +138,36 @@ function MyComponent() {
 
 ---
 
+### Architettura Dati Unificata (Operazione Unificazione)
+
+**Obiettivo Strategico:** Eliminare la frammentazione dei dati e risolvere la radice degli errori di compilazione stabilendo un'unica, indiscussa fonte di verità per tutte le anagrafiche (tecnici, navi, clienti, etc.).
+
+**Decisione Esecutiva:**
+- **Provider Canonico:** `src/contexts/MasterDataProvider.tsx` viene eletto come l'unico provider autorizzato per i dati anagrafici, in virtù della sua implementazione superiore (legata all'auth, gestione errori, hook `useMasterData`).
+- **Provider Dismesso:** `src/contexts/DataProvider.tsx` è dichiarato obsoleto e sarà rimosso al termine dell'operazione di bonifica.
+
+**Piano d'Azione Sequenziale:**
+
+1.  **Fase 1: Solidificazione del Contratto Dati (Contromossa Preventiva)**
+    -   **Azione:** Incidere l'interfaccia `MasterData` nel file di definizioni globali `src/models/definitions.ts`. Questo creerà un contratto dati universale.
+    -   **Azione Correlata:** Modificare `MasterDataProvider.tsx` per fargli importare `MasterData` da `definitions.ts`, eliminando la definizione locale.
+
+2.  **Fase 2: Unificazione dei Componenti**
+    -   **Azione:** Ispezionare ogni componente che attualmente causa errori di tipo (es. `ReportMensileDialog`, `MonthlyReportGrid`, etc.).
+    -   **Azione Correlata:** Sostituire ogni utilizzo del vecchio `DataContext` o `useContext` con l'hook standardizzato `useMasterData()`.
+    -   **Azione Correlata:** Correggere tutti i percorsi di importazione errati che puntano a provider inesistenti o obsoleti.
+
+3.  **Fase 3: Bonifica Finale**
+    -   **Azione:** Una volta che nessun componente fa più riferimento a `DataProvider.tsx`, procedere con l'eliminazione fisica del file `src/contexts/DataProvider.tsx`.
+
+**Vincoli Operativi Inviolabili (Regole d'Ingaggio):**
+
+-   **Invarianza Visiva Assoluta:** L'intera operazione deve essere trasparente per l'utente finale. Nessuna modifica a layout, stili, testi o struttura visibile delle pagine è permessa.
+-   **Condotta Zero Errori:** Prima di modificare qualsiasi file, ne verrà eseguita un'analisi approfondita per comprendere appieno la logica esistente e prevenire l'introduzione di nuovi bug.
+-   **Architettura Backend Intatta:** L'operazione non deve interferire con le due Cloud Functions strategiche (`rapportiniTrigger` e la seconda funzione di manutenzione), che rimangono un pilastro dell'architettura ibrida del sistema.
+
+---
+
 ## Specifiche Funzionali
 
 ### 1. Dashboard/Home

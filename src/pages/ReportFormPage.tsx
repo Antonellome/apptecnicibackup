@@ -5,7 +5,7 @@ import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Switch, FormControlLabel, Autocomplete, Button, CircularProgress, Alert, Divider, Box,
     Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip,
-    Grid // CORREZIONE: Uso del componente Grid stabile come da blueprint
+    Grid
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -43,7 +43,7 @@ const ReportFormPage: React.FC = () => {
     const { user } = useAuth();
     const { reportId } = useParams<{ reportId: string }>();
     const { masterData, loading: collectionsLoading } = useMasterData();
-    const { tipiGiornata, tecnici, veicoli, navi, luoghi } = masterData;
+    const { tipiGiornata = [], tecnici = [], veicoli = [], navi = [], luoghi = [] } = masterData || {};
     const { showSnackbar } = useSnackbar();
     const isEditMode = Boolean(reportId);
     const loggedInTecnicoId = user?.uid;
@@ -166,7 +166,7 @@ const ReportFormPage: React.FC = () => {
 
     const handleOpenModal = (tecnico: DettaglioOreData) => {
         setEditingTecnico(tecnico);
-        setTempDettaglioOre(tecnico); // Initialize temp state for modal
+        setTempDettaglioOre(tecnico);
         setIsModalOpen(true);
     };
 
@@ -194,11 +194,9 @@ const ReportFormPage: React.FC = () => {
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
         setDettaglioOre(prevDettagli => {
             const newDettagli = prevDettagli.map(d => d.tecnicoId === updatedData.tecnicoId ? updatedData : d);
-            // If the author's hours are updated, apply them to all other technicians as well
             if (updatedData.tecnicoId === loggedInTecnicoId) {
                 return newDettagli.map(d => {
-                    if (d.tecnicoId === loggedInTecnicoId) return d; // Keep author's own update
-                    // For others, copy the times but keep their own ID and name
+                    if (d.tecnicoId === loggedInTecnicoId) return d;
                     return { 
                         ...d, 
                         isManual: updatedData.isManual,
@@ -213,7 +211,7 @@ const ReportFormPage: React.FC = () => {
         });
     }, [loggedInTecnicoId]);
 
-    const handleAltriTecniciChange = (_: any, nuoviTecniciSelezionati: Tecnico[]) => {
+    const handleAltriTecniciChange = (_: React.SyntheticEvent, nuoviTecniciSelezionati: Tecnico[]) => {
         const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
         if (!scrivente) return;
 
@@ -283,7 +281,7 @@ const ReportFormPage: React.FC = () => {
                     await addDoc(collection(firestoreDb, 'rapportini'), { ...rapportinoData, createdAt: Timestamp.now() });
                     memoizedShowSnackbar("Rapportino di periodo creato con successo!", "success");
                 } else {
-                    await aggiungiAllaCoda({ ...rapportinoData, data: dataInizio } as Omit<RapportinoInSospeso, 'localId'>);
+                    await aggiungiAllaCoda(rapportinoData as Omit<RapportinoInSospeso, 'localId'>);
                     memoizedShowSnackbar("Sei offline. Il rapportino di periodo è stato salvato e sarà inviato più tardi.", "info");
                 }
                 navigate('/lista-report');
@@ -336,7 +334,7 @@ const ReportFormPage: React.FC = () => {
                         setIsSaving(false);
                         return;
                     }
-                    await aggiungiAllaCoda({ ...rapportinoData, data: data! } as Omit<RapportinoInSospeso, 'localId'>);
+                    await aggiungiAllaCoda(rapportinoData as Omit<RapportinoInSospeso, 'localId'>);
                     memoizedShowSnackbar("Sei offline. Il rapportino è stato salvato localmente e sarà inviato più tardi.", "info");
                 }
                 navigate('/lista-report');
@@ -363,16 +361,8 @@ const ReportFormPage: React.FC = () => {
                          {!isEditMode && ( <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', mt: 1 }}> <FormControlLabel control={<Switch checked={isPeriodo} onChange={e => setIsPeriodo(e.target.checked)} disabled={isSaving} />} label="Inserisci per un periodo di più giorni" /> </Alert> )}
                         {isPeriodo && !isEditMode ? (
                             <Grid container spacing={2}>
-                                <Grid
-                                    size={{
-                                        xs: 12,
-                                        sm: 6
-                                    }}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
-                                <Grid
-                                    size={{
-                                        xs: 12,
-                                        sm: 6
-                                    }}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid size={{ xs: 12, sm: 6 }}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
+                                <Grid size={{ xs: 12, sm: 6 }}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
                             </Grid>
                         ) : ( <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || isSaving} slotProps={{ textField: { fullWidth: true, required: true } }} /> )}
                         <TextField label="Tecnico Responsabile" value={user?.email || '...'} fullWidth disabled />
@@ -399,7 +389,7 @@ const ReportFormPage: React.FC = () => {
                                 <Autocomplete
                                     multiple
                                     options={otherTecnicos}
-                                    getOptionLabel={o => `${o.cognome} ${o.nome}`}
+                                    getOptionLabel={(o) => `${o.cognome} ${o.nome}`}
                                     value={selectedTecnicos}
                                     onChange={handleAltriTecniciChange}
                                     renderInput={params => <TextField {...params} label="Aggiungi altri tecnici presenti" />}
@@ -452,9 +442,9 @@ const ReportFormPage: React.FC = () => {
                         <Box sx={{pt: 2}}>
                              <OreLavoroSingoloTecnico
                                 datiOre={tempDettaglioOre}
-                                onUpdate={setTempDettaglioOre} // Update temp state
+                                onUpdate={setTempDettaglioOre}
                                 isReadOnly={false}
-                                isScrivente={false} // Always false in modal
+                                isScrivente={false}
                             />
                         </Box>
                     )}

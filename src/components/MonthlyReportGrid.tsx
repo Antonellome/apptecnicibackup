@@ -1,19 +1,21 @@
 
 import { useMemo } from 'react';
-import { Tecnico, Rapportino, TipoGiornata } from '@/hooks/useGlobalData';
-import { getDaysInMonth, startOfDay, isValid } from 'date-fns'; // Importo isValid
+import { Tecnico, EnrichedRapportino, TipoGiornata } from '@/models/definitions'; // CORRETTO
+import { getDaysInMonth, isValid, parseISO } from 'date-fns';
 import { 
     Table, TableBody, TableCell, TableContainer, TableHead, 
-    TableRow, Paper, Typography, Tooltip 
+    TableRow, Paper, Typography, Tooltip, Box
 } from '@mui/material';
+import { Timestamp } from 'firebase/firestore';
 
 interface MonthlyReportGridProps {
   tecnici: Tecnico[];
-  rapportini: Rapportino[];
+  rapportini: EnrichedRapportino[]; // CORRETTO
   tipiGiornata: TipoGiornata[];
   currentDate: Date;
 }
 
+// Funzione helper per ottenere l'abbreviazione del giorno
 const getDayAbbreviation = (dayIndex: number) => {
     const days = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
     return days[dayIndex];
@@ -25,83 +27,110 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
     const year = currentDate.getFullYear();
     const daysInMonth = getDaysInMonth(new Date(year, month));
 
-    const rapportiniByTecnicoAndDate = useMemo(() => {
-        const map = new Map<string, Rapportino>();
-        rapportini
-            // AGGIUNGO CONTROLLO DI SICUREZZA: ignoro i rapportini senza data o con data invalida
-            .filter(r => r && r.data && isValid(r.data))
-            .filter(r => r.data.getMonth() === month && r.data.getFullYear() === year)
-            .forEach(r => {
-                const key = `${r.tecnicoId}_${startOfDay(r.data).getTime()}`;
-                map.set(key, r);
-            });
-        return map;
-    }, [rapportini, month, year]);
-
+    // Mappa per accesso rapido ai tipi di giornata per ID
     const tipiGiornataMap = useMemo(() => {
         const map = new Map<string, TipoGiornata>();
         tipiGiornata.forEach(t => map.set(t.id, t));
         return map;
     }, [tipiGiornata]);
 
-    const renderDayCell = (tecnico: Tecnico, day: number) => {
-        const date = startOfDay(new Date(year, month, day));
-        const key = `${tecnico.id}_${date.getTime()}`;
-        const rapportino = rapportiniByTecnicoAndDate.get(key);
+    // Mappa nidificata per i rapportini: [tecnicoId][giorno] -> rapportino
+    const rapportiniMatrix = useMemo(() => {
+        const matrix = new Map<string, Map<number, EnrichedRapportino>>();
+        
+        tecnici.forEach(t => matrix.set(t.id, new Map()));
 
+        rapportini.forEach(r => {
+            // Assicura che la data sia un oggetto Date valido
+            const reportDate = r.data instanceof Timestamp ? r.data.toDate() : (typeof r.data === 'string' ? parseISO(r.data) : r.data);
+            if (!isValid(reportDate)) return;
+
+            if (reportDate.getMonth() === month && reportDate.getFullYear() === year) {
+                const dayOfMonth = reportDate.getDate();
+                // Il rapportino è associato al tecnico che lo ha scritto E a tutti i presenti
+                r.presenze.forEach(tecnicoPresente => {
+                    const tecnicoId = tecnicoPresente.id;
+                    const technicianMap = matrix.get(tecnicoId);
+                    if (technicianMap) {
+                        // Se c'è già un rapportino per quel giorno, non sovrascriverlo
+                        // (potrebbe essere un caso limite da gestire meglio se necessario)
+                        if (!technicianMap.has(dayOfMonth)) {
+                            technicianMap.set(dayOfMonth, r);
+                        }
+                    }
+                });
+            }
+        });
+        return matrix;
+    }, [rapportini, tecnici, month, year]);
+
+    
+    const renderDayCell = (tecnico: Tecnico, day: number) => {
+        const date = new Date(year, month, day);
         const dayOfWeek = date.getDay();
-        // Logica per assenza ingiustificata
+
+        const rapportino = rapportiniMatrix.get(tecnico.id)?.get(day);
+
+        // Assenza (né weekend, né rapportino)
         if (!rapportino && dayOfWeek !== 0 && dayOfWeek !== 6) {
             return (
-                <TableCell key={day} sx={{ backgroundColor: '#ffcdd2', textAlign: 'center', border: '1px solid #e0e0e0' }}>
+                <TableCell key={day} sx={{ backgroundColor: '#ffcdd2', textAlign: 'center', border: '1px solid #e0e0e0', p: 0.5 }}>
                     <Tooltip title="Assenza Ingiustificata">
-                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#c62828' }}>X</Typography>
+                        <Box sx={{ width: '100%', height: '100%' }} />
                     </Tooltip>
                 </TableCell>
             );
         }
 
-        // Weekend o giorno non lavorativo senza rapportino
+        // Giorno vuoto (weekend o festivo senza rapportino)
         if (!rapportino) {
-            return <TableCell key={day} sx={{ backgroundColor: '#f5f5f5', border: '1px solid #e0e0e0' }} />;
+            return <TableCell key={day} sx={{ backgroundColor: isWeekend(dayOfWeek) ? '#f5f5f5' : 'inherit', border: '1px solid #e0e0e0' }} />;
         }
 
-        // AGGIUNGO CONTROLLO DI SICUREZZA: gestisco il caso in cui tipoGiornataId non sia valido
-        const tipoGiornata = rapportino.tipoGiornataId ? tipiGiornataMap.get(rapportino.tipoGiornataId) : undefined;
-        const cellColor = tipoGiornata?.colore || '#ffffff'; // Default bianco se non trovato
-        const sigla = tipoGiornata?.sigla || 'ERR'; // Sigla di errore se non trovato
+        const tipoGiornata = tipiGiornataMap.get(rapportino.tipoGiornata.id);
+        const cellColor = tipoGiornata?.colore || '#ffffff';
+        const textColor = 'white'; 
+        const sigla = tipoGiornata?.sigla || '?';
 
         return (
             <TableCell 
                 key={day} 
                 sx={{ 
                     backgroundColor: cellColor, 
+                    color: textColor,
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
                     textAlign: 'center', 
                     cursor: 'pointer',
                     border: '1px solid #e0e0e0',
-                    color: 'white',
-                    textShadow: '1px 1px 2px black'
+                    p: 1,
                 }}
             >
-                <Tooltip title={`${tipoGiornata?.nome || 'Tipo non trovato'} - ${rapportino.oreLavorate} ore`}>
+                <Tooltip title={`${tipoGiornata?.nome || 'N/D'} - Ore: ${rapportino.oreLavoro || 'N/A'}`}>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{sigla}</Typography>
                 </Tooltip>
             </TableCell>
         );
     };
+    
+    const isWeekend = (dayOfWeek: number) => dayOfWeek === 0 || dayOfWeek === 6;
 
     return (
-        <TableContainer component={Paper} elevation={3}>
+        <TableContainer component={Paper} elevation={2} sx={{maxHeight: '70vh'}}>
             <Table stickyHeader size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold', minWidth: 150, position: 'sticky', left: 0, zIndex: 1001, backgroundColor: '#eeeeee' }}>Tecnico</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', minWidth: 170, position: 'sticky', left: 0, zIndex: 1001, backgroundColor: '#eeeeee', borderRight: '2px solid #cccccc' }}>Tecnico</TableCell>
                         {[...Array(daysInMonth).keys()].map(day => {
                             const date = new Date(year, month, day + 1);
                             const dayOfWeek = date.getDay();
-                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                             return (
-                                <TableCell key={day + 1} sx={{ textAlign: 'center', fontWeight: 'bold', backgroundColor: isWeekend ? '#e0e0e0' : '#f5f5f5', minWidth: 50 }}>
+                                <TableCell key={day + 1} sx={{
+                                    textAlign: 'center', 
+                                    fontWeight: 'bold', 
+                                    backgroundColor: isWeekend(dayOfWeek) ? '#e0e0e0' : '#f5f5f5', 
+                                    minWidth: 50,
+                                    borderLeft: '1px solid #dddddd'
+                                }}>
                                     {day + 1}
                                     <Typography variant="caption" display="block">{getDayAbbreviation(dayOfWeek)}</Typography>
                                 </TableCell>
@@ -112,7 +141,9 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
                 <TableBody>
                     {tecnici.map(tecnico => (
                         <TableRow key={tecnico.id} hover>
-                            <TableCell sx={{ fontWeight: 'bold', position: 'sticky', left: 0, zIndex: 1000, backgroundColor: '#fafafa' }}>{tecnico.nome}</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#fafafa', borderRight: '2px solid #cccccc' }}>
+                                {tecnico.nomeCompleto}
+                            </TableCell>
                             {[...Array(daysInMonth).keys()].map(day => renderDayCell(tecnico, day + 1))}
                         </TableRow>
                     ))}

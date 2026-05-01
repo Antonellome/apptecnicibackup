@@ -17,18 +17,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase'; // Accesso diretto al DB
 import { useAuth } from '@/contexts/AuthContext';
-import { Tecnico, Cliente, Sede, TipoGiornata, Veicolo, Luogo, Nave } from '@/models/definitions';
-
-// Interfaccia che definisce la struttura dei dati master
-export interface MasterData {
-    tecnici: Tecnico[];
-    clienti: Cliente[];
-    sedi: Sede[];
-    tipiGiornata: TipoGiornata[];
-    veicoli: Veicolo[];
-    luoghi: Luogo[];
-    navi: Nave[];
-}
+// MODIFICA: Importa MasterData dal contratto globale e rimuove la definizione locale.
+import { Tecnico, Cliente, Sede, TipoGiornata, Veicolo, Luogo, Nave, MasterData, Ditta, Categoria } from '@/models/definitions';
 
 // Interfaccia per il valore del contesto
 interface MasterDataContextValue {
@@ -86,7 +76,9 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
                 tipiGiornata,
                 veicoli,
                 luoghi,
-                navi
+                navi,
+                ditte,
+                categorie
             ] = await Promise.all([
                 fetchCollection<Tecnico>('tecnici'),
                 fetchCollection<Cliente>('clienti'),
@@ -95,6 +87,8 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
                 fetchCollection<Veicolo>('veicoli'),
                 fetchCollection<Luogo>('luoghi'),
                 fetchCollection<Nave>('navi'),
+                fetchCollection<Ditta>('ditte'),
+                fetchCollection<Categoria>('categorie'),
             ]);
 
             setMasterData({
@@ -105,6 +99,8 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
                 veicoli,
                 luoghi,
                 navi,
+                ditte,
+                categorie,
             });
 
         } catch (err) {

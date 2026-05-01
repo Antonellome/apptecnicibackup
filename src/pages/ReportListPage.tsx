@@ -19,21 +19,27 @@ import { it } from 'date-fns/locale';
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { useMasterData } from '@/contexts/MasterDataProvider'; // CORREZIONE: Uso del nuovo MasterDataProvider
-import { Rapportino, EnrichedRapportino } from '@/models/definitions';
+import { useMasterData } from '@/contexts/MasterDataProvider';
+import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions';
 
 const ReportListPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { masterData, loading: masterDataLoading } = useMasterData(); // CORREZIONE: Chiamata al nuovo hook
+  const { masterData, loading: masterDataLoading } = useMasterData();
   
   const [rapportini, setRapportini] = useState<EnrichedRapportino[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user || masterDataLoading) { // CORREZIONE: Verifica del nuovo stato di caricamento
+    if (!user || masterDataLoading) {
         if(!masterDataLoading) setLoading(false);
+        return;
+    }
+
+    if (!masterData) {
+        setError("Dati anagrafici non disponibili.");
+        setLoading(false);
         return;
     }
 
@@ -47,15 +53,16 @@ const ReportListPage = () => {
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       try {
-        // CORREZIONE: Le mappe ora usano i dati da masterData
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
         const naviMap = new Map(masterData.navi.map(n => [n.id, n.nome]));
         const luoghiMap = new Map(masterData.luoghi.map(l => [l.id, l.nome]));
+        const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
 
         const enrichedData = querySnapshot.docs.map(doc => {
             const data = doc.data() as Rapportino;
             const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Non Definito', colore: '#808080' };
             const destinazione = data.naveId ? naviMap.get(data.naveId) : (data.luogoId ? luoghiMap.get(data.luogoId) : 'Nessuna');
+            const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
 
             return {
                 ...data,
@@ -63,6 +70,7 @@ const ReportListPage = () => {
                 data: (data.data as Timestamp).toDate(),
                 tipoGiornata: tipoGiornata,
                 destinazione: destinazione || 'Non trovato',
+                presenze: presenzeArricchite,
             } as EnrichedRapportino;
         });
 
@@ -79,11 +87,10 @@ const ReportListPage = () => {
       setLoading(false);
     });
 
-    // Cleanup listener on component unmount
     return () => unsubscribe();
-  }, [user, masterDataLoading, masterData]); // CORREZIONE: Dipendenze aggiornate
+  }, [user, masterDataLoading, masterData]);
 
-  const isLoading = loading || masterDataLoading; // CORREZIONE: Logica di caricamento aggiornata
+  const isLoading = loading || masterDataLoading;
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3 } }}>

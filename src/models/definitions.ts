@@ -1,59 +1,59 @@
+
 import { Timestamp } from 'firebase/firestore';
 
-// ==========================================================================
-// --- INTERFACCE DI BASE PER COLLEZIONI FIRESTORE ---
-// ==========================================================================
+// =========================================================================
+// --- INTERFACCE DI BASE E GENERICHE ---
+// =========================================================================
 
 export interface BaseEntity {
     id: string;
 }
 
-/**
- * @description La struttura dati DEFINITIVA per un documento nella collezione /rapportini.
- * @version 4.0 - Allineata con ISTRUZIONI_TECNICI.md v4.0
- */
-export interface Rapportino extends BaseEntity {
-  // --- Campi Fondamentali ---
-  nome: string; // Es. "Rapportino giornaliero" o "Rapportino di periodo"
-  data: Timestamp;
-  tecnicoId: string; // UID del tecnico che compila (autore)
-  tipoGiornataId: string;
-
-  // --- Gestione Presenze e Ore ---
-  presenze: string[]; // Array di UID di tutti i tecnici presenti (incluso l'autore)
-  oreLavoro: number; // Somma totale delle ore di tutti i tecnici o ore personali se estratte.
-  dettaglioOreTecnici?: { tecnicoId: string; ore: number; }[];
-  altriTecniciIds?: string[];
-
-  // --- Dettagli Orari (per giornate lavorative standard) ---
-  isTrasferta?: boolean;
-  oraInizio?: string | null;
-  oraFine?: string | null;
-  pausa?: number | null;
-  
-  // --- Dettagli Descrittivi (per giornate lavorative) ---
-  descrizioneBreve?: string;
-  lavoroEseguito?: string;
-  materialiImpiegati?: string;
-
-  // --- Riferimenti Anagrafici (per giornate lavorative) ---
-  veicoloId?: string | null;
-  naveId?: string | null;
-  luogoId?: string | null;
-
-  // --- Timestamps Automatici ---
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
+// Interfaccia generica per elementi di anagrafica o dropdown.
+export interface GenericItem extends BaseEntity {
+    nome: string;
+    [key: string]: any;
 }
 
-// --- ALTRE COLLEZIONI DI ROOT ---
+// =========================================================================
+// --- ANAGRAFICHE PRINCIPALI (Collezioni di Root) ---
+// =========================================================================
+
+export interface Cliente extends GenericItem {}
+export interface Sede extends GenericItem {}
+export interface Ditta extends GenericItem {}
+export interface Categoria extends GenericItem {}
+export interface Luogo extends GenericItem {}
+export interface Nave extends GenericItem {}
+export interface Documento extends GenericItem {}
+
+export interface Veicolo extends GenericItem {
+  targa?: string;
+}
 
 export interface Tecnico extends BaseEntity {
   nome: string;
   cognome: string;
   email: string;
   attivo?: boolean;
-  [key: string]: any; // Per altri campi non strettamente definiti
+  [key: string]: any;
+}
+
+export interface TipoGiornata extends BaseEntity {
+  nome: string;
+  colore: string;
+  lavorativo: boolean;
+  icona: string;
+  sigla: string;
+}
+
+export interface Notifica extends BaseEntity {
+    title: string;
+    body: string;
+    recipientId: string;
+    senderId: string;
+    createdAt: Timestamp;
+    readBy: { [key: string]: boolean };
 }
 
 export interface UserProfile extends BaseEntity {
@@ -64,49 +64,98 @@ export interface UserProfile extends BaseEntity {
     ruolo?: string;
 }
 
-export interface Veicolo extends BaseEntity {
-  nome: string;
-  targa?: string;
-  [key: string]: any;
+// =========================================================================
+// --- OGGETTO DATI MASTER (Single Source of Truth per Anagrafiche) ---
+// =========================================================================
+export interface MasterData {
+    tecnici: Tecnico[];
+    clienti: Cliente[];
+    sedi: Sede[];
+    tipiGiornata: TipoGiornata[];
+    veicoli: Veicolo[];
+    luoghi: Luogo[];
+    navi: Nave[];
+    ditte: Ditta[];
+    categorie: Categoria[];
 }
 
-export interface Nave extends BaseEntity {
-  nome: string;
+// =========================================================================
+// --- TIPI PER LA GESTIONE DI FORM E ANAGRAFICHE ---
+// =========================================================================
+
+export interface FormField {
+    name: string;
+    label: string;
+    type: 'text' | 'select' | 'date' | 'number' | 'textarea';
+    options?: GenericItem[];
+    required?: boolean;
 }
 
-export interface Luogo extends BaseEntity {
+export interface BaseAnagrafica extends GenericItem {}
+export interface Anagrafica extends BaseAnagrafica {}
+
+
+// =========================================================================
+// --- INTERFACCIA PRINCIPALE: RAPPORTINO ---
+// =========================================================================
+
+export interface Rapportino extends BaseEntity {
+  // --- Campi Fondamentali ---
   nome: string;
+  data: Timestamp;
+  tecnicoId: string;
+  tipoGiornataId: string;
+
+  // --- Gestione Periodo (per ferie, malattia, etc.) ---
+  dataInizio?: Timestamp;
+  dataFine?: Timestamp;
+
+  // --- Gestione Presenze e Ore ---
+  presenze: string[];
+  oreLavoro: number;
+  dettaglioOreTecnici?: { tecnicoId: string; ore: number; }[];
+  altriTecniciIds?: string[];
+
+  // --- Dettagli Orari ---
+  isTrasferta?: boolean;
+  oraInizio?: string | null;
+  oraFine?: string | null;
+  pausa?: number | null;
+  
+  // --- Dettagli Descrittivi ---
+  descrizioneBreve?: string;
+  lavoroEseguito?: string;
+  materialiImpiegati?: string;
+
+  // --- Riferimenti Anagrafici ---
+  veicoloId?: string | null;
+  naveId?: string | null;
+  luogoId?: string | null;
+  clienteId?: string | null;
+  sedeId?: string | null;
+
+  // --- Timestamps Automatici ---
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
 }
 
-export interface TipoGiornata extends BaseEntity {
-  nome: string;
-  colore: string;
-  lavorativo: boolean;
-  icona: string;
-}
+export interface Report extends Rapportino {}
 
-export interface Notifica extends BaseEntity {
-    title: string;
-    body: string;
-    recipientId: string;
-    senderId: string;
-    createdAt: Timestamp;
-    isRead: boolean;
-  }
-
-// ==========================================================================
+// =========================================================================
 // --- TIPI "ARRICCHITI" PER LA VISUALIZZAZIONE NELL'UI ---
-// ==========================================================================
+// =========================================================================
 
-/**
- * @description Rappresenta un Rapportino dopo che è stato processato per la UI,
- * con i dati correlati (denormalizzati) come oggetti completi.
- */
-export interface EnrichedRapportino extends Omit<Rapportino, 'data'> {
-  data: Date; // Timestamp convertito in oggetto Date
-  tipoGiornata: TipoGiornata; // Oggetto TipoGiornata completo
-  tecnicoScrivente?: Tecnico; // Oggetto Tecnico dell'autore
-  presenze?: Tecnico[]; // Array di oggetti Tecnico completi
-  destinazione?: string; // Nome della nave o del luogo
-  guadagno?: number; // Per calcoli finanziari nel report mensile
+export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiornataId' | 'presenze'> {
+  data: Date;
+  tipoGiornata: TipoGiornata;
+  tecnicoScrivente?: Tecnico;
+  presenze: Tecnico[];
+  destinazione?: string;
+  guadagno?: number;
+  cliente?: Cliente;
+  sede?: Sede;
+  nave?: Nave;
+  luogo?: Luogo;
 }
+
+export interface EnrichedReport extends EnrichedRapportino {}

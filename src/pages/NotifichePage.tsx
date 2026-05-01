@@ -1,6 +1,3 @@
-// CIAO. CORREGGO DI NUOVO IL CRASH DELLA UI (TypeError).
-// Questa è una misura di sicurezza per assicurarci di vedere il vero errore.
-
 import React, { useEffect, useMemo } from 'react';
 import {
     Container,
@@ -23,18 +20,21 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 
 const NotifichePage: React.FC = () => {
-    const { userProfile } = useAuth();
+    const { user, userProfile } = useAuth();
     const { notifications, markAsRead, loading, error, deleteNotification } = useNotifications();
     const { showSnackbar } = useSnackbar();
 
     useEffect(() => {
-        if (!loading && notifications.length > 0) {
-            const unreadNotifications = notifications.filter(n => !n.isRead);
+        if (!loading && notifications.length > 0 && user) {
+            // Identifica le notifiche non lette DALL'UTENTE CORRENTE
+            const unreadNotifications = notifications.filter(n => !n.readBy || !n.readBy[user.uid]);
+            // Segna come lette solo quelle non ancora lette
             unreadNotifications.forEach(n => {
-                markAsRead(n.id).catch(err => console.error("Errore update lettura:", err));
+                markAsRead(n.id).catch(err => console.error("Errore durante l'aggiornamento della notifica come letta:", err));
             });
         }
-    }, [notifications, loading, markAsRead]);
+        // La dipendenza da `user` assicura che il codice venga eseguito solo quando l'utente è definito.
+    }, [notifications, loading, markAsRead, user]);
 
     const handleDelete = async (id: string) => {
         try {
@@ -46,13 +46,20 @@ const NotifichePage: React.FC = () => {
         }
     };
 
-    const formattaData = (date: Date | any) => {
-        if (!date) return 'Data non disponibile';
-        const dateObj = date instanceof Date ? date : new Date(date);
-        if (isNaN(dateObj.getTime())) return 'Data invalida';
-        return dateObj.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    // Funzione per formattare il Timestamp di Firestore
+    const formattaData = (timestamp: any): string => {
+        if (!timestamp || typeof timestamp.toDate !== 'function') {
+            return 'Data non disponibile';
+        }
+        try {
+            const date = timestamp.toDate();
+            return date.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            console.error("Errore formattazione data:", e);
+            return 'Data invalida';
+        }
     };
-
+    
     const firestoreLink = useMemo(() => {
         if (typeof error !== 'string') return null;
         const urlRegex = /(https?:\/\/[^\s]+)/;
@@ -122,45 +129,48 @@ const NotifichePage: React.FC = () => {
                             <Typography color="text.secondary">Non ci sono nuove notifiche per te.</Typography>
                         </ListItem>
                     ) : (
-                        notifications.map((notifica, index) => (
-                            <React.Fragment key={notifica.id}>
-                                <ListItem
-                                    alignItems="flex-start"
-                                    sx={{ py: 2, px: 3, transition: 'background-color 0.2s', '&:hover': { bgcolor: 'action.hover' } }}
-                                    secondaryAction={
-                                        <Tooltip title="Elimina notifica">
-                                            <IconButton edge="end" aria-label="delete" onClick={() => handleDelete(notifica.id)}>
-                                                <DeleteIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    }
-                                >
-                                    {!notifica.isRead && (
-                                        <Box sx={{ mr: 2, mt: 0.5 }}>
-                                            <CircleIcon sx={{ fontSize: 12, color: 'primary.main' }} />
-                                        </Box>
-                                    )}
-                                    <ListItemText
-                                        primary={
-                                            <Typography variant="subtitle1" sx={{ fontWeight: !notifica.isRead ? 700 : 500, color: !notifica.isRead ? 'primary.dark' : 'text.primary' }}>
-                                                {notifica.title}
-                                            </Typography>
+                        notifications.map((notifica, index) => {
+                            const isUnread = user ? (!notifica.readBy || !notifica.readBy[user.uid]) : false;
+                            return (
+                                <React.Fragment key={notifica.id}>
+                                    <ListItem
+                                        alignItems="flex-start"
+                                        sx={{ py: 2, px: 3, transition: 'background-color 0.2s', '&:hover': { bgcolor: 'action.hover' }, bgcolor: isUnread ? 'action.selected' : 'transparent' }}
+                                        secondaryAction={
+                                            <Tooltip title="Elimina notifica">
+                                                <IconButton edge="end" aria-label="delete" onClick={() => handleDelete(notifica.id)}>
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
                                         }
-                                        secondary={
-                                            <>
-                                                <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', my: 0.5, whiteSpace: 'pre-wrap' }}>
-                                                    {notifica.body}
+                                    >
+                                        {isUnread && (
+                                            <Box sx={{ mr: 2, mt: 0.5 }}>
+                                                <CircleIcon sx={{ fontSize: 12, color: 'primary.main' }} />
+                                            </Box>
+                                        )}
+                                        <ListItemText
+                                            primary={
+                                                <Typography variant="subtitle1" sx={{ fontWeight: isUnread ? 700 : 500, color: isUnread ? 'primary.dark' : 'text.primary' }}>
+                                                    {notifica.title}
                                                 </Typography>
-                                                <Typography component="span" variant="caption" color="text.secondary">
-                                                    {formattaData(notifica.createdAt)}
-                                                </Typography>
-                                            </>
-                                        }
-                                    />
-                                </ListItem>
-                                {index < notifications.length - 1 && <Divider component="li" />}
-                            </React.Fragment>
-                        ))
+                                            }
+                                            secondary={
+                                                <>
+                                                    <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', my: 0.5, whiteSpace: 'pre-wrap' }}>
+                                                        {notifica.body}
+                                                    </Typography>
+                                                    <Typography component="span" variant="caption" color="text.secondary">
+                                                        {formattaData(notifica.createdAt)}
+                                                    </Typography>
+                                                </>
+                                            }
+                                        />
+                                    </ListItem>
+                                    {index < notifications.length - 1 && <Divider component="li" />}
+                                </React.Fragment>
+                            );
+                        })
                     )}
                 </List>
             </Paper>
