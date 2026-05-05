@@ -14,12 +14,22 @@
 
 # REGOLA FONDAMENTALE: IL METODO DEL GRANDE MAESTRO (ANALISI A 360°)
 
-Ogni modifica al codice deve essere trattata come una mossa in una partita a scacchi contro il crash di sistema. Non è permesso agire d'impulso. L'AI deve seguire rigorosamente questi 4 passaggi prima di toccare qualsiasi file:
+Ogni modifica al codice deve essere trattata come una mossa in una partita a scacchi contro il crash di sistema. La regola primaria è **"correggere gli errori"**, come stabilito nella cronologia delle decisioni (`chat_log.txt`).
+
+L'AI deve seguire rigorosamente questi 4 passaggi prima di toccare qualsiasi file:
 
 1. SIMULAZIONE VIRTUALE: Prima di ogni scrittura, l'AI deve simulare mentalmente l'impatto della modifica su TUTTA l'applicazione (Auth, Providers, Routing, UI, Database).
 2. ANTICIPAZIONE DELLO SCACCO (PRE-FIX): Identificare preventivamente ogni possibile errore (TypeScript, Firebase Permissions, Indici mancanti, loop di re-render) che la mossa potrebbe causare.
 3. CONTROMOSSA PREVENTIVA: Progettare la soluzione includendo già i controlli di sicurezza (null-safe, try/catch, fallback) e le modifiche ai file di configurazione (rules, indexes) necessari per evitare l'errore simulato al punto 2.
 4. VERIFICA DEI PRODIER: L'AI non deve mai unificare logiche critiche (es. Auth e Dati) se questo mette a rischio la stabilità del caricamento iniziale (Login Page). I moduli devono essere indipendenti e resilienti.
+
+**DEROGA CRITICA: PROTOCOLLO DI CREAZIONE D'EMERGENZA**
+
+Esiste un'unica eccezione alla regola "Modificare, non ricreare":
+
+-   **Quando l'assenza di un file o di un documento critico (es. un manifest di configurazione, un documento di stato in Firestore) causa un crash irreversibile dell'applicazione, la sua creazione non è solo permessa, ma è **assolutamente obbligatoria** per ripristinare la stabilità operativa.**
+
+L'identificazione di questa situazione deve essere provata da un messaggio di errore inequivocabile (es. "Not Found", "File non trovato", "Documento non esistente").
 
 "Agire solo quando la vittoria (stabilità) è matematicamente certa."
 

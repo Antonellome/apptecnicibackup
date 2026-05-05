@@ -17,8 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 
 const LoginPage = () => {
   const { user, loading: authLoading } = useAuth();
-  const [email, setEmail] = useState('antonio.scuderi@gmail.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);

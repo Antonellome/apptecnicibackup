@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -20,7 +21,7 @@ import {
 import { doc, onSnapshot, collection, query, where, Timestamp, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, isBefore, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import ReportMensileDialog from '@/components/ReportMensileDialog';
 import { Rapportino, Tecnico, EnrichedRapportino, TipoGiornata } from '@/models/definitions';
@@ -136,6 +137,12 @@ const MonthlyReportPage = () => {
   const handleMonthChange = (increment: number) => {
     setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + increment, 1));
   };
+
+  // Logica per disabilitare i pulsanti
+  const today = new Date();
+  const minDate = startOfMonth(subMonths(today, 2));
+  const isNextButtonDisabled = isSameMonth(currentMonth, today);
+  const isPrevButtonDisabled = isSameMonth(currentMonth, minDate) || isBefore(currentMonth, minDate);
   
   const renderContent = () => {
       if (loading || masterDataLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
@@ -152,15 +159,15 @@ const MonthlyReportPage = () => {
               <CardContent>
                 <Typography variant="h5" component="div" gutterBottom>Riepilogo Ore</Typography>
                 <Grid container spacing={2}>
-                   <Grid size={{ xs: 12, sm: 4 }}><Typography variant="h6">{summary.totalOreLavoro.toFixed(2)}</Typography><Typography color="text.secondary">Ore Lavorate</Typography></Grid>
-                   <Grid size={{ xs: 12, sm: 4 }}><Typography variant="h6">{summary.totalGiorniFerie}</Typography><Typography color="text.secondary">Giorni di Ferie</Typography></Grid>
-                   <Grid size={{ xs: 12, sm: 4 }}><Typography variant="h6">{summary.totalGiorniAltro}</Typography><Typography color="text.secondary">Altri Giorni di Assenza</Typography></Grid>
+                   <Grid item xs={12} sm={4}><Typography variant="h6">{summary.totalOreLavoro.toFixed(2)}</Typography><Typography color="text.secondary">Ore Lavorate</Typography></Grid>
+                   <Grid item xs={12} sm={4}><Typography variant="h6">{summary.totalGiorniFerie}</Typography><Typography color="text.secondary">Giorni di Ferie</Typography></Grid>
+                   <Grid item xs={12} sm={4}><Typography variant="h6">{summary.totalGiorniAltro}</Typography><Typography color="text.secondary">Altri Giorni di Assenza</Typography></Grid>
                 </Grid>
                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>Ultimo agg: {summary.updatedAt ? format(summary.updatedAt.toDate(), 'dd/MM/yyyy HH:mm') : 'N/A'}</Typography>
               </CardContent>
             </Card>
           ) : (
-            <Alert severity="info">Nessun dato di riepilogo trovato per questo mese. Prova a creare o modificare un rapportino per avviare il calcolo automatico.</Alert>
+            null
           )}
           {!detailsVisible ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}><Button variant="text" onClick={handleShowDetails}>Mostra Dettaglio Giornaliero</Button></Box>
@@ -203,9 +210,9 @@ const MonthlyReportPage = () => {
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>Report Mensile</Typography>
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
+        <Button variant="outlined" onClick={() => handleMonthChange(-1)} disabled={isPrevButtonDisabled}>Mese Prec.</Button>
         <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
-        <Button variant="outlined" onClick={() => handleMonthChange(1)}>Mese Succ.</Button>
+        <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
       </Paper>
       {renderContent()}
     </Box>

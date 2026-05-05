@@ -12,7 +12,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
-import { isBefore, startOfDay, parseISO } from 'date-fns';
+import { isSameMonth, subMonths, isBefore, startOfDay, parseISO } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/contexts/MasterDataProvider';
 import { db as firestoreDb } from '@/firebase';
@@ -137,20 +137,24 @@ const ReportFormPage: React.FC = () => {
                     setDettaglioOre(dettagliCaricati);
 
                     const today = new Date();
+                    const isGracePeriod = today.getDate() <= 10;
+                    const isReportInCurrentMonth = isSameMonth(reportDate, today);
+                    const isReportInPreviousMonth = isSameMonth(reportDate, subMonths(today, 1));
+
                     let isLocked = false;
                     let reason = '';
                     if (reportData.tecnicoId !== loggedInTecnicoId) {
                         isLocked = true;
                         reason = "Rapportino bloccato: non sei l'autore originale.";
-                    } else if (reportDate.getMonth() !== today.getMonth() || reportDate.getFullYear() !== today.getFullYear()) {
+                    } else if (!isReportInCurrentMonth && !(isGracePeriod && isReportInPreviousMonth)) {
                         isLocked = true;
-                        reason = "Rapportino bloccato: puoi modificare solo i report del mese corrente.";
+                        reason = "Rapportino bloccato: puoi modificare solo i report del mese corrente (o del mese precedente entro i primi 10 giorni).";
                     }
                     setIsReadOnly(isLocked);
                     setLockReason(reason);
 
                 } else {
-                    memoizedShowSnackbar("Rapportino non trovato.", "error");
+                    memoizedShowSnackbar("Report non trovato.", "error");
                     navigate('/lista-report');
                 }
             } catch (e) {
@@ -255,7 +259,7 @@ const ReportFormPage: React.FC = () => {
                 }
 
                 const rapportinoData: Partial<Rapportino> = {
-                    nome: 'Rapportino di periodo',
+                    nome: 'Report di periodo',
                     tipoGiornataId,
                     data: Timestamp.fromDate(dataInizio), 
                     dataInizio: Timestamp.fromDate(dataInizio),
@@ -279,10 +283,10 @@ const ReportFormPage: React.FC = () => {
 
                 if (isOnline) {
                     await addDoc(collection(firestoreDb, 'rapportini'), { ...rapportinoData, createdAt: Timestamp.now() });
-                    memoizedShowSnackbar("Rapportino di periodo creato con successo!", "success");
+                    memoizedShowSnackbar("Report di periodo creato con successo!", "success");
                 } else {
                     await aggiungiAllaCoda(rapportinoData as Omit<RapportinoInSospeso, 'localId'>);
-                    memoizedShowSnackbar("Sei offline. Il rapportino di periodo è stato salvato e sarà inviato più tardi.", "info");
+                    memoizedShowSnackbar("Sei offline. Il report di periodo è stato salvato e sarà inviato più tardi.", "info");
                 }
                 navigate('/lista-report');
 
@@ -292,7 +296,7 @@ const ReportFormPage: React.FC = () => {
                 const oreLavoroTotali = dettaglioOreTecniciToSave.reduce((sum, item) => sum + item.ore, 0);
 
                 let rapportinoData: Partial<Rapportino> = {
-                    nome: 'Rapportino giornaliero',
+                    nome: 'Report giornaliero',
                     data: Timestamp.fromDate(data!),
                     tipoGiornataId,
                     tecnicoId: loggedInTecnicoId,
@@ -323,10 +327,10 @@ const ReportFormPage: React.FC = () => {
                 if (isOnline) {
                     if (isEditMode) {
                         await updateDoc(doc(firestoreDb, 'rapportini', reportId!), { ...rapportinoData, updatedAt: Timestamp.now() });
-                        memoizedShowSnackbar("Rapportino aggiornato con successo!", "success");
+                        memoizedShowSnackbar("Report aggiornato con successo!", "success");
                     } else {
                         await addDoc(collection(firestoreDb, 'rapportini'), { ...rapportinoData, createdAt: Timestamp.now() });
-                        memoizedShowSnackbar("Rapportino creato con successo!", "success");
+                        memoizedShowSnackbar("Report creato con successo!", "success");
                     }
                 } else {
                     if (isEditMode) {
@@ -335,7 +339,7 @@ const ReportFormPage: React.FC = () => {
                         return;
                     }
                     await aggiungiAllaCoda(rapportinoData as Omit<RapportinoInSospeso, 'localId'>);
-                    memoizedShowSnackbar("Sei offline. Il rapportino è stato salvato localmente e sarà inviato più tardi.", "info");
+                    memoizedShowSnackbar("Sei offline. Il report è stato salvato localmente e sarà inviato più tardi.", "info");
                 }
                 navigate('/lista-report');
             }
@@ -355,7 +359,7 @@ const ReportFormPage: React.FC = () => {
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
             <Box sx={{ p: { xs: 2, sm: 3 }, mx: 'auto' }}>
                 <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, maxHeight: '90vh', overflowY: 'auto' }}>
-                    <Typography variant="h4" component="h1" gutterBottom>{isEditMode ? 'Dettaglio' : 'Nuovo'} Rapportino</Typography>
+                    <Typography variant="h4" component="h1" gutterBottom>{isEditMode ? 'Dettaglio' : 'Nuovo'} Report</Typography>
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
                     <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 2 }}>
                          {!isEditMode && ( <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', mt: 1 }}> <FormControlLabel control={<Switch checked={isPeriodo} onChange={e => setIsPeriodo(e.target.checked)} disabled={isSaving} />} label="Inserisci per un periodo di più giorni" /> </Alert> )}

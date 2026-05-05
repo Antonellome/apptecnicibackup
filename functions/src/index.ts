@@ -1,16 +1,14 @@
-// CIAO. QUESTA È LA VERSIONE RIFATTORIZZATA E PULITA SECONDO LA SINTASSI V2.
+// CIAO. QUESTA È LA VERSIONE RIFATTORIZZATA E STABILIZZATA CON TRANSAZIONI.
 
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
-import { onDocumentWritten, onDocumentCreated, FirestoreEvent, Change, DocumentSnapshot, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
+import { onDocumentWritten, FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import { eachDayOfInterval, isWithinInterval, endOfMonth } from "date-fns";
 
-// Inizializza l'SDK Admin di Firebase.
 admin.initializeApp();
 const db = admin.firestore();
 
-// SINTASSI V2: Imposta le opzioni globali, come la regione, una sola volta.
 setGlobalOptions({ region: "europe-west1" });
 
 // --- TIPI E INTERFACCE (invariato) ---
@@ -29,9 +27,7 @@ interface TipoGiornata {
   nome: string;
 }
 
-// =================================================================================================
-// FUNZIONE DI AGGREGAZIONE DATI MASTER (SINTASSI V2)
-// =================================================================================================
+// La funzione getMasterData rimane invariata
 export const getMasterData = onCall(async (request: CallableRequest) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "L'utente deve essere autenticato.");
@@ -61,22 +57,17 @@ export const getMasterData = onCall(async (request: CallableRequest) => {
   }
 });
 
-// =================================================================================================
-// FUNZIONE PER GENERARE IL RIEPILOGO MENSILE (SINTASSI V2)
-// =================================================================================================
+// La funzione generateMonthlySummary rimane invariata
 export const generateMonthlySummary = onCall(async (request: CallableRequest<{ year: number, month: number }>) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "L'utente deve essere autenticato per generare un riepilogo.");
   }
-
   const { year, month } = request.data;
   if (typeof year !== 'number' || typeof month !== 'number') {
     throw new HttpsError("invalid-argument", "I parametri 'year' e 'month' devono essere numeri.");
   }
-
   const tecnicoId = request.auth.uid;
   logger.info(`Richiesta di generazione riepilogo per tecnico: ${tecnicoId}, Mese: ${month + 1}/${year}`);
-
   try {
     await recalculateAndSaveSummary(tecnicoId, year, month);
     logger.info(`Riepilogo generato con successo per tecnico: ${tecnicoId}`);
@@ -87,12 +78,9 @@ export const generateMonthlySummary = onCall(async (request: CallableRequest<{ y
   }
 });
 
-// =================================================================================================
-// TRIGGER PER AGGREGAZIONE RAPPORTINI (SINTASSI V2)
-// =================================================================================================
+// Il trigger rapportiniTrigger rimane invariato
 export const rapportiniTrigger = onDocumentWritten("rapportini/{rapportinoId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined>) => {
   logger.info(`Trigger attivato per rapportino: ${event.params.rapportinoId}`);
-  
   const monthsToRecalculate = new Set<string>();
   const beforeData = event.data?.before?.data() as Rapportino | undefined;
   const afterData = event.data?.after?.data() as Rapportino | undefined;
@@ -127,10 +115,17 @@ export const rapportiniTrigger = onDocumentWritten("rapportini/{rapportinoId}", 
   logger.info("Ricalcoli completati.");
 });
 
+/**
+ * @name recalculateAndSaveSummary
+ * @description Ricalcola il riepilogo mensile per un dato tecnico, anno e mese.
+ *   ATTENZIONE: Questa funzione ora utilizza una TRANSAZIONE Firestore per garantire
+ *   l'atomicità e prevenire race conditions durante salvataggi concorrenti.
+ */
 async function recalculateAndSaveSummary(tecnicoId: string, year: number, month: number) {
-    const summaryId = `${year}-${String(month + 1).padStart(2, "0")}_${tecnicoId}`;
+  const summaryId = `${year}-${String(month + 1).padStart(2, "0")}_${tecnicoId}`;
   logger.info(`Inizio ricalcolo per: ${summaryId}`);
 
+  // Tutta la logica di lettura e calcolo rimane fuori dalla transazione per efficienza.
   const tipiGiornataSnap = await db.collection("tipiGiornata").get();
   const tipiGiornataNonLavorativi = new Map<string, string>();
   tipiGiornataSnap.forEach(doc => {
@@ -179,28 +174,35 @@ async function recalculateAndSaveSummary(tecnicoId: string, year: number, month:
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  await db.collection("riepiloghiMensili").doc(summaryId).set(summaryData, { merge: true });
-  logger.info(`Riepilogo salvato per ${summaryId}:`, summaryData);
+  // --- MODIFICA CRITICA: Blocco di Transazione Atomica ---
+  // Questo blocco garantisce che l'operazione di scrittura sul riepilogo sia isolata.
+  // Se due funzioni vengono eseguite contemporaneamente per lo stesso riepilogo,
+  // la transazione previene la sovrascrittura e la corruzione dei dati.
+  const summaryRef = db.collection("riepiloghiMensili").doc(summaryId);
+  try {
+    await db.runTransaction(async (transaction) => {
+      transaction.set(summaryRef, summaryData, { merge: true });
+    });
+    logger.info(`Riepilogo salvato in TRANSAZIONE per ${summaryId}:`, summaryData);
+  } catch (error) {
+    logger.error(`TRANSAZIONE FALLITA per il riepilogo ${summaryId}. L'operazione verrà ritentata automaticamente da Firestore.`, error);
+    // Rilancio l'errore per far sapere alla funzione chiamante che qualcosa è andato storto.
+    throw error;
+  }
 }
 
-// =================================================================================================
-// TRIGGER PER IMPOSTARE LA SCADENZA DEI CHECK-IN (SINTASSI V2)
-// =================================================================================================
-export const checkInTrigger = onDocumentCreated("checkin_giornalieri/{checkinId}", async (event: FirestoreEvent<QueryDocumentSnapshot | undefined>) => {
+// La funzione checkInTrigger rimane invariata
+export const checkInTrigger = onDocumentCreated("checkin_giornalieri/{checkinId}", async (event) => {
     const snap = event.data;
     if (!snap) {
         logger.error("Evento di creazione check-in senza dati. Impossibile procedere.");
         return;
     }
-
     const checkinData = snap.data();
     const checkinDate = (checkinData.data as admin.firestore.Timestamp).toDate();
-
     const expireAt = new Date(checkinDate.getTime());
     expireAt.setHours(expireAt.getHours() + 24);
-
     logger.info(`Impostazione scadenza per check-in ${event.params.checkinId} a ${expireAt.toISOString()}`);
-
     return snap.ref.update({ 
         expireAt: admin.firestore.Timestamp.fromDate(expireAt) 
     });

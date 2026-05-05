@@ -1,26 +1,33 @@
 
 /**
  * @file MasterDataProvider.tsx
- * @description Questo file definisce il provider per i "dati master", allineato all'architettura R.I.S.O.
+ * @description Provider per i dati master con caching automatico basato su versione (Sync Manifest).
  *
- * ARCHITETTURA RETTIFICATA:
- * Come da analisi e correzione di rotta, questo provider abbandona l'uso di Cloud Functions
- * per il recupero dati. Ora legge i dati anagrafici DIRETTAMENTE dalle collezioni Firestore.
- *
- * PRINCIPIO CHIAVE:
- * 1. EFFICIENZA: Utilizza Promise.all per eseguire query parallele e recuperare tutte le anagrafiche
- *    necessarie in un unico "giro" asincrono all'avvio dell'app.
- * 2. CENTRALIZZAZIONE: Rimane il Single Source of Truth per i dati master.
- * 3. DIPENDENZA DALL'AUTH: Il recupero si attiva solo dopo il login dell'utente.
+ * ARCHITETTURA SYNC MANIFEST:
+ * 1. CONTROLLO VERSIONE: All'avvio, il provider legge un documento 'config/app_state' in Firestore
+ *    per ottenere la versione corrente delle anagrafiche (`anagrafiche_version`).
+ * 2. CONFRONTO CON CACHE LOCALE: Confronta la versione remota con quella salvata nel localStorage.
+ * 3. EFFICIENZA MASSIMA: Se le versioni coincidono, i dati locali sono validi e l'app si avvia
+ *    istantaneamente senza scaricare nulla. Questo riduce le letture al minimo indispensabile (1 sola).
+ * 4. AGGIORNAMENTO AUTOMATICO: Se le versioni differiscono, il provider scarica tutte le anagrafiche,
+ *    le salva nel localStorage con la nuova versione e poi si avvia.
+ * 5. ROBUSTEZZA: Se il manifest non esiste, viene creato automaticamente con una versione di default.
+ * 6. REFETCH: La funzione `refetch` forza una nuova verifica della versione.
  */
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase'; // Accesso diretto al DB
-import { useAuth } from '@/contexts/AuthContext';
-// MODIFICA: Importa MasterData dal contratto globale e rimuove la definizione locale.
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/utils/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import { Tecnico, Cliente, Sede, TipoGiornata, Veicolo, Luogo, Nave, MasterData, Ditta, Categoria } from '@/models/definitions';
 
-// Interfaccia per il valore del contesto
+const CACHE_KEY = 'masterDataCache';
+const SYNC_MANIFEST_PATH = 'config/app_state';
+
+interface CachedData {
+    version: number;
+    data: MasterData;
+}
+
 interface MasterDataContextValue {
     masterData: MasterData | null;
     loading: boolean;
@@ -28,10 +35,8 @@ interface MasterDataContextValue {
     refetch: () => void;
 }
 
-// Creazione del contesto
 const MasterDataContext = createContext<MasterDataContextValue | undefined>(undefined);
 
-// Hook per l'utilizzo del contesto
 export const useMasterData = () => {
     const context = useContext(MasterDataContext);
     if (!context) {
@@ -40,7 +45,6 @@ export const useMasterData = () => {
     return context;
 };
 
-// Props del provider
 interface MasterDataProviderProps {
     children: ReactNode;
 }
@@ -52,70 +56,125 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
     const [error, setError] = useState<Error | null>(null);
     const [fetchTrigger, setFetchTrigger] = useState<number>(0);
 
-    const fetchMasterData = async () => {
-        if (!user) {
-            setLoading(false);
-            return;
+    const fetchMasterDataFromFirestore = useCallback(async (): Promise<MasterData> => {
+        const fetchCollection = async <T,>(collectionName: string): Promise<T[]> => {
+            const querySnapshot = await getDocs(collection(db, collectionName));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
         };
 
-        setLoading(true);
-        setError(null);
+        const [
+            tecnici,
+            clienti,
+            sedi,
+            tipiGiornata,
+            veicoli,
+            luoghi,
+            navi,
+            ditte,
+            categorie
+        ] = await Promise.all([
+            fetchCollection<Tecnico>('tecnici'),
+            fetchCollection<Cliente>('clienti'),
+            fetchCollection<Sede>('sedi'),
+            fetchCollection<TipoGiornata>('tipiGiornata'),
+            fetchCollection<Veicolo>('veicoli'),
+            fetchCollection<Luogo>('luoghi'),
+            fetchCollection<Nave>('navi'),
+            fetchCollection<Ditta>('ditte'),
+            fetchCollection<Categoria>('categorie'),
+        ]);
 
-        try {
-            // Funzione helper per recuperare una collezione
-            const fetchCollection = async <T,>(collectionName: string): Promise<T[]> => {
-                const querySnapshot = await getDocs(collection(db, collectionName));
-                return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
-            };
-
-            // Esecuzione delle query in parallelo
-            const [
-                tecnici,
-                clienti,
-                sedi,
-                tipiGiornata,
-                veicoli,
-                luoghi,
-                navi,
-                ditte,
-                categorie
-            ] = await Promise.all([
-                fetchCollection<Tecnico>('tecnici'),
-                fetchCollection<Cliente>('clienti'),
-                fetchCollection<Sede>('sedi'),
-                fetchCollection<TipoGiornata>('tipiGiornata'),
-                fetchCollection<Veicolo>('veicoli'),
-                fetchCollection<Luogo>('luoghi'),
-                fetchCollection<Nave>('navi'),
-                fetchCollection<Ditta>('ditte'),
-                fetchCollection<Categoria>('categorie'),
-            ]);
-
-            setMasterData({
-                tecnici,
-                clienti,
-                sedi,
-                tipiGiornata,
-                veicoli,
-                luoghi,
-                navi,
-                ditte,
-                categorie,
-            });
-
-        } catch (err) {
-            console.error("MasterDataProvider: Errore nel recupero dei dati master.", err);
-            setError(err instanceof Error ? err : new Error('Errore sconosciuto nel recupero dei dati master'));
-        } finally {
-            setLoading(false);
-        }
-    };
+        return {
+            tecnici,
+            clienti,
+            sedi,
+            tipiGiornata,
+            veicoli,
+            luoghi,
+            navi,
+            ditte,
+            categorie,
+        };
+    }, []);
 
     useEffect(() => {
-        fetchMasterData();
-    }, [user, fetchTrigger]);
+        if (!user) {
+            setLoading(false);
+            setMasterData(null);
+            localStorage.removeItem(CACHE_KEY);
+            return;
+        }
 
-    const refetch = () => setFetchTrigger(prev => prev + 1);
+        const syncAndLoadData = async () => {
+            setLoading(true);
+            setError(null);
+
+            try {
+                // 1. Leggi o crea il Sync Manifest
+                const manifestDocRef = doc(db, SYNC_MANIFEST_PATH);
+                const manifestSnap = await getDoc(manifestDocRef);
+                let remoteVersion: number;
+
+                if (!manifestSnap.exists() || !manifestSnap.data()?.anagrafiche_version) {
+                    console.warn(`[Sync] Manifest non trovato o corrotto in '${SYNC_MANIFEST_PATH}'. Verrà creato con v1.`);
+                    remoteVersion = 1; // Versione di fallback
+                    try {
+                        await setDoc(manifestDocRef, { anagrafiche_version: remoteVersion, createdAt: new Date() });
+                        console.log(`[Sync] Nuovo manifest creato con successo in '${SYNC_MANIFEST_PATH}'.`);
+                    } catch (creationError) {
+                         console.error(`[Sync] Errore critico durante la creazione del manifest in '${SYNC_MANIFEST_PATH}'.`, creationError);
+                         throw new Error(`Impossibile creare il Sync Manifest. Causa: ${creationError.message}`);
+                    }
+                } else {
+                    remoteVersion = manifestSnap.data().anagrafiche_version as number;
+                }
+
+                // 2. Leggi la versione locale dal cache
+                let localVersion: number | null = null;
+                let cachedData: MasterData | null = null;
+                const cachedItem = localStorage.getItem(CACHE_KEY);
+                if (cachedItem) {
+                    try {
+                        const parsedCache = JSON.parse(cachedItem) as CachedData;
+                        localVersion = parsedCache.version;
+                        cachedData = parsedCache.data;
+                    } catch (e) {
+                        console.warn("[Cache] Cache locale corrotto. Verrà forzato l'aggiornamento.");
+                        localStorage.removeItem(CACHE_KEY); // Rimuovi cache corrotta
+                    }
+                }
+
+                // 3. Confronta le versioni e decidi se aggiornare
+                if (localVersion === remoteVersion && cachedData) {
+                    console.log(`[Sync] Anagrafiche v${localVersion} valide. Caricamento da cache.`);
+                    setMasterData(cachedData);
+                } else {
+                    console.log(`[Sync] Versione cache non valida (locale: v${localVersion}, remota: v${remoteVersion}). Scarico da Firestore.`);
+                    const freshData = await fetchMasterDataFromFirestore();
+                    setMasterData(freshData);
+
+                    // 4. Aggiorna la cache locale con i nuovi dati e la nuova versione
+                    const newCachePayload: CachedData = { version: remoteVersion, data: freshData };
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(newCachePayload));
+                    console.log(`[Sync] Cache aggiornata alla v${remoteVersion}.`);
+                }
+
+            } catch (err) {
+                console.error("MasterDataProvider: Errore durante il processo di sincronizzazione.", err);
+                setError(err instanceof Error ? err : new Error('Errore sconosciuto nel recupero dati'));
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        syncAndLoadData();
+
+    }, [user, fetchTrigger, fetchMasterDataFromFirestore]);
+
+    const refetch = useCallback(() => {
+        console.log("[Sync] Richiesta di riverifica della versione anagrafiche.");
+        setFetchTrigger(prev => prev + 1);
+    }, []);
 
     const value = { masterData, loading, error, refetch };
 

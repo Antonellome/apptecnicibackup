@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,9 +13,11 @@ import {
   Paper,
   ListItemButton,
   Divider,
-  Chip
+  Chip,
+  IconButton,
 } from '@mui/material';
-import { format } from 'date-fns';
+import { Lock as LockIcon } from '@mui/icons-material';
+import { format, startOfMonth, endOfMonth, subMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
@@ -27,6 +30,7 @@ const ReportListPage = () => {
   const { user } = useAuth();
   const { masterData, loading: masterDataLoading } = useMasterData();
   
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [rapportini, setRapportini] = useState<EnrichedRapportino[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,9 +49,14 @@ const ReportListPage = () => {
 
     setLoading(true);
 
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
+
     const q = query(
       collection(db, "rapportini"), 
       where("presenze", "array-contains", user.uid),
+      where("data", ">=", Timestamp.fromDate(start)),
+      where("data", "<=", Timestamp.fromDate(end)),
       orderBy("data", "desc")
     );
 
@@ -58,16 +67,27 @@ const ReportListPage = () => {
         const luoghiMap = new Map(masterData.luoghi.map(l => [l.id, l.nome]));
         const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
 
+        const today = new Date();
+        const isGracePeriod = today.getDate() <= 10;
+        const currentMonthDate = today;
+        const previousMonthDate = subMonths(today, 1);
+
         const enrichedData = querySnapshot.docs.map(doc => {
             const data = doc.data() as Rapportino;
+            const reportDate = (data.data as Timestamp).toDate();
             const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Non Definito', colore: '#808080' };
             const destinazione = data.naveId ? naviMap.get(data.naveId) : (data.luogoId ? luoghiMap.get(data.luogoId) : 'Nessuna');
             const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
+            
+            const isReportInCurrentMonth = isSameMonth(reportDate, currentMonthDate);
+            const isReportInPreviousMonth = isSameMonth(reportDate, previousMonthDate);
+            const isEditable = isReportInCurrentMonth || (isGracePeriod && isReportInPreviousMonth);
 
             return {
                 ...data,
                 id: doc.id,
-                data: (data.data as Timestamp).toDate(),
+                data: reportDate,
+                isEditable: isEditable,
                 tipoGiornata: tipoGiornata,
                 destinazione: destinazione || 'Non trovato',
                 presenze: presenzeArricchite,
@@ -88,7 +108,16 @@ const ReportListPage = () => {
     });
 
     return () => unsubscribe();
-  }, [user, masterDataLoading, masterData]);
+  }, [user, masterDataLoading, masterData, currentMonth]);
+  
+  const handleMonthChange = (increment: number) => {
+      setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + increment, 1));
+  };
+
+  const today = new Date();
+  const minDate = startOfMonth(subMonths(today, 2));
+  const isNextButtonDisabled = isSameMonth(currentMonth, today);
+  const isPrevButtonDisabled = isSameMonth(currentMonth, minDate);
 
   const isLoading = loading || masterDataLoading;
 
@@ -96,12 +125,18 @@ const ReportListPage = () => {
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
-          I Miei Rapportini
+          I Miei Report
         </Typography>
         <Button variant="contained" color="primary" size="large" onClick={() => navigate('/nuovo-report')}>
           Nuovo
         </Button>
       </Box>
+
+      <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Button variant="outlined" onClick={() => handleMonthChange(-1)} disabled={isPrevButtonDisabled}>Mese Prec.</Button>
+        <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
+        <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
+      </Paper>
       
       {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4}}>
@@ -120,23 +155,28 @@ const ReportListPage = () => {
               rapportini.map((report, index) => (
                   <Box key={report.id}>
                     <ListItem 
-                        component={ListItemButton}
-                        onClick={() => navigate(`/report/edit/${report.id}`)}
+                        component={report.isEditable ? ListItemButton : 'div'}
+                        onClick={report.isEditable ? () => navigate(`/report/edit/${report.id}`) : undefined}
+                        sx={{ opacity: report.isEditable ? 1 : 0.7 }}
+                        secondaryAction={
+                            report.isEditable ? (
+                                <Typography variant="body2" color="text.secondary" sx={{pr: 2}}>
+                                    {report.tipoGiornata.nome}
+                                </Typography>
+                            ) : (
+                                <IconButton edge="end" aria-label="locked" disabled>
+                                    <LockIcon />
+                                </IconButton>
+                            )
+                        }
                     >
                       <ListItemText 
                         primaryTypographyProps={{ fontWeight: '500' }}
                         secondaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
                         primary={
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography variant="subtitle1" component="span">
-                                    {report.descrizioneBreve || report.destinazione}
-                                </Typography>
-                                <Chip 
-                                    label={report.tipoGiornata.nome} 
-                                    size="small"
-                                    sx={{ backgroundColor: report.tipoGiornata.colore, color: 'white' }}
-                                />
-                            </Box>
+                            <Typography variant="subtitle1" component="span">
+                                {report.descrizioneBreve || report.destinazione}
+                            </Typography>
                         }
                         secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })} - Ore: ${report.oreLavoro.toFixed(2)}`}
                       />
@@ -146,7 +186,7 @@ const ReportListPage = () => {
               ))
             ) : (
               <Typography sx={{ textAlign: 'center', p: 4, fontStyle: 'italic', color: 'text.secondary' }}>
-                Nessun rapportino trovato per te.
+                Nessun report trovato per il mese selezionato.
               </Typography>
             )}
           </List>
