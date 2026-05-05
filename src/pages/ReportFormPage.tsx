@@ -258,6 +258,21 @@ const ReportFormPage: React.FC = () => {
                     return;
                 }
 
+                const selectedTipo = tipiGiornata.find(t => t.id === tipoGiornataId);
+                const tipoNome = selectedTipo?.nome.toLowerCase() || '';
+                
+                let oreDaAssegnare = 0;
+                if (tipoNome.includes('ferie') || tipoNome.includes('malattia')) {
+                    oreDaAssegnare = 8;
+                }
+
+                const dettaglioOreTecniciToSave = dettaglioOre.map(d => ({
+                    tecnicoId: d.tecnicoId,
+                    ore: oreDaAssegnare
+                }));
+            
+                const oreLavoroTotali = dettaglioOreTecniciToSave.reduce((sum, item) => sum + item.ore, 0);
+
                 const rapportinoData: Partial<Rapportino> = {
                     nome: 'Report di periodo',
                     tipoGiornataId,
@@ -265,8 +280,9 @@ const ReportFormPage: React.FC = () => {
                     dataInizio: Timestamp.fromDate(dataInizio),
                     dataFine: Timestamp.fromDate(dataFine),
                     tecnicoId: loggedInTecnicoId,
-                    presenze: [loggedInTecnicoId],
-                    oreLavoro: 0,
+                    presenze: dettaglioOre.map(d => d.tecnicoId),
+                    oreLavoro: oreLavoroTotali,
+                    dettaglioOreTecnici: dettaglioOreTecniciToSave,
                     isTrasferta: false,
                     oraInizio: null,
                     oraFine: null,
@@ -277,8 +293,7 @@ const ReportFormPage: React.FC = () => {
                     descrizioneBreve: '',
                     lavoroEseguito: '',
                     materialiImpiegati: '',
-                    altriTecniciIds: [],
-                    dettaglioOreTecnici: []
+                    altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId),
                 };
 
                 if (isOnline) {
@@ -321,7 +336,22 @@ const ReportFormPage: React.FC = () => {
                         materialiImpiegati,
                     };
                 } else {
-                    rapportinoData = { ...rapportinoData, oreLavoro: 0, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: [], dettaglioOreTecnici: [] };
+                    const selectedTipo = tipiGiornata.find(t => t.id === tipoGiornataId);
+                    const tipoNome = selectedTipo?.nome.toLowerCase() || '';
+                    
+                    let oreDaAssegnare = 0;
+                    if (tipoNome.includes('ferie') || tipoNome.includes('malattia')) {
+                        oreDaAssegnare = 8;
+                    }
+    
+                    const dettaglioOreTecniciToSave = dettaglioOre.map(d => ({
+                        tecnicoId: d.tecnicoId,
+                        ore: oreDaAssegnare
+                    }));
+                    
+                    const oreLavoroTotali = dettaglioOreTecniciToSave.reduce((sum, item) => sum + item.ore, 0);
+
+                    rapportinoData = { ...rapportinoData, oreLavoro: oreLavoroTotali, dettaglioOreTecnici: dettaglioOreTecniciToSave, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId) };
                 }
 
                 if (isOnline) {

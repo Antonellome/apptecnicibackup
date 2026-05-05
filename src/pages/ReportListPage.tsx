@@ -13,7 +13,6 @@ import {
   Paper,
   ListItemButton,
   Divider,
-  Chip,
   IconButton,
 } from '@mui/material';
 import { Lock as LockIcon } from '@mui/icons-material';

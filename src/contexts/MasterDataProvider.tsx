@@ -93,7 +93,7 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
             luoghi,
             navi,
             ditte,
-            categorie,
+categorie,
         };
     }, []);
 
@@ -128,7 +128,7 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
                     try {
                         await setDoc(manifestDocRef, { anagrafiche_version: remoteVersion, createdAt: new Date() });
                         console.log(`[Sync] Nuovo manifest creato con successo in '${SYNC_MANIFEST_PATH}'.`);
-                    } catch (creationError) {
+                    } catch (creationError: any) { // --- ECCO LA CORREZIONE ---
                          console.error(`[Sync] Errore critico durante la creazione del manifest in '${SYNC_MANIFEST_PATH}'.`, creationError);
                          throw new Error(`Impossibile creare il Sync Manifest. Causa: ${creationError.message}`);
                     }
@@ -166,7 +166,7 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
                     console.log(`[Sync] Cache aggiornata alla v${remoteVersion}.`);
                 }
 
-            } catch (err) {
+            } catch (err: any) { // --- ECCO LA CORREZIONE ---
                 console.error("MasterDataProvider: Errore durante il processo di sincronizzazione.", err);
                 setError(err instanceof Error ? err : new Error('Errore sconosciuto nel recupero dati'));
             } finally {

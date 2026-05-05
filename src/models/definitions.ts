@@ -156,6 +156,7 @@ export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiorn
   sede?: Sede;
   nave?: Nave;
   luogo?: Luogo;
+  isEditable?: boolean;
 }
 
 export interface EnrichedReport extends EnrichedRapportino {}

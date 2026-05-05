@@ -159,9 +159,9 @@ const MonthlyReportPage = () => {
               <CardContent>
                 <Typography variant="h5" component="div" gutterBottom>Riepilogo Ore</Typography>
                 <Grid container spacing={2}>
-                   <Grid item xs={12} sm={4}><Typography variant="h6">{summary.totalOreLavoro.toFixed(2)}</Typography><Typography color="text.secondary">Ore Lavorate</Typography></Grid>
-                   <Grid item xs={12} sm={4}><Typography variant="h6">{summary.totalGiorniFerie}</Typography><Typography color="text.secondary">Giorni di Ferie</Typography></Grid>
-                   <Grid item xs={12} sm={4}><Typography variant="h6">{summary.totalGiorniAltro}</Typography><Typography color="text.secondary">Altri Giorni di Assenza</Typography></Grid>
+                   <Grid size={{ xs: 12, sm: 4 }}><Typography variant="h6">{summary.totalOreLavoro.toFixed(2)}</Typography><Typography color="text.secondary">Ore Lavorate</Typography></Grid>
+                   <Grid size={{ xs: 12, sm: 4 }}><Typography variant="h6">{summary.totalGiorniFerie}</Typography><Typography color="text.secondary">Giorni di Ferie</Typography></Grid>
+                   <Grid size={{ xs: 12, sm: 4 }}><Typography variant="h6">{summary.totalGiorniAltro}</Typography><Typography color="text.secondary">Altri Giorni di Assenza</Typography></Grid>
                 </Grid>
                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>Ultimo agg: {summary.updatedAt ? format(summary.updatedAt.toDate(), 'dd/MM/yyyy HH:mm') : 'N/A'}</Typography>
               </CardContent>
