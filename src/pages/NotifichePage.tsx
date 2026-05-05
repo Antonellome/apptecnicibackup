@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React from 'react';
 import {
     Container,
     Typography,
@@ -11,42 +11,32 @@ import {
     Box,
     Alert,
     CircularProgress,
-    Tooltip,
-    Button
+    Tooltip
 } from '@mui/material';
-import { Delete as DeleteIcon, Circle as CircleIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Circle as CircleIcon } from '@mui/icons-material';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 
 const NotifichePage: React.FC = () => {
     const { user, userProfile } = useAuth();
-    const { notifications, markAsRead, loading, error, deleteNotification } = useNotifications();
+    const { notifications, loading, error, hideNotification } = useNotifications();
     const { showSnackbar } = useSnackbar();
 
-    useEffect(() => {
-        if (!loading && notifications.length > 0 && user) {
-            // Identifica le notifiche non lette DALL'UTENTE CORRENTE
-            const unreadNotifications = notifications.filter(n => !n.readBy || !n.readBy[user.uid]);
-            // Segna come lette solo quelle non ancora lette
-            unreadNotifications.forEach(n => {
-                markAsRead(n.id).catch(err => console.error("Errore durante l'aggiornamento della notifica come letta:", err));
-            });
-        }
-        // La dipendenza da `user` assicura che il codice venga eseguito solo quando l'utente è definito.
-    }, [notifications, loading, markAsRead, user]);
+    // *** LOGICA DI AUTO-LETTURA RIMOSSA ***
+    // Il blocco useEffect che segnava le notifiche come lette in automatico
+    // è stato rimosso per risolvere il bug critico.
 
-    const handleDelete = async (id: string) => {
+    const handleHide = async (id: string) => {
         try {
-            await deleteNotification(id);
-            showSnackbar("Notifica eliminata con successo.", "success");
+            await hideNotification(id);
+            showSnackbar("Notifica nascosta con successo.", "success");
         } catch (error) {
-            console.error("Errore durante l'eliminazione della notifica:", error);
-            showSnackbar("Errore durante l'eliminazione della notifica.", "error");
+            console.error("Errore durante il mascheramento della notifica:", error);
+            showSnackbar("Errore durante il mascheramento della notifica.", "error");
         }
     };
 
-    // Funzione per formattare il Timestamp di Firestore
     const formattaData = (timestamp: any): string => {
         if (!timestamp || typeof timestamp.toDate !== 'function') {
             return 'Data non disponibile';
@@ -59,40 +49,8 @@ const NotifichePage: React.FC = () => {
             return 'Data invalida';
         }
     };
-    
-    const firestoreLink = useMemo(() => {
-        if (typeof error !== 'string') return null;
-        const urlRegex = /(https?:\/\/[^\s]+)/;
-        const match = error.match(urlRegex);
-        return match ? match[0] : null;
-    }, [error]);
 
-    if (error && firestoreLink) {
-        return (
-            <Container maxWidth="md" sx={{ py: 4 }}>
-                <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: 'error.main', mb: 1 }}>
-                    Azione Richiesta
-                </Typography>
-                <Alert severity="error" sx={{ mt: 2, p: 3 }}>
-                    <Typography fontWeight="bold">Errore di Configurazione Firestore</Typography>
-                    <Typography variant="body2" sx={{ mt: 1, mb: 2 }}>
-                        La query per le notifiche richiede un indice composito che non è presente nel database.
-                        Per risolvere, apri il link seguente in una nuova scheda e clicca su "Crea Indice" nella pagina di Firebase.
-                    </Typography>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<OpenInNewIcon />}
-                        href={firestoreLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        Apri Console Firebase per Creare l'Indice
-                    </Button>
-                </Alert>
-            </Container>
-        );
-    } else if (error) {
+    if (error) {
         return (
              <Container maxWidth="md" sx={{ py: 4 }}>
                 <Alert severity="error" sx={{ mt: 2, p: 3 }}>
@@ -137,8 +95,8 @@ const NotifichePage: React.FC = () => {
                                         alignItems="flex-start"
                                         sx={{ py: 2, px: 3, transition: 'background-color 0.2s', '&:hover': { bgcolor: 'action.hover' }, bgcolor: isUnread ? 'action.selected' : 'transparent' }}
                                         secondaryAction={
-                                            <Tooltip title="Elimina notifica">
-                                                <IconButton edge="end" aria-label="delete" onClick={() => handleDelete(notifica.id)}>
+                                            <Tooltip title="Nascondi notifica">
+                                                <IconButton edge="end" aria-label="delete" onClick={() => handleHide(notifica.id)}>
                                                     <DeleteIcon fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>

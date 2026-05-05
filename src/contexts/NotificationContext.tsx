@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import {
   collection,
   query,
@@ -6,24 +6,27 @@ import {
   onSnapshot,
   doc,
   updateDoc,
-  deleteDoc,
+  arrayUnion,
   or,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Notifica } from '@/models/definitions';
 
+// --- INTERFACCIA E CONTESTO DEFINITI CORRETTAMENTE ---
 interface NotificationContextType {
   notifications: Notifica[];
   unreadCount: number;
   markAsRead: (notificationId: string) => Promise<void>;
-  deleteNotification: (notificationId: string) => Promise<void>;
+  hideNotification: (notificationId: string) => Promise<void>;
   loading: boolean;
   error: string | null;
   refetch: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -41,58 +44,90 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    let unsubscribe: () => void = () => {};
 
-    const finalQuery = query(
-      collection(db, 'notificheRichieste'),
-      or(
-        where('to_ids', 'array-contains', user.uid),
-        where('to_category_ids', 'array-contains', userProfile.categoria.id),
-        where('sendToAll', '==', true)
-      )
-    );
+    const setupListener = () => {
+      unsubscribe();
+      setLoading(true);
+      setError(null);
 
-    const unsubscribe = onSnapshot(finalQuery,
-      (snapshot) => {
-        const docs = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return { 
-              id: doc.id, 
-              ...data, 
-              createdAt: data.createdAt, // Manteniamo il formato che arriva da firestore
-              readBy: data.readBy || {}
-          } as Notifica;
-        });
+      const finalQuery = query(
+        collection(db, 'notificheRichieste'),
+        or(
+          where('to_ids', 'array-contains', user.uid),
+          where('to_category_ids', 'array-contains', userProfile.categoria.id),
+          where('sendToAll', '==', true)
+        )
+      );
 
-        docs.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-        setNotifications(docs);
-        setLoading(false);
-      },
-      (err: any) => {
-        console.error("Errore nel listener delle notifiche (Verificare Indice Firestore):", err);
-        setError(err.message || 'Errore sconosciuto');
-        setLoading(false);
-      }
-    );
+      unsubscribe = onSnapshot(finalQuery,
+        (snapshot) => {
+          const docs = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return { 
+                id: doc.id, 
+                ...data,
+                // Assicura che questi campi esistano sempre
+                readBy: data.readBy || {},
+                hiddenFor: data.hiddenFor || []
+            } as Notifica;
+          });
 
-    return () => unsubscribe();
+          // --- LOGICA DIFENSIVA ---
+          const validDocs = docs.filter(doc => {
+            const hasTimestamp = doc.createdAt && doc.createdAt instanceof Timestamp;
+            if (!hasTimestamp) {
+              console.warn("Documento notifica scartato per mancanza di timestamp valido:", doc.id);
+            }
+            return hasTimestamp;
+          });
+
+          validDocs.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+          
+          const visibleDocs = validDocs.filter(doc => !doc.hiddenFor.includes(user.uid));
+
+          setNotifications(visibleDocs);
+          setLoading(false);
+        },
+        (err: any) => {
+          console.error("Errore nel listener delle notifiche:", err);
+          setError(err.message || 'Errore sconosciuto');
+          setLoading(false);
+        }
+      );
+    };
+
+    const handleVisibilityChange = () => {
+        if (document.hidden) {
+            unsubscribe();
+            console.log("Notification listener scollegato (app in background).");
+        } else {
+            console.log("App in primo piano, ricollego il listener delle notifiche.");
+            setupListener();
+        }
+    };
+
+    setupListener();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+
   }, [user, userProfile, authLoading, fetchTrigger]);
 
+  // --- CODICE FUNZIONALITÀ RIPRISTINATO ---
   const unreadCount = useMemo(() => {
       if (!user) return 0;
-      return notifications.filter(n => !n.readBy || !n.readBy[user.uid]).length;
+      return notifications.filter(n => !n.readBy[user.uid]).length;
   }, [notifications, user]);
 
   const markAsRead = async (notificationId: string) => {
       if (!user) return;
       try {
           const notificationRef = doc(db, 'notificheRichieste', notificationId);
-          // Aggiorna il campo mappa 'readBy' con l'uid dell'utente
-          // La notazione a punti è fondamentale per aggiornare un campo in una mappa
           await updateDoc(notificationRef, { [`readBy.${user.uid}`]: true });
-
-          // Aggiornamento locale per una UI reattiva
           setNotifications(prev => prev.map(n => 
               n.id === notificationId 
                   ? { ...n, readBy: { ...n.readBy, [user.uid]: true } } 
@@ -100,20 +135,21 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           ));
       } catch (err) {
           console.error("Errore durante l'aggiornamento della notifica:", err);
-          // Qui potresti voler mostrare uno snackbar di errore
       }
   };
 
-  const deleteNotification = async (notificationId: string) => {
+  const hideNotification = async (notificationId: string) => {
+    if (!user) return;
     try {
-      await deleteDoc(doc(db, 'notificheRichieste', notificationId));
+      const notificationRef = doc(db, 'notificheRichieste', notificationId);
+      await updateDoc(notificationRef, { hiddenFor: arrayUnion(user.uid) });
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
     } catch (err) {
-      console.error("Errore durante l'eliminazione della notifica:", err);
+      console.error("Errore durante il mascheramento della notifica:", err);
     }
   };
 
-  const value = { notifications, unreadCount, markAsRead, deleteNotification, loading, error, refetch };
+  const value = { notifications, unreadCount, markAsRead, hideNotification, loading, error, refetch };
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 };
