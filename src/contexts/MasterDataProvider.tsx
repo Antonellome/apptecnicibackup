@@ -50,7 +50,7 @@ interface MasterDataProviderProps {
 }
 
 export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, userProfile, loading: authLoading } = useAuth(); // Usiamo anche authLoading
     const [masterData, setMasterData] = useState<MasterData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<Error | null>(null);
@@ -98,10 +98,17 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
     }, []);
 
     useEffect(() => {
-        if (!user) {
+        // La condizione di guardia ora è più robusta. Aspetta che l'auth sia finalizzata
+        // e che il profilo utente (con la categoria) sia caricato.
+        const canSync = !authLoading && user && userProfile?.categoria?.id;
+
+        if (!canSync) {
+            // Se non possiamo sincronizzare, ci assicuriamo che lo stato sia pulito e non in caricamento.
             setLoading(false);
-            setMasterData(null);
-            localStorage.removeItem(CACHE_KEY);
+             if (!user) { // Se l'utente è sloggato, puliamo la cache
+                setMasterData(null);
+                localStorage.removeItem(CACHE_KEY);
+            }
             return;
         }
 
@@ -169,7 +176,7 @@ export const MasterDataProvider: React.FC<MasterDataProviderProps> = ({ children
 
         syncAndLoadData();
 
-    }, [user, fetchTrigger, fetchMasterDataFromFirestore]);
+    }, [user, userProfile, authLoading, fetchTrigger, fetchMasterDataFromFirestore]); // Aggiunte dipendenze
 
     const refetch = useCallback(() => {
         console.log("[Sync] Richiesta di riverifica della versione anagrafiche.");

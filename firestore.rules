@@ -1,68 +1,18 @@
-rules_version = '2';
+rules_version='2'
+
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // --- Funzioni Helper --- 
-    function getMasterUserData() {
-      return get(/databases/$(database)/documents/webAppUsers/$(request.auth.uid)).data;
-    }
-    function isAdmin() {
-      // Questa funzione ora funziona perché la regola su webAppUsers/{userId} qui sotto
-      // permette l'operazione di get() necessaria.
-      return request.auth != null && getMasterUserData().ruolo == 'admin';
-    }
-    function isMasterUser() {
-      return request.auth != null && getMasterUserData().ruolo == 'user';
-    }
-    function isTecnicoAbilitato() {
-      return request.auth != null &&
-             exists(/databases/$(database)/documents/tecnici/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/tecnici/$(request.auth.uid)).data.attivo == true;
-    }
-
-    // --- Regole Specifiche (hanno la precedenza) ---
-
-    // REGOLA CHIAVE PER ROMPERE IL CIRCOLO VIZIOSO
-    match /webAppUsers/{userId} {
-      // Permetti a un utente di leggere SOLO il proprio documento per verificare il ruolo.
-      allow get: if request.auth != null && request.auth.uid == userId;
-      // L'admin può scrivere e listare tutti gli utenti master.
-      allow list, write: if isAdmin();
-    }
-
-    // Regole per l'app dei tecnici
-    match /tecnici/{tecnicoUid} {
-        allow read, write: if request.auth.uid == tecnicoUid;
-    }
-
-    match /{path=**}/rapportini/{rapportinoId} {
-      // Un tecnico può CREARE un rapportino solo per se stesso.
-      allow create: if isTecnicoAbilitato() && request.resource.data.tecnicoId == request.auth.uid;
-
-      // L'Admin può LEGGERE tutto. Il tecnico può leggere solo i propri.
-      allow read: if isAdmin() || (isTecnicoAbilitato() && resource.data.tecnicoId == request.auth.uid);
-
-      // L'Admin può sempre MODIFICARE/CANCELLARE.
-      // Il tecnico può farlo solo sui propri rapportini del mese corrente.
-      allow update, delete: if isAdmin() || (
-                               isTecnicoAbilitato() &&
-                               resource.data.tecnicoId == request.auth.uid &&
-                               resource.data.data.month() == request.time.month() &&
-                               resource.data.data.year() == request.time.year()
-                             );
-    }
-
-    match /notificheRichieste/{id} {
-      allow read, write: if isTecnicoAbilitato();
-    }
-
-    // --- Regole Globali (valgono per tutto il resto) ---
-    match /{path=**} {
-      // L'admin e il visualizzatore possono leggere tutto.
-      // Il tecnico può leggere le collezioni necessarie (es. clienti, veicoli).
-      allow read: if isAdmin() || isMasterUser() || isTecnicoAbilitato();
-      // Solo l'admin può scrivere ovunque (tranne dove specificato sopra).
-      allow write: if isAdmin();
+    match /{document=**} {
+      // This rule allows anyone with your database reference to view, edit,
+      // and delete all data in your database. It is useful for getting
+      // started, but it is configured to expire after 30 days because it
+      // leaves your app open to attackers. At that time, all client
+      // requests to your database will be denied.
+      //
+      // Make sure to write security rules for your app before that time, or
+      // else all client requests to your database will be denied until you
+      // update your rules.
+      allow read, write: if request.time < timestamp.date(2026, 6, 4);
     }
   }
 }
