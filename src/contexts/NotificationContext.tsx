@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import {
   collection,
@@ -8,7 +7,8 @@ import {
   doc,
   updateDoc,
   arrayUnion,
-  Timestamp
+  Timestamp,
+  or
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,22 +25,6 @@ interface NotificationContextType {
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
-
-// Funzione helper per unire e deduplicare gli array di notifiche
-const mergeNotifications = (allNotifications: Notifica[][]): Notifica[] => {
-    const notificationMap = new Map<string, Notifica>();
-    for (const notificationArray of allNotifications) {
-        for (const notification of notificationArray) {
-            if (notification && notification.id && notification.createdAt) {
-                notificationMap.set(notification.id, notification);
-            }
-        }
-    }
-    const merged = Array.from(notificationMap.values());
-    // Ordina per data, dalla più recente alla più vecchia
-    merged.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-    return merged;
-};
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -63,70 +47,57 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const collectionRef = collection(db, 'notificheRichieste');
 
-    // CIAO. OBBEDISCO. Cambio strategia: 3 query separate.
-    const queries = [
-      // 1. Notifiche Personali
-      query(collectionRef, where('to_ids', 'array-contains', user.uid)),
-      // 2. Notifiche di Categoria
-      query(collectionRef, where('to_category_ids', 'array-contains', userProfile.categoria.id)),
-      // 3. Notifiche Globali
-      query(collectionRef, where('sendToAll', '==', true))
-    ];
+    // OBBEDISCO. QUESTA E' LA QUERY DEFINITIVA CHE RISPETTA LA TUA ARCHITETTURA.
+    const notificheQuery = query(collectionRef, 
+      or(
+        where('to_ids', 'array-contains', user.uid),
+        where('to_category_ids', 'array-contains', userProfile.categoria.id),
+        where('target', '==', 'all')
+      )
+    );
 
-    const unsubscribes = queries.map((q, index) => {
-      return onSnapshot(q, (snapshot) => {
-        const newDocs = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return { 
-                id: doc.id, 
-                ...data,
-                readBy: data.readBy || {},
-                hiddenFor: data.hiddenFor || []
-            } as Notifica;
-        });
-
-        // Aggiorna lo state globale mantenendo i risultati delle altre query
-        setNotifications(currentNotifications => {
-            const allDocs = [...currentNotifications];
-            // Rimpiazza i documenti di questa query con i nuovi risultati
-            const otherDocs = allDocs.filter(doc => doc.queryIndex !== index);
-            const updatedDocs = newDocs.map(doc => ({...doc, queryIndex: index}));
-            return mergeNotifications([otherDocs, updatedDocs]);
-        });
-
-        setLoading(false);
-      }, (err: any) => {
-        console.error(`Errore nel listener ${index}:`, err);
-        setError(err.message || 'Errore sconosciuto');
-        setLoading(false);
+    const unsubscribe = onSnapshot(notificheQuery, (snapshot) => {
+      const fetchedNotifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      } as Notifica));
+      
+      // Ordino i risultati qui, perché la query `or` non può essere combinata con `orderBy`.
+      fetchedNotifications.sort((a, b) => {
+          const timeA = a.createdAt?.toMillis() ?? 0;
+          const timeB = b.createdAt?.toMillis() ?? 0;
+          return timeB - timeA; // Ordine decrescente
       });
+
+      setNotifications(fetchedNotifications);
+      setLoading(false);
+    }, (err) => {
+      console.error("Errore nel listener delle notifiche:", err);
+      setError("Impossibile caricare il centro notifiche.");
+      setLoading(false);
     });
 
-    return () => {
-      unsubscribes.forEach(unsub => unsub());
-    };
-
+    return () => unsubscribe();
   }, [user, userProfile, authLoading, fetchTrigger]);
 
-  // Filtra le notifiche nascoste prima di passarle ai componenti figli
   const visibleNotifications = useMemo(() => {
-      if (!user) return [];
-      return notifications.filter(n => !n.hiddenFor || !n.hiddenFor.includes(user.uid));
+    if (!user) return [];
+    return notifications.filter(n => !n.hiddenFor || !n.hiddenFor.includes(user.uid));
   }, [notifications, user]);
 
   const unreadCount = useMemo(() => {
-      if (!user) return 0;
-      return visibleNotifications.filter(n => !n.readBy || !n.readBy[user.uid]).length;
+    if (!user) return 0;
+    return visibleNotifications.filter(n => !n.readBy || !n.readBy[user.uid]).length;
   }, [visibleNotifications, user]);
 
   const markAsRead = async (notificationId: string) => {
-      if (!user) return;
-      const notificationRef = doc(db, 'notificheRichieste', notificationId);
-      try {
-          await updateDoc(notificationRef, { [`readBy.${user.uid}`]: true });
-      } catch (err) {
-          console.error("Errore durante l'aggiornamento della notifica:", err);
-      }
+    if (!user) return;
+    const notificationRef = doc(db, 'notificheRichieste', notificationId);
+    try {
+      await updateDoc(notificationRef, { [`readBy.${user.uid}`]: true });
+    } catch (err) {
+      console.error("Errore durante l'aggiornamento della notifica:", err);
+    }
   };
 
   const hideNotification = async (notificationId: string) => {

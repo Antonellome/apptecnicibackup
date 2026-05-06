@@ -20,12 +20,8 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 
 const NotifichePage: React.FC = () => {
     const { user, userProfile } = useAuth();
-    const { notifications, loading, error, hideNotification } = useNotifications();
+    const { notifications, loading, error, hideNotification, markAsRead } = useNotifications();
     const { showSnackbar } = useSnackbar();
-
-    // *** LOGICA DI AUTO-LETTURA RIMOSSA ***
-    // Il blocco useEffect che segnava le notifiche come lette in automatico
-    // è stato rimosso per risolvere il bug critico.
 
     const handleHide = async (id: string) => {
         try {
@@ -36,6 +32,10 @@ const NotifichePage: React.FC = () => {
             showSnackbar("Errore durante il mascheramento della notifica.", "error");
         }
     };
+
+    const handleMarkAsRead = (id: string) => {
+        markAsRead(id);
+    }
 
     const formattaData = (timestamp: any): string => {
         if (!timestamp || typeof timestamp.toDate !== 'function') {
@@ -92,11 +92,13 @@ const NotifichePage: React.FC = () => {
                             return (
                                 <React.Fragment key={notifica.id}>
                                     <ListItem
+                                        button
+                                        onClick={() => handleMarkAsRead(notifica.id)}
                                         alignItems="flex-start"
                                         sx={{ py: 2, px: 3, transition: 'background-color 0.2s', '&:hover': { bgcolor: 'action.hover' }, bgcolor: isUnread ? 'action.selected' : 'transparent' }}
                                         secondaryAction={
                                             <Tooltip title="Nascondi notifica">
-                                                <IconButton edge="end" aria-label="delete" onClick={() => handleHide(notifica.id)}>
+                                                <IconButton edge="end" aria-label="delete" onClick={(e) => { e.stopPropagation(); handleHide(notifica.id); }}>
                                                     <DeleteIcon fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
