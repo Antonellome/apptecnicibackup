@@ -112,8 +112,7 @@ export interface Rapportino extends BaseEntity {
 
   // --- Gestione Presenze e Ore ---
   presenze: string[];
-  oreLavoro: number;
-  dettaglioOreTecnici?: { tecnicoId: string; ore: number; }[];
+  dettaglioOreTecnici: { tecnicoId: string; ore: number; }[]; // Unica fonte di verità per le ore
   altriTecniciIds?: string[];
 
   // --- Dettagli Orari ---

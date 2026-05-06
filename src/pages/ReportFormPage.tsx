@@ -131,7 +131,7 @@ const ReportFormPage: React.FC = () => {
                             oraInizio: reportData.oraInizio || '07:30',
                             oraFine: reportData.oraFine || '16:30',
                             pausa: reportData.pausa === undefined ? 60 : reportData.pausa,
-                            ore: dettaglioSalvato?.ore ?? reportData.oreLavoro ?? 0,
+                            ore: dettaglioSalvato?.ore ?? 0, // CORRETTO: Rimosso fallback a oreLavoro
                         };
                     });
                     setDettaglioOre(dettagliCaricati);
@@ -270,8 +270,6 @@ const ReportFormPage: React.FC = () => {
                     tecnicoId: d.tecnicoId,
                     ore: oreDaAssegnare
                 }));
-            
-                const oreLavoroTotali = dettaglioOreTecniciToSave.reduce((sum, item) => sum + item.ore, 0);
 
                 const rapportinoData: Partial<Rapportino> = {
                     nome: 'Report di periodo',
@@ -281,7 +279,6 @@ const ReportFormPage: React.FC = () => {
                     dataFine: Timestamp.fromDate(dataFine),
                     tecnicoId: loggedInTecnicoId,
                     presenze: dettaglioOre.map(d => d.tecnicoId),
-                    oreLavoro: oreLavoroTotali,
                     dettaglioOreTecnici: dettaglioOreTecniciToSave,
                     isTrasferta: false,
                     oraInizio: null,
@@ -308,8 +305,7 @@ const ReportFormPage: React.FC = () => {
             } else { 
                 const presenze = dettaglioOre.map(d => d.tecnicoId);
                 const dettaglioOreTecniciToSave = dettaglioOre.map(d => ({ tecnicoId: d.tecnicoId, ore: d.ore || 0 }));
-                const oreLavoroTotali = dettaglioOreTecniciToSave.reduce((sum, item) => sum + item.ore, 0);
-
+                
                 let rapportinoData: Partial<Rapportino> = {
                     nome: 'Report giornaliero',
                     data: Timestamp.fromDate(data!),
@@ -325,7 +321,6 @@ const ReportFormPage: React.FC = () => {
                         oraInizio: scriventeDettaglio?.isManual ? null : scriventeDettaglio?.oraInizio,
                         oraFine: scriventeDettaglio?.isManual ? null : scriventeDettaglio?.oraFine,
                         pausa: scriventeDettaglio?.isManual ? null : scriventeDettaglio?.pausa,
-                        oreLavoro: oreLavoroTotali,
                         dettaglioOreTecnici: dettaglioOreTecniciToSave,
                         altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId),
                         veicoloId,
@@ -348,10 +343,8 @@ const ReportFormPage: React.FC = () => {
                         tecnicoId: d.tecnicoId,
                         ore: oreDaAssegnare
                     }));
-                    
-                    const oreLavoroTotali = dettaglioOreTecniciToSave.reduce((sum, item) => sum + item.ore, 0);
 
-                    rapportinoData = { ...rapportinoData, oreLavoro: oreLavoroTotali, dettaglioOreTecnici: dettaglioOreTecniciToSave, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId) };
+                    rapportinoData = { ...rapportinoData, dettaglioOreTecnici: dettaglioOreTecniciToSave, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId) };
                 }
 
                 if (isOnline) {

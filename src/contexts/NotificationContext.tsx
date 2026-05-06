@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import {
   collection,
@@ -7,14 +8,12 @@ import {
   doc,
   updateDoc,
   arrayUnion,
-  or,
   Timestamp
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Notifica } from '@/models/definitions';
 
-// --- INTERFACCIA E CONTESTO DEFINITI CORRETTAMENTE ---
 interface NotificationContextType {
   notifications: Notifica[];
   unreadCount: number;
@@ -27,6 +26,21 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+// Funzione helper per unire e deduplicare gli array di notifiche
+const mergeNotifications = (allNotifications: Notifica[][]): Notifica[] => {
+    const notificationMap = new Map<string, Notifica>();
+    for (const notificationArray of allNotifications) {
+        for (const notification of notificationArray) {
+            if (notification && notification.id && notification.createdAt) {
+                notificationMap.set(notification.id, notification);
+            }
+        }
+    }
+    const merged = Array.from(notificationMap.values());
+    // Ordina per data, dalla più recente alla più vecchia
+    merged.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+    return merged;
+};
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -44,95 +58,72 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       return;
     }
 
-    let unsubscribe: () => void = () => {};
+    setLoading(true);
+    setError(null);
 
-    const setupListener = () => {
-      unsubscribe();
-      setLoading(true);
-      setError(null);
+    const collectionRef = collection(db, 'notificheRichieste');
 
-      const finalQuery = query(
-        collection(db, 'notificheRichieste'),
-        or(
-          where('to_ids', 'array-contains', user.uid),
-          where('to_category_ids', 'array-contains', userProfile.categoria.id),
-          where('sendToAll', '==', true)
-        )
-      );
+    // CIAO. OBBEDISCO. Cambio strategia: 3 query separate.
+    const queries = [
+      // 1. Notifiche Personali
+      query(collectionRef, where('to_ids', 'array-contains', user.uid)),
+      // 2. Notifiche di Categoria
+      query(collectionRef, where('to_category_ids', 'array-contains', userProfile.categoria.id)),
+      // 3. Notifiche Globali
+      query(collectionRef, where('sendToAll', '==', true))
+    ];
 
-      unsubscribe = onSnapshot(finalQuery,
-        (snapshot) => {
-          const docs = snapshot.docs.map(doc => {
+    const unsubscribes = queries.map((q, index) => {
+      return onSnapshot(q, (snapshot) => {
+        const newDocs = snapshot.docs.map(doc => {
             const data = doc.data();
             return { 
                 id: doc.id, 
                 ...data,
-                // Assicura che questi campi esistano sempre
                 readBy: data.readBy || {},
                 hiddenFor: data.hiddenFor || []
             } as Notifica;
-          });
+        });
 
-          // --- LOGICA DIFENSIVA ---
-          const validDocs = docs.filter(doc => {
-            const hasTimestamp = doc.createdAt && doc.createdAt instanceof Timestamp;
-            if (!hasTimestamp) {
-              console.warn("Documento notifica scartato per mancanza di timestamp valido:", doc.id);
-            }
-            return hasTimestamp;
-          });
+        // Aggiorna lo state globale mantenendo i risultati delle altre query
+        setNotifications(currentNotifications => {
+            const allDocs = [...currentNotifications];
+            // Rimpiazza i documenti di questa query con i nuovi risultati
+            const otherDocs = allDocs.filter(doc => doc.queryIndex !== index);
+            const updatedDocs = newDocs.map(doc => ({...doc, queryIndex: index}));
+            return mergeNotifications([otherDocs, updatedDocs]);
+        });
 
-          validDocs.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-          
-          const visibleDocs = validDocs.filter(doc => !doc.hiddenFor.includes(user.uid));
-
-          setNotifications(visibleDocs);
-          setLoading(false);
-        },
-        (err: any) => {
-          console.error("Errore nel listener delle notifiche:", err);
-          setError(err.message || 'Errore sconosciuto');
-          setLoading(false);
-        }
-      );
-    };
-
-    const handleVisibilityChange = () => {
-        if (document.hidden) {
-            unsubscribe();
-            console.log("Notification listener scollegato (app in background).");
-        } else {
-            console.log("App in primo piano, ricollego il listener delle notifiche.");
-            setupListener();
-        }
-    };
-
-    setupListener();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+        setLoading(false);
+      }, (err: any) => {
+        console.error(`Errore nel listener ${index}:`, err);
+        setError(err.message || 'Errore sconosciuto');
+        setLoading(false);
+      });
+    });
 
     return () => {
-      unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      unsubscribes.forEach(unsub => unsub());
     };
 
   }, [user, userProfile, authLoading, fetchTrigger]);
 
-  // --- CODICE FUNZIONALITÀ RIPRISTINATO ---
+  // Filtra le notifiche nascoste prima di passarle ai componenti figli
+  const visibleNotifications = useMemo(() => {
+      if (!user) return [];
+      return notifications.filter(n => !n.hiddenFor || !n.hiddenFor.includes(user.uid));
+  }, [notifications, user]);
+
   const unreadCount = useMemo(() => {
       if (!user) return 0;
-      return notifications.filter(n => !n.readBy[user.uid]).length;
-  }, [notifications, user]);
+      return visibleNotifications.filter(n => !n.readBy || !n.readBy[user.uid]).length;
+  }, [visibleNotifications, user]);
 
   const markAsRead = async (notificationId: string) => {
       if (!user) return;
+      const notificationRef = doc(db, 'notificheRichieste', notificationId);
       try {
-          const notificationRef = doc(db, 'notificheRichieste', notificationId);
           await updateDoc(notificationRef, { [`readBy.${user.uid}`]: true });
-          setNotifications(prev => prev.map(n => 
-              n.id === notificationId 
-                  ? { ...n, readBy: { ...n.readBy, [user.uid]: true } } 
-                  : n
-          ));
       } catch (err) {
           console.error("Errore durante l'aggiornamento della notifica:", err);
       }
@@ -143,13 +134,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     try {
       const notificationRef = doc(db, 'notificheRichieste', notificationId);
       await updateDoc(notificationRef, { hiddenFor: arrayUnion(user.uid) });
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
     } catch (err) {
       console.error("Errore durante il mascheramento della notifica:", err);
     }
   };
 
-  const value = { notifications, unreadCount, markAsRead, hideNotification, loading, error, refetch };
+  const value = { notifications: visibleNotifications, unreadCount, markAsRead, hideNotification, loading, error, refetch };
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 };

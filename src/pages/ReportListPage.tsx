@@ -177,7 +177,7 @@ const ReportListPage = () => {
                                 {report.descrizioneBreve || report.destinazione}
                             </Typography>
                         }
-                        secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })} - Ore: ${report.oreLavoro.toFixed(2)}`}
+                        secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })} - Ore: ${(report.dettaglioOreTecnici || []).reduce((acc, curr) => acc + (curr.ore || 0), 0).toFixed(2)}`}
                       />
                     </ListItem>
                     {index < rapportini.length - 1 && <Divider component="li" />}
