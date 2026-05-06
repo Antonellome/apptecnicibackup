@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { collection, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Anagrafica, Categoria, Veicolo, Contratto, Notifica } from '@/models/definitions';
@@ -96,4 +96,13 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
             {children}
         </MasterDataContext.Provider>
     );
+};
+
+// HOOK MANCANTE RIPRISTINATO
+export const useMasterData = (): MasterDataContextType => {
+    const context = useContext(MasterDataContext);
+    if (context === undefined) {
+        throw new Error('useMasterData deve essere usato dentro un MasterDataProvider');
+    }
+    return context;
 };

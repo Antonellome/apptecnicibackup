@@ -12,6 +12,72 @@
 
 ---
 
+# SEZIONE DI EMERGENZA: PIANO DI RECUPERO POST-RESET
+
+**ATTENZIONE:** Questa sezione è stata creata in risposta a un ripristino (`git reset`) errato che ha desincronizzato lo stato dell'applicazione. I seguenti passaggi devono essere eseguiti in ordine per ripristinare le funzionalità implementate durante questa sessione di chat, annullando il danno del reset.
+
+**STATO ATTUALE DEL PROBLEMA:** Il `git reset` ha riportato alcuni file a versioni precedenti, creando un conflitto tra la vecchia gestione delle ore (`oreLavoro`) e la nuova struttura (`dettaglioOreTecnici`), e rompendo le dipendenze degli hook (es. `useMasterData`).
+
+**OBIETTIVO:** Ripercorrere e riapplicare le modifiche salienti di questa chat per riallineare l'intera codebase allo stato desiderato prima dell'incidente.
+
+---
+
+### **FASE 1: RIPRISTINO STRUTTURA DATI E CONTESTI**
+
+**1.1. Ripristino del `MasterDataProvider`**
+- **Problema:** L'hook `useMasterData` è stato cancellato dal file `src/contexts/MasterDataProvider.tsx`, causando un crash all'avvio.
+- **Azione Correttiva:** Aggiungere il seguente blocco di codice alla fine del file `src/contexts/MasterDataProvider.tsx`:
+
+  '''typescript
+  export const useMasterData = (): MasterDataContextType => {
+      const context = useContext(MasterDataContext);
+      if (context === undefined) {
+          throw new Error('useMasterData deve essere usato dentro un MasterDataProvider');
+      }
+      return context;
+  };
+  '''
+
+**1.2. (DA VERIFICARE) Ripristino Struttura `dettaglioOreTecnici`**
+- **Contesto:** Durante la chat, è stata introdotta una nuova struttura per la gestione delle ore. Il reset potrebbe averla rimossa o danneggiata.
+- **Azione di Analisi:** Verificare il file `rapportino.schema.ts` e altri modelli per assicurarsi che la struttura dati per le ore sia quella corretta e più recente.
+- **Azione Correttiva (se necessaria):** Ripristinare la definizione del tipo corretto, che includa `dettaglioOreTecnici` e i tipi associati.
+
+---
+
+### **FASE 2: ALLINEAMENTO DEI COMPONENTI**
+
+**2.1. Correzione Componenti che utilizzano la gestione delle ore**
+- **Contesto:** Diversi componenti (es. `ReportMensileDialog`, `MonthlyReportGrid`, form di creazione report) erano stati aggiornati per usare la nuova struttura `dettaglioOreTecnici`. Il reset li ha probabilmente riportati a una versione che si aspetta la vecchia `oreLavoro`.
+- **Azione di Analisi:** Ispezionare tutti i componenti che manipolano o visualizzano i dati dei rapportini.
+- **Azione Correttiva:** Modificare questi componenti per:
+    - Utilizzare `dettaglioOreTecnici` invece di `oreLavoro`.
+    - Adattare la logica di calcolo e visualizzazione alla nuova struttura dati.
+
+**2.2. Allineamento `NotificationContext.tsx`**
+- **Contesto:** Il file `NotificationContext.tsx` era stato modificato per risolvere un problema di query e ottimizzare il recupero delle notifiche. Il reset ha annullato queste modifiche.
+- **Azione Correttiva:** Ripristinare il contenuto di `src/contexts/NotificationContext.tsx` alla versione funzionale sviluppata durante la chat, che include la query `or` per recuperare le notifiche personali e di categoria.
+
+**2.3. Allineamento `App.tsx`**
+- **Contesto:** Il file `App.tsx` era stato modificato per includere il `NotificationProvider` e altre logiche di routing.
+- **Azione Correttiva:** Assicurarsi che `App.tsx` contenga la struttura di routing corretta e che tutti i provider necessari (`AuthProvider`, `MasterDataProvider`, `NotificationProvider`, `SnackbarProvider`) siano presenti e nell'ordine corretto.
+
+---
+
+### **FASE 3: VERIFICA FINALE**
+
+**3.1. Controllo Incrociato**
+- **Azione:** Una volta applicate le correzioni, eseguire un controllo completo dell'applicazione, verificando in particolare:
+    - La creazione e la visualizzazione dei rapportini.
+    - Il calcolo corretto delle ore nei report mensili.
+    - Il funzionamento del sistema di notifiche.
+    - L'assenza di errori in console.
+
+**Questa sezione rappresenta la roadmap per uscire dalla situazione di emergenza. Ogni passo deve essere verificato con attenzione.**
+
+---
+
+
 # REGOLA FONDAMENTALE: IL METODO DEL GRANDE MAESTRO (ANALISI A 360°)
 
 Ogni modifica al codice deve essere trattata come una mossa in una partita a scacchi contro il crash di sistema. La regola primaria è **"correggere gli errori"**, come stabilito nella cronologia delle decisioni (`chat_log.txt`).
