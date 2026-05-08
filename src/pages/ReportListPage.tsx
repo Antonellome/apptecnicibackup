@@ -177,7 +177,10 @@ const ReportListPage = () => {
                                 {report.descrizioneBreve || report.destinazione}
                             </Typography>
                         }
-                        secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })} - Ore: ${(report.dettaglioOreTecnici || []).reduce((acc, curr) => acc + (curr.ore || 0), 0).toFixed(2)}`}
+                        secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })} - Ore: ${(() => {
+                            const userOreDetail = (report.dettaglioOreTecnici || []).find(d => d.tecnicoId === user.uid);
+                            return userOreDetail ? (userOreDetail.ore || 0).toFixed(2) : 'N/A';
+                        })()}`}
                       />
                     </ListItem>
                     {index < rapportini.length - 1 && <Divider component="li" />}

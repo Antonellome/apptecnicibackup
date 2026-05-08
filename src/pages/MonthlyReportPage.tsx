@@ -11,9 +11,9 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Grid
+  TableRow
 } from '@mui/material';
+import Grid from "@mui/material/Grid";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
@@ -59,22 +59,12 @@ const ReportMensilePage = () => {
         }
 
         setLoading(true);
-        const monthId = format(currentMonth, 'yyyy-MM');
         
-        const cachedData = await localDB.rapportini_mensili.get(monthId);
-        if (cachedData) {
-            console.log("Dati caricati dalla cache locale per il mese:", monthId);
-            setRapportini(cachedData.data as EnrichedRapportino[]);
-            setLoading(false);
-            return;
-        }
-        
-        console.log("Dati non in cache, fetch da Firestore per il mese:", monthId);
         const start = startOfMonth(currentMonth);
         const end = endOfMonth(currentMonth);
         const q = query(
             collection(db, "rapportini"),
-            where("tecnicoId", "==", user.uid),
+            where("presenze", "array-contains", user.uid),
             where("data", ">=", Timestamp.fromDate(start)),
             where("data", "<=", Timestamp.fromDate(end)),
             orderBy("data", "asc")
@@ -97,7 +87,6 @@ const ReportMensilePage = () => {
                 } as EnrichedRapportino;
             });
             
-            await localDB.rapportini_mensili.put({ id: monthId, data: enrichedData, timestamp: new Date() });
             setRapportini(enrichedData);
             setError(null);
         } catch (err) {
@@ -223,7 +212,7 @@ const ReportMensilePage = () => {
                     <Grid size={{ xs: 12, md: 7, lg: 8 }}>
                         <DettaglioCostiTipoGiornata dettaglio={riepilogoMese.dettaglio} />
                     </Grid>
-                    <Grid size={{ xs: 12}} sx={{ mt: 2 }}>
+                    <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
                         <ActivityBreakdown riepilogo={riepilogoMese} />
                     </Grid>
                 </Grid>

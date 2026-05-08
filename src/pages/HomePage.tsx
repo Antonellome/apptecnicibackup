@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Paper, Typography, ButtonBase, Badge, Grid } from '@mui/material'; // <-- CORREZIONE: RIPRISTINATO GRID STABILE
+import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -65,8 +66,7 @@ const HomePage: React.FC = () => {
                 
                 <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ maxWidth: '500px', mb: 4 }}>
                     {dashboardItems.map((item) => (
-                        // CORREZIONE: Usata la sintassi corretta per Grid v1
-                        (<Grid key={item.title} size={6}>
+                        <Grid size={{ xs: 6 }} key={item.title}>
                             <ButtonBase
                                 onClick={() => navigate(item.path)}
                                 sx={{
@@ -96,7 +96,7 @@ const HomePage: React.FC = () => {
                                     </Typography>
                                 </Paper>
                             </ButtonBase>
-                        </Grid>)
+                        </Grid>
                     ))}
                 </Grid>
 

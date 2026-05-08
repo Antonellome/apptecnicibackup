@@ -4,9 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Switch, FormControlLabel, Autocomplete, Button, CircularProgress, Alert, Divider, Box,
-    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip,
-    Grid
+    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -131,7 +131,7 @@ const ReportFormPage: React.FC = () => {
                             oraInizio: reportData.oraInizio || '07:30',
                             oraFine: reportData.oraFine || '16:30',
                             pausa: reportData.pausa === undefined ? 60 : reportData.pausa,
-                            ore: dettaglioSalvato?.ore ?? 0, // CORRETTO: Rimosso fallback a oreLavoro
+                            ore: dettaglioSalvato?.ore ?? 0,
                         };
                     });
                     setDettaglioOre(dettagliCaricati);
@@ -381,7 +381,7 @@ const ReportFormPage: React.FC = () => {
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
             <Box sx={{ p: { xs: 2, sm: 3 }, mx: 'auto' }}>
-                <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, maxHeight: '90vh', overflowY: 'auto' }}>
+                <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 } }}>
                     <Typography variant="h4" component="h1" gutterBottom>{isEditMode ? 'Dettaglio' : 'Nuovo'} Report</Typography>
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
                     <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 2 }}>
