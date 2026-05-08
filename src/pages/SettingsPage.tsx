@@ -1,111 +1,92 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box,
     Typography,
     Paper,
     TextField,
     Button,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
     List,
     ListItem,
     ListItemText,
     Divider,
     CircularProgress,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
-import { useGlobalData } from '@/hooks/useGlobalData';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
+import { localDB } from '@/db/local-db';
+import { Impostazioni, Tariffa } from '@/models/definitions';
+import { useLiveQuery } from 'dexie-react-hooks';
 
 const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
-    const { tipiGiornata, loading: globalLoading } = useGlobalData();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
 
-    const [tariffe, setTariffe] = useState<Record<string, string>>({});
+    const impostazioniLive = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
+
+    const [impostazioni, setImpostazioni] = useState<Impostazioni | null>(null);
     const [isSaving, setIsSaving] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
     const [isDirty, setIsDirty] = useState(false);
 
     useEffect(() => {
-        if (globalLoading || !user?.uid || tipiGiornata.length === 0) {
-            return;
+        if (impostazioniLive) {
+            // Applichiamo la logica per Ferie e Malattia qui se necessario
+            const data = impostazioniLive.data;
+            data.tariffe.forEach(t => {
+                if (t.nome.toLowerCase() === 'ferie' || t.nome.toLowerCase() === 'malattia') {
+                    t.unita = 'giorno';
+                }
+            });
+            setImpostazioni(data);
         }
+    }, [impostazioniLive]);
 
-        setIsLoading(true);
-
-        const storageKey = `tariffe_${user.uid}`;
-        const savedTariffeJSON = localStorage.getItem(storageKey);
-
-        const defaultTariffe = tipiGiornata.reduce((acc, tipo) => {
-            acc[tipo.nome] = 10.00;
-            return acc;
-        }, {} as Record<string, number>);
-
-        let finalTariffe: Record<string, number>;
-
-        if (savedTariffeJSON) {
-            const savedTariffe = JSON.parse(savedTariffeJSON);
-            finalTariffe = { ...defaultTariffe, ...savedTariffe };
-        } else {
-            finalTariffe = defaultTariffe;
-            localStorage.setItem(storageKey, JSON.stringify(finalTariffe));
-        }
-
-        const displayTariffe = Object.entries(finalTariffe).reduce((acc, [key, value]) => {
-            acc[key] = value.toFixed(2);
-            return acc;
-        }, {} as Record<string, string>);
-
-        setTariffe(displayTariffe);
-        setIsLoading(false);
-
-    }, [user, tipiGiornata, globalLoading]);
-
-
-    const handleTariffaChange = (id: string, value: string) => {
+    const handleTariffaChange = (tipoId: string, value: string) => {
         const valueWithDot = value.replace(',', '.');
-        if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
-            setTariffe(prev => ({ ...prev, [id]: valueWithDot }));
+        if (valueWithDot === '' || /^[0-9]*\\.?[0-9]*$/.test(valueWithDot)) {
+            setImpostazioni(prev => {
+                if (!prev) return null;
+                const newTariffe = prev.tariffe.map(t => 
+                    t.tipoGiornataId === tipoId ? { ...t, costo: Number(valueWithDot) } : t
+                );
+                return { ...prev, tariffe: newTariffe };
+            });
             setIsDirty(true);
         }
     };
 
-    const handleSalvaTariffe = () => {
-        if (!user) {
-            showSnackbar('Utente non autenticato.', 'error');
+    const handleTrasfertaChange = (value: string) => {
+        const valueWithDot = value.replace(',', '.');
+        if (valueWithDot === '' || /^[0-9]*\\.?[0-9]*$/.test(valueWithDot)) {
+            setImpostazioni(prev => prev ? { ...prev, costoTrasferta: { ...prev.costoTrasferta, costo: Number(valueWithDot) } } : null);
+            setIsDirty(true);
+        }
+    };
+
+    const handleSalva = async () => {
+        if (!impostazioni) {
+            showSnackbar('Nessuna impostazione da salvare.', 'error');
             return;
         }
         setIsSaving(true);
         try {
-            const tariffeToSave = Object.entries(tariffe).reduce((acc, [key, value]) => {
-                const numericValue = parseFloat(value);
-                acc[key] = isNaN(numericValue) ? 0 : numericValue;
-                return acc;
-            }, {} as Record<string, number>);
-
-            localStorage.setItem(`tariffe_${user.uid}`, JSON.stringify(tariffeToSave));
-            
-            const formattedTariffe = Object.entries(tariffeToSave).reduce((acc, [key, value]) => {
-                acc[key] = value.toFixed(2);
-                return acc;
-            }, {} as Record<string, string>);
-            setTariffe(formattedTariffe);
-            
-            showSnackbar('Tariffe salvate con successo!', 'success');
+            await localDB.tariffe_locali.put({ id: 'main', data: impostazioni, timestamp: new Date() });
+            showSnackbar('Impostazioni salvate con successo in locale!', 'success');
             setIsDirty(false);
         } catch (error) {
-            console.error("Errore during il salvataggio:", error);
-            showSnackbar('Errore during il salvataggio.', 'error');
+            console.error("Errore durante il salvataggio in locale:", error);
+            showSnackbar('Errore durante il salvataggio delle impostazioni.', 'error');
         } finally {
             setIsSaving(false);
         }
     };
-
+    
     const handlePasswordReset = async () => {
         if (user?.email) {
             try {
@@ -123,11 +104,11 @@ const SettingsPage: React.FC = () => {
             navigate('/login');
         } catch (error) {
             console.error("Logout Error: ", error);
-            showSnackbar('Errore during il logout', 'error');
+            showSnackbar('Errore durante il logout', 'error');
         }
     };
 
-    if (isLoading) {
+    if (!impostazioni) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
     }
 
@@ -136,119 +117,68 @@ const SettingsPage: React.FC = () => {
             <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>Impostazioni</Typography>
 
             <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-                <Typography variant="h6" gutterBottom>Gestione Tariffe Orarie</Typography>
+                <Typography variant="h6" gutterBottom>Gestione Tariffe Locali</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
+                    Queste tariffe sono salvate solo su questo dispositivo e vengono usate per i calcoli nel report mensile. Non modificano i dati centrali.
+                </Typography>
                 <List>
-                    {tipiGiornata.map((tipo) => (
-                        <React.Fragment key={tipo.id}>
+                     <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                        <ListItemText primary="Costo Trasferta" primaryTypographyProps={{ fontWeight: 'bold' }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
+                            <TextField
+                                type="text"
+                                size="small"
+                                value={impostazioni.costoTrasferta.costo.toFixed(2)}
+                                onChange={(e) => handleTrasfertaChange(e.target.value)}
+                                sx={{ width: '100px' }}
+                                inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
+                                disabled={isSaving}
+                            />
+                            <Typography variant="body1" sx={{ ml: 1 }}>€/{impostazioni.costoTrasferta.unita === 'ora' ? 'h' : 'g'}</Typography>
+                        </Box>
+                    </ListItem>
+                    <Divider sx={{my:1}} />
+                    {impostazioni.tariffe.map((tariffa) => (
+                        <React.Fragment key={tariffa.tipoGiornataId}>
                             <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                                <ListItemText primary={tipo.nome} />
+                                <ListItemText primary={tariffa.nome} />
                                 <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
                                     <TextField
                                         type="text"
                                         size="small"
-                                        value={tariffe[tipo.nome] ?? ''}
-                                        onChange={(e) => handleTariffaChange(tipo.nome, e.target.value)}
+                                        value={tariffa.costo.toFixed(2)}
+                                        onChange={(e) => handleTariffaChange(tariffa.tipoGiornataId, e.target.value)}
                                         sx={{ width: '100px' }}
-                                        inputProps={{ 
-                                            inputMode: 'decimal',
-                                            pattern: '^[0-9]*\\.?[0-9]*$',
-                                            style: { textAlign: 'right' } 
-                                        }}
+                                        inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
                                         disabled={isSaving}
                                     />
-                                    <Typography variant="body1" sx={{ ml: 1 }}>€/ora</Typography>
+                                    <Typography variant="body1" sx={{ ml: 1 }}>€/{tariffa.unita === 'ora' ? 'h' : 'g'}</Typography>
                                 </Box>
                             </ListItem>
                             <Divider />
                         </React.Fragment>
                     ))}
                 </List>
-                <Button variant="contained" sx={{ mt: 2 }} onClick={handleSalvaTariffe} disabled={isSaving || !isDirty}>
-                    {isSaving ? <CircularProgress size={24} /> : 'Salva Tariffe'}
+                <Button variant="contained" sx={{ mt: 2 }} onClick={handleSalva} disabled={isSaving || !isDirty}>
+                    {isSaving ? <CircularProgress size={24} /> : 'Salva Tariffe in Locale'}
                 </Button>
             </Paper>
 
             <Accordion elevation={3} sx={{ mb: 4 }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6">Guida all'Uso dell'App R.I.S.O.</Typography>
+                    <Typography>Guida e Gestione Account</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                    <Accordion defaultExpanded>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="h6">Installazione App (PWA)</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                        <Typography paragraph>
-                            Questa applicazione è una Progressive Web App (PWA). Puoi installarla sulla home screen del tuo telefono per un accesso rapido e per un'esperienza simile a quella di un'app nativa, incluse le funzionalità offline.
-                        </Typography>
-                        <Accordion>
-                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                <Typography>iPhone e iPad (Safari)</Typography>
-                            </AccordionSummary>
-                            <AccordionDetails>
-                                <Typography component="div">
-                                    <ol>
-                                        <li>Apri <strong>Safari</strong> e naviga a questa pagina.</li>
-                                        <li>Tocca il pulsante <strong>Condividi</strong> (l'icona con il quadrato e la freccia verso l'alto).</li>
-                                        <li>Scorri verso il basso e seleziona <strong>"Aggiungi a Home"</strong>.</li>
-                                        <li>Conferma il nome dell'app e tocca <strong>"Aggiungi"</strong>.</li>
-                                    </ol>
-                                </Typography>
-                            </AccordionDetails>
-                        </Accordion>
-                        <Accordion>
-                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                <Typography>Android (Chrome)</Typography>
-                            </AccordionSummary>
-                            <AccordionDetails>
-                                <Typography component="div">
-                                    <ol>
-                                        <li>Apri <strong>Chrome</strong> e naviga a questa pagina.</li>
-                                        <li>Tocca il pulsante del menu (i tre puntini in alto a destra).</li>
-                                        <li>Seleziona <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong>.</li>
-                                        <li>Segui le istruzioni per confermare l'installazione.</li>
-                                    </ol>
-                                </Typography>
-                            </AccordionDetails>
-                        </Accordion>
-                    </AccordionDetails>
-                </Accordion>
-
-                <Accordion>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="h6">Funzionalità Principali</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                        <Typography paragraph>
-                            <strong>Dashboard:</strong> La tua pagina iniziale con accesso rapido a tutte le sezioni.
-                        </Typography>
-                        <Typography paragraph>
-                            <strong>Nuovo Report:</strong> Compila i rapportini giornalieri. Puoi anche creare report per periodi di assenza (ferie, malattia) attivando l'opzione "Inserisci per un periodo".
-                        </Typography>
-                        <Typography paragraph>
-                            <strong>Funzionalità Offline:</strong> L'app funziona anche senza connessione a internet. I dati verranno salvati localmente e sincronizzati automaticamente non appena torni online.
-                        </Typography>
-                        <Typography paragraph>
-                            <strong>Lista Report:</strong> Vedi lo storico di tutti i tuoi rapportini. Puoi modificare solo quelli del mese corrente.
-                        </Typography>
-                        <Typography paragraph>
-                            <strong>Report Mensile:</strong> Un riepilogo completo del tuo mese lavorativo.
-                        </Typography>
-                        <Typography paragraph>
-                            <strong>Notifiche:</strong> Ricevi comunicazioni importanti direttamente nell'app.
-                        </Typography>
-                    </AccordionDetails>
-                </Accordion>
+                    <Typography paragraph>Qui puoi trovare le guide all'uso dell'app e gestire le impostazioni del tuo account.</Typography>
+                     <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+                        <Typography variant="h5" gutterBottom>Gestione Account</Typography>
+                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                            <Button variant="contained" color="secondary" onClick={handlePasswordReset}>Recupero Password</Button>
+                            <Button variant="outlined" color="error" onClick={handleLogout}>Logout</Button>
+                        </Box>
+                    </Paper>
                 </AccordionDetails>
             </Accordion>
-            
-            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-                <Typography variant="h5" gutterBottom>Gestione Account</Typography>
-                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-                    <Button variant="contained" color="secondary" onClick={handlePasswordReset}>Recupero Password</Button>
-                    <Button variant="outlined" color="error" onClick={handleLogout}>Logout</Button>
-                </Box>
-            </Paper>
         </Box>
     );
 }

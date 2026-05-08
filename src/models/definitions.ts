@@ -79,21 +79,6 @@ export interface MasterData {
     categorie: Categoria[];
 }
 
-// =========================================================================
-// --- TIPI PER LA GESTIONE DI FORM E ANAGRAFICHE ---
-// =========================================================================
-
-export interface FormField {
-    name: string;
-    label: string;
-    type: 'text' | 'select' | 'date' | 'number' | 'textarea';
-    options?: GenericItem[];
-    required?: boolean;
-}
-
-export interface BaseAnagrafica extends GenericItem {}
-export interface Anagrafica extends BaseAnagrafica {}
-
 
 // =========================================================================
 // --- INTERFACCIA PRINCIPALE: RAPPORTINO ---
@@ -112,7 +97,7 @@ export interface Rapportino extends BaseEntity {
 
   // --- Gestione Presenze e Ore ---
   presenze: string[];
-  dettaglioOreTecnici: { tecnicoId: string; ore: number; }[]; // Unica fonte di verità per le ore
+  dettaglioOreTecnici: { tecnicoId: string; ore: number; }[];
   altriTecniciIds?: string[];
 
   // --- Dettagli Orari ---
@@ -138,7 +123,25 @@ export interface Rapportino extends BaseEntity {
   updatedAt?: Timestamp;
 }
 
-export interface Report extends Rapportino {}
+// =========================================================================
+// --- INTERFACCIA PER IMPOSTAZIONI E TARIFFE ---
+// =========================================================================
+
+export interface Tariffa {
+    tipoGiornataId: string;
+    nome: string; // e.g., "Lavoro Ordinario", "Ferie"
+    costo: number;
+    unita: 'ora' | 'giorno';
+}
+
+export interface Impostazioni {
+    costoTrasferta: {
+        costo: number;
+        unita: 'giorno';
+    };
+    tariffe: Tariffa[];
+}
+
 
 // =========================================================================
 // --- TIPI "ARRICCHITI" PER LA VISUALIZZAZIONE NELL'UI ---
@@ -158,4 +161,3 @@ export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiorn
   isEditable?: boolean;
 }
 
-export interface EnrichedReport extends EnrichedRapportino {}
