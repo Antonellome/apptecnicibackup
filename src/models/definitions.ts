@@ -69,11 +69,16 @@ export interface Notifica extends BaseEntity {
 }
 
 export interface UserProfile extends BaseEntity {
+    uid: string;
     email: string;
+    tecnicoId: string;
     nome: string;
     cognome: string;
     attivo: boolean;
-    ruolo?: string;
+    categoria?: {
+        id: string;
+        nome: string;
+    };
 }
 
 export interface WebAppUser {

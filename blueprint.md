@@ -44,3 +44,25 @@ Ogni modifica al codice deve essere trattata come una mossa in una partita a sca
 # R.I.S.O. - Blueprint Applicazione Tecnici
 
 Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.O." (Report Individuali Sincronizzati Online) per tecnici.
+
+---
+
+# Piano di Implementazione Corrente
+
+## Funzionalità: Condivisione PDF del Report
+
+**Obiettivo:** Aggiungere un pulsante "Condividi" nella pagina di creazione di un nuovo report (`NuovoReportPage`).
+
+**Dettagli:**
+1.  **Pulsante:**
+    *   Posizionato accanto ai pulsanti "Annulla" e "Salva".
+    *   Visualizzerà un'icona di condivisione.
+    *   Sarà visibile solo se il browser supporta la Web Share API.
+2.  **Funzionalità al Click:**
+    *   Il form del report verrà convertito in un'immagine utilizzando `html2canvas`.
+    *   L'immagine verrà inserita in un documento PDF utilizzando `jspdf`.
+    *   Il PDF generato verrà condiviso tramite la Web Share API (`navigator.share`), consentendo l'invio ad app come WhatsApp, Email, etc.
+    *   Un indicatore di caricamento informerà l'utente durante la generazione del file.
+3.  **Dipendenze da Installare:**
+    *   `jspdf`
+    *   `html2canvas`

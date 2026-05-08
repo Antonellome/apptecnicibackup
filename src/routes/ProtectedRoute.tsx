@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import MainLayout from '@/components/layout/MainLayout'; // IMPORTA IL LAYOUT
 
 export const ProtectedRoute = () => {
   const { user, loading } = useAuth();
@@ -12,5 +13,10 @@ export const ProtectedRoute = () => {
     return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />;
+  // AVVOLGE L'OUTLET CON IL LAYOUT PRINCIPALE
+  return (
+    <MainLayout>
+      <Outlet />
+    </MainLayout>
+  );
 };

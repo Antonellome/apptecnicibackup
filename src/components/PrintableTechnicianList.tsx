@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { Box, Typography, Divider } from '@mui/material';
 import type { Tecnico, FormField, Ditta, Categoria } from '@/models/definitions';
-import { useMasterData } from '@/contexts/MasterDataProvider'; // AGGIORNATO
+import { useMasterData } from '@/hooks/useMasterData'; // AGGIORNATO
 import { safeGetDayjs } from '@/utils/dateUtils';
 import logo from '@/assets/react.svg';
 

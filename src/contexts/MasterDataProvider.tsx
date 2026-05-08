@@ -1,23 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '@/firebase';
-import { Tecnico, TipoGiornata, Veicolo, Nave, Luogo, Cliente, Impostazioni, Tariffa } from '@/models/definitions';
+import { db } from '@/utils/firebase'; // Corretto l'import
+import { Tecnico, TipoGiornata, Veicolo, Nave, Luogo, Cliente, Impostazioni, Tariffa, MasterData } from '@/models/definitions';
 import { localDB } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box } from '@mui/material';
 
 // --- STRUTTURE DATI ---
-interface MasterData {
-    tecnici: Tecnico[];
-    tipiGiornata: TipoGiornata[];
-    veicoli: Veicolo[];
-    navi: Nave[];
-    luoghi: Luogo[];
-    clienti: Cliente[];
-    impostazioni: Impostazioni; // Non può più essere null, avrà sempre un valore
-}
-
-interface MasterDataContextType {
+export interface MasterDataContextType {
     masterData: MasterData | null;
     loading: boolean;
     error: string | null;
@@ -32,12 +22,8 @@ const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni'>)[] = [
 const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 ore
 
 // --- LOGICA DI FALLBACK ---
-/**
- * Crea una configurazione di emergenza se nient'altro è disponibile.
- * Si basa sui tipi di giornata caricati per creare una struttura di tariffe valida.
- */
 const generateDefaultImpostazioni = (tipiGiornata: TipoGiornata[]): Impostazioni => {
-    console.warn("ATTENZIONE: Creazione di impostazioni di default hard-coded. Questo dovrebbe accadere solo al primo avvio in assoluto.");
+    console.warn("ATTENZIONE: Creazione di impostazioni di default hard-coded.");
     
     const tariffe: Tariffa[] = tipiGiornata.map(tg => {
         const nomeLower = tg.nome.toLowerCase();
@@ -45,14 +31,13 @@ const generateDefaultImpostazioni = (tipiGiornata: TipoGiornata[]): Impostazioni
         const isStraordinario = nomeLower.includes('straordinario');
         const isFestivo = nomeLower.includes('festivo');
         
-        let costo = 10; // Default orario
+        let costo = 10;
         if (isStraordinario) costo = 15;
         if (isFestivo) costo = 20;
-        if (isGiornaliero) costo = 0; // Ferie e Malattia hanno costo 0
+        if (isGiornaliero) costo = 0;
         if (nomeLower.includes('trasferta italia')) costo = 20;
         if (nomeLower.includes('trasferta europa')) costo = 50;
         if (nomeLower.includes('trasferta extraeuropea')) costo = 80;
-
 
         return {
             tipoGiornataId: tg.id,
@@ -68,7 +53,6 @@ const generateDefaultImpostazioni = (tipiGiornata: TipoGiornata[]): Impostazioni
     };
 };
 
-
 // --- COMPONENTE PROVIDER ---
 export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [masterData, setMasterData] = useState<MasterData | null>(null);
@@ -82,7 +66,6 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         try {
             const loadedAnagrafiche: { [key: string]: any[] } = {};
 
-            // 1. CARICAMENTO ANAGRAFICHE (CACHE-FIRST)
             for (const key of ANAGRAFICA_COLLECTIONS) {
                 const cached = await localDB.anagrafiche.get(key);
                 if (!forceRemote && cached && (new Date().getTime() - cached.timestamp.getTime() < CACHE_EXPIRATION_MS)) {
@@ -95,7 +78,6 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 }
             }
 
-            // 2. CARICAMENTO IMPOSTAZIONI (CON FALLBACK)
             let finalImpostazioni: Impostazioni | null = null;
             const cachedImpostazioni = await localDB.tariffe_locali.get('main');
 
@@ -107,7 +89,6 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                     finalImpostazioni = impostazioniDoc.data() as Impostazioni;
                     await localDB.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
                 } else {
-                    // FALLBACK DEFINITIVO: Genera le impostazioni di default
                     finalImpostazioni = generateDefaultImpostazioni(loadedAnagrafiche.tipiGiornata as TipoGiornata[]);
                     await localDB.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
                 }
@@ -140,12 +121,4 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
             {children}
         </MasterDataContext.Provider>
     );
-};
-
-export const useMasterData = (): MasterDataContextType => {
-    const context = useContext(MasterDataContext);
-    if (context === undefined) {
-        throw new Error('useMasterData must be used within a MasterDataProvider');
-    }
-    return context;
 };

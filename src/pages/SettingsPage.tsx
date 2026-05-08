@@ -74,8 +74,8 @@ const SettingsPage: React.FC = () => {
 
     useEffect(() => {
         if (impostazioniLive) {
-            const data = impostazioniLive.data;
-            data.tariffe.forEach(t => {
+            const data = JSON.parse(JSON.stringify(impostazioniLive.data)); // Deep clone
+            data.tariffe.forEach((t: any) => {
                 if (t.nome.toLowerCase() === 'ferie' || t.nome.toLowerCase() === 'malattia') {
                     t.unita = 'giorno';
                 }
@@ -176,24 +176,21 @@ const SettingsPage: React.FC = () => {
                     </ListItem>
                     <Divider sx={{ my: 1 }} />
                     {impostazioni.tariffe.map((tariffa) => (
-                        <React.Fragment key={tariffa.tipoGiornataId}>
-                            <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                                <ListItemText primary={tariffa.nome} />
-                                <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
-                                    <TextField
-                                        type="text"
-                                        size="small"
-                                        value={tariffa.costo.toFixed(2)}
-                                        onChange={(e) => handleTariffaChange(tariffa.tipoGiornataId, e.target.value)}
-                                        sx={{ width: '100px' }}
-                                        inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
-                                        disabled={isSaving}
-                                    />
-                                    <Typography variant="body1" sx={{ ml: 1 }}>€/{tariffa.unita === 'ora' ? 'h' : 'g'}</Typography>
-                                </Box>
-                            </ListItem>
-                            <Divider />
-                        </React.Fragment>
+                        <ListItem key={tariffa.tipoGiornataId} sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                            <ListItemText primary={tariffa.nome} />
+                            <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
+                                <TextField
+                                    type="text"
+                                    size="small"
+                                    value={tariffa.costo.toFixed(2)}
+                                    onChange={(e) => handleTariffaChange(tariffa.tipoGiornataId, e.target.value)}
+                                    sx={{ width: '100px' }}
+                                    inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
+                                    disabled={isSaving}
+                                />
+                                <Typography variant="body1" sx={{ ml: 1 }}>€/{tariffa.unita === 'ora' ? 'h' : 'g'}</Typography>
+                            </Box>
+                        </ListItem>
                     ))}
                 </List>
                 <Button variant="contained" sx={{ mt: 2 }} onClick={handleSalva} disabled={isSaving || !isDirty}>

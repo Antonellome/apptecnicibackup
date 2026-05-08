@@ -21,7 +21,7 @@ import { it } from 'date-fns/locale';
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { useMasterData } from '@/contexts/MasterDataProvider';
+import { useMasterData } from '@/hooks/useMasterData';
 import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions';
 
 const ReportListPage = () => {

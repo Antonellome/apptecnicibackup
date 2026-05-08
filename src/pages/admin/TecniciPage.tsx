@@ -17,7 +17,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { EnrichedRapportino, Rapportino, Tecnico } from '@/models/definitions';
 import ReportMensileDialog from '@/components/ReportMensileDialog';
 import { useSnackbar } from '@/contexts/SnackbarContext';
-import { useMasterData } from '@/contexts/MasterDataProvider'; // SOSTITUITO
+import { useMasterData } from '@/hooks/useMasterData'; // SOSTITUITO
 import DownloadIcon from '@mui/icons-material/Download';
 import { useAuth } from '@/hooks/useAuth';
 

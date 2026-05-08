@@ -1,21 +1,8 @@
-import { useState, useEffect, createContext, ReactNode, useMemo, useCallback, useContext } from 'react';
+import { useState, useEffect, createContext, ReactNode, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/utils/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-
-// --- INTERFACCIA CORRETTA CON OGGETTO CATEGORIA ANNIDATO ---
-export interface UserProfile {
-    uid: string;
-    email: string;
-    tecnicoId: string;
-    nome: string;
-    cognome: string;
-    attivo: boolean;
-    categoria?: {
-        id: string;
-        nome: string;
-    };
-}
+import { UserProfile } from '@/models/definitions';
 
 export interface AuthContextType {
   user: User | null;
@@ -46,7 +33,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   const tecnicoData = tecnicoDocSnap.data();
                   const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
 
-                  // --- COSTRUZIONE DELL'OGGETTO CATEGORIA CORRETTO ---
                   let categoriaObj: { id: string; nome: string; } | undefined = undefined;
 
                   if (id_categoria) {
@@ -64,13 +50,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   }
 
                   const profile: UserProfile = {
+                      id: currentUser.uid, // Aggiunto per conformità con BaseEntity
                       uid: currentUser.uid,
                       email: currentUser.email || '',
                       tecnicoId: tecnicoDocSnap.id,
                       nome: tecnicoData.nome || '',
                       cognome: tecnicoData.cognome || '',
                       attivo: tecnicoData.attivo || false,
-                      categoria: categoriaObj, // Assegno l'oggetto annidato
+                      categoria: categoriaObj,
                   };
                   setUserProfile(profile);
 
@@ -113,12 +100,4 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth deve essere usato all\'interno di un AuthProvider');
-    }
-    return context;
 };

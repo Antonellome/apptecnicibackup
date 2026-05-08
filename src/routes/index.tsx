@@ -11,7 +11,8 @@ import ReportListPage from '@/pages/ReportListPage';
 import SettingsPage from '@/pages/SettingsPage';
 import MonthlyReportPage from '@/pages/MonthlyReportPage';
 import CheckinPage from '@/pages/CheckinPage';
-import NotifichePage from '@/pages/NotifichePage'; // **CORREZIONE: Importo la pagina Notifiche**
+import NotifichePage from '@/pages/NotifichePage';
+import ReportFormPage from '@/pages/ReportFormPage'; // Importa la pagina del form
 
 // Auth HOC
 import { ProtectedRoute } from './ProtectedRoute';
@@ -23,11 +24,12 @@ export const router = createBrowserRouter([
         children: [
             { path: '', element: <HomePage /> },
             { path: 'nuovo-report', element: <NuovoReportPage /> },
+            { path: 'report/edit/:reportId', element: <ReportFormPage /> }, // ROTTA DI MODIFICA
             { path: 'lista-report', element: <ReportListPage /> },
             { path: 'impostazioni', element: <SettingsPage /> },
             { path: 'report-mensile', element: <MonthlyReportPage /> },
             { path: 'check-in', element: <CheckinPage /> },
-            { path: 'notifiche', element: <NotifichePage /> }, // **CORREZIONE: Aggiungo la rotta /notifiche**
+            { path: 'notifiche', element: <NotifichePage /> }, 
         ]
     },
     {
@@ -43,7 +45,6 @@ export const router = createBrowserRouter([
     }
 ], {
     future: {
-        v7_startTransition: true,
         v7_relativeSplatPath: true,
     },
 });
