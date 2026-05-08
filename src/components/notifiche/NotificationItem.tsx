@@ -1,64 +1,86 @@
 
-// CIAO. Componente per visualizzare una singola notifica.
-import React from 'react';
-import {
-    ListItem, ListItemText, Typography, Box
-} from '@mui/material';
-import { formatDistanceToNow } from 'date-fns';
-import { it } from 'date-fns/locale';
-
-interface Notification {
-    id: string;
-    title: string;
-    body: string;
-    sender: string;
-    read: boolean;
-    createdAt: any; 
-}
+import React, { useState } from 'react';
+import { Box, Typography, IconButton, Collapse, Paper, Tooltip } from '@mui/material';
+import { ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Delete as DeleteIcon, Circle as CircleIcon } from '@mui/icons-material';
+import { Notifica } from '@/models/definitions';
 
 interface NotificationItemProps {
-    notifica: Notification;
+    notification: Notifica;
+    isUnread: boolean;
+    onMarkAsRead: (id: string) => void;
+    onHide: (id: string) => void;
+    formattaData: (timestamp: any) => string;
 }
 
-const NotificationItem: React.FC<NotificationItemProps> = ({ notifica }) => {
+const NotificationItem: React.FC<NotificationItemProps> = ({ notification, isUnread, onMarkAsRead, onHide, formattaData }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
 
-    const timeAgo = notifica.createdAt
-        ? formatDistanceToNow(notifica.createdAt.toDate(), { addSuffix: true, locale: it })
-        : 'data non disponibile';
+    const handleToggleExpand = () => {
+        if (isUnread) {
+            onMarkAsRead(notification.id);
+        }
+        setIsExpanded(!isExpanded);
+    };
+
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Previene l'apertura/chiusura quando si clicca il cestino
+        onHide(notification.id);
+    };
+
+    const formattedDate = formattaData(notification.createdAt);
 
     return (
-        <ListItem 
-            divider
-            sx={{ 
-                // CIAO. Applica uno sfondo diverso se la notifica non è letta.
-                backgroundColor: notifica.read ? 'transparent' : 'action.hover',
-                py: 1.5
+        <Paper 
+            elevation={2} 
+            sx={{
+                p: 2,
+                mb: 2,
+                borderRadius: 2,
+                borderLeft: 5,
+                borderColor: 'primary.main',
+                bgcolor: isExpanded ? 'action.hover' : 'background.paper',
+                transition: 'background-color 0.3s, border-color 0.3s',
             }}
         >
-            <ListItemText
-                primary={
-                    <Typography variant="subtitle1" component="div" sx={{ fontWeight: notifica.read ? 'normal' : 'bold' }}>
-                        {notifica.title}
+            <Box display="flex" alignItems="center" onClick={handleToggleExpand} sx={{ cursor: 'pointer' }}>
+                {/* Main Content Area */}
+                <Box flexGrow={1}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: isUnread ? 700 : 500 }}>
+                        {notification.title}
                     </Typography>
-                }
-                secondary={
-                    <>
-                        <Typography variant="body2" color="text.secondary" component="p">
-                            {notifica.body}
+                    {!isExpanded && (
+                        <Typography variant="caption" color="text.secondary">
+                            {formattedDate}
                         </Typography>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Da: {notifica.sender}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {timeAgo}
-                            </Typography>
-                        </Box>
-                    </>
-                }
-            />
-        </ListItem>
+                    )}
+                </Box>
+
+                {/* Apex Icon */}
+                <IconButton size="small">
+                    {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+            </Box>
+
+            {/* Collapsible Details */}
+            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                <Box sx={{ pt: 2, mt: 1, borderTop: 1, borderColor: 'divider' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {notification.body}
+                    </Typography>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
+                        <Typography variant="caption" color="text.secondary">
+                            {formattedDate}
+                        </Typography>
+                        <Tooltip title="Nascondi notifica">
+                            <IconButton size="small" onClick={handleDelete}>
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                </Box>
+            </Collapse>
+        </Paper>
     );
-}
+};
 
 export default NotificationItem;
