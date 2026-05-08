@@ -3,8 +3,7 @@ import React from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Box
 } from '@mui/material';
-import { format, getDaysInMonth, startOfMonth } from 'date-fns';
-import { it } from 'date-fns/locale';
+import { getDaysInMonth, startOfMonth } from 'date-fns';
 import { EnrichedRapportino, TipoGiornata } from '@/models/definitions';
 
 interface MonthlyReportGridProps {
@@ -21,11 +20,10 @@ const MonthlyReportGrid: React.FC<MonthlyReportGridProps> = ({ rapportini, tipiG
   const firstDayOfMonth = startOfMonth(currentMonth);
 
   const renderCellContent = (day: number) => {
-    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     const reportForDay = rapportini.find(r => r.data.getDate() === day);
 
     if (reportForDay) {
-      const tipo = tipiGiornataMap.get(reportForDay.tipoGiornataId);
+      const tipo = tipiGiornataMap.get(reportForDay.tipoGiornata.id);
       const oreTotali = (reportForDay.dettaglioOreTecnici || []).reduce((acc, curr) => acc + (curr.ore || 0), 0);
 
       return (

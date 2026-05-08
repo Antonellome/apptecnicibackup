@@ -15,6 +15,17 @@ export interface GenericItem extends BaseEntity {
     [key: string]: any;
 }
 
+export interface FormField {
+    id: string;
+    label: string;
+    value: any;
+}
+
+export interface BaseAnagrafica {
+    id: string;
+    [key: string]: any;
+}
+
 // =========================================================================
 // --- ANAGRAFICHE PRINCIPALI (Collezioni di Root) ---
 // =========================================================================
@@ -54,6 +65,7 @@ export interface Notifica extends BaseEntity {
     senderId: string;
     createdAt: Timestamp;
     readBy: { [key: string]: boolean };
+    hiddenFor?: { [key: string]: boolean };
 }
 
 export interface UserProfile extends BaseEntity {
@@ -62,6 +74,17 @@ export interface UserProfile extends BaseEntity {
     cognome: string;
     attivo: boolean;
     ruolo?: string;
+}
+
+export interface WebAppUser {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+}
+
+export interface Qualifica {
+    id: string;
+    nome: string;
 }
 
 // =========================================================================
@@ -81,7 +104,7 @@ export interface MasterData {
 
 
 // =========================================================================
-// --- INTERFACCIA PRINCIPALE: RAPPORTINO ---
+// --- INTERFACCIA PRINCIPALE: RAPPORTINO E REPORT ---
 // =========================================================================
 
 export interface Rapportino extends BaseEntity {
@@ -123,6 +146,8 @@ export interface Rapportino extends BaseEntity {
   updatedAt?: Timestamp;
 }
 
+export type Report = Rapportino; // Alias per coerenza
+
 // =========================================================================
 // --- INTERFACCIA PER IMPOSTAZIONI E TARIFFE ---
 // =========================================================================
@@ -159,5 +184,8 @@ export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiorn
   nave?: Nave;
   luogo?: Luogo;
   isEditable?: boolean;
+  oreLavoro?: number;
 }
+
+export interface EnrichedReport extends EnrichedRapportino {};
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -10,7 +10,6 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableHead,
   TableRow
 } from '@mui/material';
 import Grid from "@mui/material/Grid";
@@ -20,7 +19,7 @@ import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/contexts/MasterDataProvider';
-import { Rapportino, EnrichedRapportino, Tecnico, Impostazioni, TipoGiornata } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { localDB } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
@@ -129,7 +128,7 @@ const ReportMensilePage = () => {
             
             riepilogo.oreTotali += oreGiorno;
             
-            const tariffa = tariffeMap.get(report.tipoGiornataId);
+            const tariffa = tariffeMap.get(report.tipoGiornata.id);
             let costoGiorno = 0;
             if (tariffa) {
                 if (tariffa.unita === 'ora') {
@@ -146,7 +145,7 @@ const ReportMensilePage = () => {
                 riepilogo.costoTrasferte += impostazioni.costoTrasferta.costo;
             }
 
-            const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornataId) || {
+            const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || {
                 nome: report.tipoGiornata.nome,
                 colore: report.tipoGiornata.colore,
                 ore: 0,
@@ -157,7 +156,7 @@ const ReportMensilePage = () => {
             dettaglioGiorno.ore += oreGiorno;
             dettaglioGiorno.costo += costoGiorno;
             dettaglioGiorno.giorni += 1;
-            riepilogo.dettaglio.set(report.tipoGiornataId, dettaglioGiorno);
+            riepilogo.dettaglio.set(report.tipoGiornata.id, dettaglioGiorno);
         }
         return riepilogo;
     }, [rapportini, impostazioniLocali, user]);

@@ -1,103 +1,73 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Grid, TextField, MenuItem, Select, FormControl, InputLabel, CircularProgress, SelectChangeEvent } from '@mui/material';
-import type { FormField, BaseAnagrafica } from '@/models/definitions';
+import React from 'react';
+import { TextField, Button, Box, Autocomplete } from '@mui/material';
+import { FormField, BaseAnagrafica } from '@/models/definitions';
 
 interface AnagraficaFormProps<T extends BaseAnagrafica> {
-    open: boolean;
-    onClose: () => void;
-    onSave: (data: Partial<T>) => Promise<void>;
-    initialData?: Partial<T>;
     fields: FormField[];
-    anagraficaType: string;
+    formData: T;
+    onFormChange: (name: string, value: any) => void;
+    onSave: () => void;
+    onCancel: () => void;
+    isEditing: boolean;
+    autocompleteOptions?: { [key: string]: any[] };
+    getAutocompleteLabel?: (option: any) => string;
 }
 
-const AnagraficaForm = <T extends BaseAnagrafica>({
-    open,
-    onClose,
-    onSave,
-    initialData,
-    fields,
-    anagraficaType
+const AnagraficaForm = <T extends BaseAnagrafica>({ 
+    fields, 
+    formData, 
+    onFormChange, 
+    onSave, 
+    onCancel, 
+    isEditing,
+    autocompleteOptions = {},
+    getAutocompleteLabel = (option: any) => option.nome || '',
 }: AnagraficaFormProps<T>) => {
-    const [formData, setFormData] = useState<Partial<T>>(initialData || {});
-    const [isSaving, setIsSaving] = useState(false);
-
-    useEffect(() => {
-        setFormData(initialData || {});
-    }, [initialData, open]);
-
-    const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<unknown>) => {
-        const { name, value } = event.target;
-        if (name) {
-            setFormData(prev => ({ ...prev, [name]: value }));
-        }
-    };
-
-    const handleSubmit = async () => {
-        setIsSaving(true);
-        try {
-            await onSave(formData);
-            onClose(); 
-        } catch (error) {
-            console.error("Errore durante il salvataggio:", error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
 
     const renderField = (field: FormField) => {
-        const { name, label, type, required, options } = field;
-        const value = String(formData[name as keyof T] ?? '');
-
-        if (type === 'select' && options) {
+        if (autocompleteOptions[field.id]) {
             return (
-                <FormControl fullWidth required={required} margin="normal">
-                    <InputLabel>{label}</InputLabel>
-                    <Select name={name} value={value} label={label} onChange={handleChange}>
-                        <MenuItem value=""><em>Nessuno</em></MenuItem>
-                        {options.map(option => (
-                            <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
+                <Autocomplete
+                    key={field.id}
+                    options={autocompleteOptions[field.id]}
+                    getOptionLabel={getAutocompleteLabel}
+                    value={autocompleteOptions[field.id].find(opt => opt.id === formData[field.id]) || null}
+                    onChange={(_, newValue) => {
+                        onFormChange(field.id, newValue ? newValue.id : '');
+                    }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            label={field.label}
+                            variant="outlined"
+                            margin="normal"
+                        />
+                    )}
+                />
             );
         }
 
         return (
             <TextField
+                key={field.id}
+                name={field.id}
+                label={field.label}
+                value={formData[field.id] || ''}
+                onChange={(e) => onFormChange(e.target.name, e.target.value)}
                 fullWidth
                 margin="normal"
-                name={name}
-                label={label}
-                type={type}
-                required={required}
-                value={value}
-                onChange={handleChange}
-                multiline={type === 'textarea'}
-                rows={type === 'textarea' ? 4 : 1}
             />
         );
     };
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-            <DialogTitle>{formData.id ? 'Modifica' : 'Aggiungi'} {anagraficaType}</DialogTitle>
-            <DialogContent>
-                <Grid container spacing={2}>
-                    {fields.map(field => (
-                        <Grid key={field.name}>
-                            {renderField(field)}
-                        </Grid>
-                    ))}
-                </Grid>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose} disabled={isSaving}>Annulla</Button>
-                <Button onClick={handleSubmit} color="primary" variant="contained" disabled={isSaving}>
-                    {isSaving ? <CircularProgress size={24} /> : 'Salva'}
-                </Button>
-            </DialogActions>
-        </Dialog>
+        <Box component="form" noValidate autoComplete="off">
+            {fields.map(renderField)}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                <Button onClick={onCancel} sx={{ mr: 1 }}>Annulla</Button>
+                <Button onClick={onSave} variant="contained">{isEditing ? 'Salva Modifiche' : 'Crea'}</Button>
+            </Box>
+        </Box>
     );
 };
 
