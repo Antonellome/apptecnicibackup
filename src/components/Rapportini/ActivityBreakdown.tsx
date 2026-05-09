@@ -2,11 +2,11 @@ import React from 'react';
 import {
   Box,
   Typography,
-  Grid,
   LinearProgress,
   Tooltip,
   Paper
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { RiepilogoMese } from '@/pages/MonthlyReportPage'; // Import the interface
 
 interface ActivityBreakdownProps {

@@ -25,6 +25,34 @@
 
 ---
 
+# MUI Grid - Regole Obbligatorie (v7+)
+
+**ATTENZIONE:** Queste regole derivano dalla documentazione ufficiale MUI e devono essere seguite alla lettera per prevenire errori di layout.
+
+1.  **Importazione Corretta:**
+    - Utilizzare **sempre** l'importazione standard, non la versione legacy.
+    - Corretto: `import Grid from '@mui/material/Grid';`
+    - **VIETATO:** `import Grid from '@mui/material/GridLegacy';`
+
+2.  **Props Obsolete RIMOSSE:**
+    - Le props `item` and `zeroMinWidth` sono state rimosse. Non devono essere utilizzate. Ogni `Grid` è implicitamente un `item`.
+
+3.  **Gestione delle Dimensioni (Size):**
+    - Le vecchie props `xs`, `sm`, `md`, `lg`, `xl` sono state **sostituite** dalla singola prop `size`.
+    - La prop `size` accetta un oggetto per definire le dimensioni sui diversi breakpoint.
+      - Esempio: `<Grid size={{ xs: 12, sm: 6 }}>`
+    - Se la dimensione è la stessa per tutti i breakpoint, si usa un singolo valore numerico.
+      - Esempio: `<Grid size={6}>`
+    - Il valore booleano `true` è stato sostituito dalla stringa `"grow"`.
+      - Esempio: `<Grid size="grow">`
+
+4.  **Comportamento del Layout:**
+    - Il nuovo `Grid` **non usa margini negativi**, eliminando problemi di overflow.
+    - `direction="column"` non è supportata. Utilizzare `Stack` o `flexbox` per layout verticali.
+    - Di default, un `Grid container` **non si espande** per tutta la larghezza. Se necessario, aggiungere `sx={{ width: '100%' }}`.
+
+---
+
 # SEZIONE DI EMERGENZA: PIANO DI RECUPERO POST-RESET
 
 **ATTENZIONE:** Questa sezione è stata creata in risposta a un ripristino (`git reset`) errato che ha desincronizzato lo stato dell'applicazione. I seguenti passaggi devono essere eseguiti in ordine per ripristinare le funzionalità implementate durante questa sessione di chat, annullando il danno del reset.
@@ -32,12 +60,6 @@
 **STATO ATTUALE DEL PROBLEMA:** Il `git reset` ha riportato alcuni file a versioni precedenti, creando un conflitto tra la vecchia gestione delle ore (`oreLavoro`) e la nuova struttura (`dettaglioOreTecnici`), e rompendo le dipendenze degli hook (es. `useMasterData`).
 
 **OBIETTIVO:** Ripercorrere e riapplicare le modifiche salienti di questa chat per riallineare l'intera codebase allo stato desiderato prima dell'incidente.
-
----
-
-# REGOLA FONDAMENTALE: IL METODO DEL GRANDE MAESTRO (ANALISI A 360°)
-
-Ogni modifica al codice deve essere trattata come una mossa in una partita a scacchi contro il crash di sistema. La regola primaria è **"correggere gli errori"**, come stabilito nella cronologia delle decisioni (`chat_log.txt`).
 
 ---
 
@@ -51,18 +73,13 @@ Questo documento descrive le specifiche e i requisiti per l'applicazione "R.I.S.
 
 ## Funzionalità: Condivisione PDF del Report
 
-**Obiettivo:** Aggiungere un pulsante "Condividi" nella pagina di creazione di un nuovo report (`NuovoReportPage`).
+**Obiettivo:** Correggere il pulsante "Condividi" nella pagina di modifica di un report (`ReportFormPage.tsx`).
 
 **Dettagli:**
-1.  **Pulsante:**
-    *   Posizionato accanto ai pulsanti "Annulla" e "Salva".
-    *   Visualizzerà un'icona di condivisione.
-    *   Sarà visibile solo se il browser supporta la Web Share API.
-2.  **Funzionalità al Click:**
-    *   Il form del report verrà convertito in un'immagine utilizzando `html2canvas`.
-    *   L'immagine verrà inserita in un documento PDF utilizzando `jspdf`.
-    *   Il PDF generato verrà condiviso tramite la Web Share API (`navigator.share`), consentendo l'invio ad app come WhatsApp, Email, etc.
-    *   Un indicatore di caricamento informerà l'utente durante la generazione del file.
-3.  **Dipendenze da Installare:**
-    *   `jspdf`
-    *   `html2canvas`
+1.  **Pulsante "Aggiorna":**
+    *   Mantiene la sua funzione: salva le modifiche e chiude il form.
+2.  **Pulsante "Condividi":**
+    *   Verrà rinominato in **"Aggiorna e Condividi"**.
+    *   Al click, eseguirà prima il salvataggio delle modifiche (`performSave`).
+    *   Subito dopo, e solo se il salvataggio ha successo, eseguirà la funzione di condivisione (`handleShare`).
+    *   Questo garantisce che il PDF condiviso contenga sempre i dati più recenti.

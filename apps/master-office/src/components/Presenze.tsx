@@ -12,10 +12,10 @@ import {
     Paper,
     Button,
     Chip,
-    Grid,
     TextField, // Aggiunto
     InputAdornment // Aggiunto
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { Tecnico, Rapportino, TipoGiornata } from '@/models/definitions';
@@ -231,7 +231,7 @@ const ListaTecnici = ({ titolo, tecnici, tipo, onCreaRapportino }: any) => {
   }
 
   return (
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
           <Typography variant="h6" gutterBottom>{`${titolo} (${tecnici.length})`}</Typography>
           <Paper variant="outlined" sx={{ p: 1, height: 400, overflowY: 'auto' }}>
               <List dense>
@@ -257,7 +257,7 @@ const ListaTecnici = ({ titolo, tecnici, tipo, onCreaRapportino }: any) => {
 }
 
 const KPIBox = ({ title, count, icon }: { title: string, count: number, icon: React.ReactNode }) => (
-    <Grid item xs={12} sm={6} md={3}>
+    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
         <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
             {icon}
             <Typography variant="h4">{count}</Typography>

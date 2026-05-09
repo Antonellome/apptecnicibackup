@@ -146,6 +146,11 @@ export interface Rapportino extends BaseEntity {
   clienteId?: string | null;
   sedeId?: string | null;
 
+  // --- Dati Firma Cliente ---
+  firmaFirmatarioNome?: string;
+  firmaFirmatarioSocieta?: string;
+  firmaVettoriale?: string; // SVG o JSON
+
   // --- Timestamps Automatici ---
   createdAt: Timestamp;
   updatedAt?: Timestamp;
@@ -193,4 +198,3 @@ export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiorn
 }
 
 export interface EnrichedReport extends EnrichedRapportino {};
-

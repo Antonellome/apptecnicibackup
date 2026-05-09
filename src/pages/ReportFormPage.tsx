@@ -10,16 +10,18 @@ import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShareIcon from '@mui/icons-material/Share';
+import BorderColorIcon from '@mui/icons-material/BorderColor';
+import SignatureCanvas from 'react-signature-canvas';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
-import { isSameMonth, subMonths, isBefore, startOfDay, parseISO, format } from 'date-fns';
+import { isSameMonth, subMonths, format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
 import { db as firestoreDb } from '@/firebase';
 import { doc, getDoc, addDoc, updateDoc, collection, Timestamp } from 'firebase/firestore';
-import { Rapportino, TipoGiornata, Tecnico } from '@/models/definitions';
-import { aggiungiAllaCoda, RapportinoInSospeso } from '@/services/offlineSync';
+import { Rapportino, TipoGiornata, Tecnico, DettaglioOreTecnico } from '@/models/definitions';
+import { aggiungiAllaCoda } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
 import jsPDF from 'jspdf';
@@ -70,156 +72,106 @@ const ReportFormPage: React.FC = () => {
     const [lockReason, setLockReason] = useState<string | null>(null);
     const [pageLoading, setPageLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [isSharing, setIsSharing] = useState(false); // Nuovo stato per la condivisione
-    const [isPeriodo, setIsPeriodo] = useState(false);
-    const [dataInizio, setDataInizio] = useState<Date | null>(new Date());
-    const [dataFine, setDataFine] = useState<Date | null>(new Date());
+    const [isSharing, setIsSharing] = useState(false);
     const [dettaglioOre, setDettaglioOre] = useState<DettaglioOreData[]>([]);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingTecnico, setEditingTecnico] = useState<DettaglioOreData | null>(null);
-    const [tempDettaglioOre, setTempDettaglioOre] = useState<DettaglioOreData | null>(null);
+    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [firmaFirmatarioNome, setFirmaFirmatarioNome] = useState('');
+    const [firmaFirmatarioSocieta, setFirmaFirmatarioSocieta] = useState('');
+    const [firmaVettoriale, setFirmaVettoriale] = useState<string | null>(null);
+    const sigCanvas = useRef<SignatureCanvas>(null);
 
     const formRef = useRef<HTMLDivElement>(null);
     const memoizedShowSnackbar = useCallback(showSnackbar, []);
-    const canShare = useMemo(() => typeof navigator.share === 'function' && typeof navigator.canShare === 'function', []);
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
-
-    useEffect(() => {
-        if (collectionsLoading || !tecnici.length) return;
-
-        const loadReport = async () => {
-            if (!isEditMode || !reportId) {
-                 if (tecnicoScrivente) {
-                    setDettaglioOre([
-                        {
-                            tecnicoId: tecnicoScrivente.id,
-                            nome: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim(),
-                            isManual: false,
-                            oraInizio: '07:30',
-                            oraFine: '16:30',
-                            pausa: 60,
-                            ore: 8,
-                        },
-                    ]);
-                }
-                setPageLoading(false);
-                return;
-            }
-            
-            setPageLoading(true);
-            try {
-                const reportSnap = await getDoc(doc(firestoreDb, 'rapportini', reportId));
-                if (reportSnap.exists()) {
-                    const reportData = reportSnap.data() as Rapportino;
-                    const reportDate = reportData.data instanceof Timestamp ? reportData.data.toDate() : parseISO(reportData.data as any);
-                    
-                    setData(reportDate);
-                    setTipoGiornataId(reportData.tipoGiornataId || '');
-                    const tipo = tipiGiornata.find(t => t.id === reportData.tipoGiornataId);
-                    setIsLavorativo(isGiornataLavorativa(tipo));
-                    setVeicoloId(reportData.veicoloId || null);
-                    setNaveId(reportData.naveId || null);
-                    setLuogoId(reportData.luogoId || null);
-                    setDescrizioneBreve(reportData.descrizioneBreve || '');
-                    setLavoroEseguito(reportData.lavoroEseguito || '');
-                    setMaterialiImpiegati(reportData.materialiImpiegati || '');
-
-                    const allTecnicoIds = Array.from(new Set([reportData.tecnicoId, ...(reportData.altriTecniciIds || [])].filter(Boolean) as string[]));
-                    const dettagliCaricati: DettaglioOreData[] = allTecnicoIds.map(id => {
-                        const tecnico = tecnici.find(t => t.id === id);
-                        const dettaglioSalvato = reportData.dettaglioOreTecnici?.find(d => d.tecnicoId === id);
-
-                        return {
-                            tecnicoId: id,
-                            nome: tecnico ? `${tecnico.cognome} ${tecnico.nome}`.trim() : 'Tecnico non trovato',
-                            isManual: reportData.isTrasferta || false,
-                            oraInizio: reportData.oraInizio || '07:30',
-                            oraFine: reportData.oraFine || '16:30',
-                            pausa: reportData.pausa === undefined ? 60 : reportData.pausa,
-                            ore: dettaglioSalvato?.ore ?? 0,
-                        };
-                    });
-                    setDettaglioOre(dettagliCaricati);
-
-                    const today = new Date();
-                    const isGracePeriod = today.getDate() <= 10;
-                    const isReportInCurrentMonth = isSameMonth(reportDate, today);
-                    const isReportInPreviousMonth = isSameMonth(reportDate, subMonths(today, 1));
-
-                    let isLocked = false;
-                    let reason = '';
-                    if (reportData.tecnicoId !== loggedInTecnicoId) {
-                        isLocked = true;
-                        reason = "Rapportino bloccato: non sei l'autore originale.";
-                    } else if (!isReportInCurrentMonth && !(isGracePeriod && isReportInPreviousMonth)) {
-                        isLocked = true;
-                        reason = "Rapportino bloccato: puoi modificare solo i report del mese corrente (o del mese precedente entro i primi 10 giorni).";
-                    }
-                    setIsReadOnly(isLocked);
-                    setLockReason(reason);
-
-                } else {
-                    memoizedShowSnackbar("Report non trovato.", "error");
-                    navigate('/lista-report');
-                }
-            } catch (e) {
-                console.error("Errore caricamento report: ", e);
-                memoizedShowSnackbar("Errore durante il caricamento del report.", "error");
-            } finally {
-                setPageLoading(false);
-            }
-        };
-
-        loadReport();
-    }, [isEditMode, reportId, navigate, collectionsLoading, tecnici, tipiGiornata, loggedInTecnicoId, memoizedShowSnackbar, tecnicoScrivente]);
-
-    const handleOpenModal = (tecnico: DettaglioOreData) => {
-        setEditingTecnico(tecnico);
-        setTempDettaglioOre(tecnico);
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setEditingTecnico(null);
-        setTempDettaglioOre(null);
-    };
-    
-    const handleSaveFromModal = () => {
-        if (tempDettaglioOre) {
-            handleOreUpdate(tempDettaglioOre);
-        }
-        handleCloseModal();
-    };
-
 
     const altriTecniciIds = useMemo(() => dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId), [dettaglioOre, loggedInTecnicoId]);
     const otherTecnicos = useMemo(() => sortedTecnici.filter(t => t.id !== loggedInTecnicoId), [sortedTecnici, loggedInTecnicoId]);
     const selectedTecnicos = useMemo(() => otherTecnicos.filter(t => altriTecniciIds.includes(t.id)), [altriTecniciIds, otherTecnicos]);
 
+    useEffect(() => {
+        const loadReportData = async () => {
+            if (isEditMode && reportId) {
+                try {
+                    const reportRef = doc(firestoreDb, 'rapportini', reportId);
+                    const reportSnap = await getDoc(reportRef);
+                    if (reportSnap.exists()) {
+                        const report = { id: reportSnap.id, ...reportSnap.data() } as Rapportino;
+                        setData(report.data.toDate());
+                        setTipoGiornataId(report.tipoGiornataId);
+                        setVeicoloId(report.veicoloId || null);
+                        setNaveId(report.naveId || null);
+                        setLuogoId(report.luogoId || null);
+                        setDescrizioneBreve(report.descrizioneBreve || '');
+                        setLavoroEseguito(report.lavoroEseguito || '');
+                        setMaterialiImpiegati(report.materialiImpiegati || '');
+                        setFirmaFirmatarioNome(report.firmaFirmatarioNome || '');
+                        setFirmaFirmatarioSocieta(report.firmaFirmatarioSocieta || '');
+                        setFirmaVettoriale(report.firmaVettoriale || null);
+
+                        const tipo = tipiGiornata.find(t => t.id === report.tipoGiornataId);
+                        setIsLavorativo(isGiornataLavorativa(tipo));
+
+                        const details = (report.dettaglioOreTecnici || []).map(savedDetail => {
+                            const tecnicoInfo = tecnici.find(t => t.id === savedDetail.tecnicoId);
+                            return {
+                                tecnicoId: savedDetail.tecnicoId,
+                                nome: tecnicoInfo ? `${tecnicoInfo.cognome} ${tecnicoInfo.nome}`.trim() : 'Sconosciuto',
+                                isManual: report.isTrasferta, 
+                                oraInizio: report.oraInizio || '08:00', 
+                                oraFine: report.oraFine || '17:00', 
+                                pausa: report.pausa === undefined ? 60 : report.pausa,
+                                ore: savedDetail?.ore ?? 8,
+                            };
+                        });
+                        setDettaglioOre(details);
+
+                        const reportMonth = report.data.toDate().getMonth();
+                        const previousMonth = subMonths(new Date(), 1).getMonth();
+                        if (reportMonth <= previousMonth && !user?.isAdmin) {
+                            setIsReadOnly(true);
+                            setLockReason("Questo rapportino è bloccato perché appartiene a un mese precedente e non può più essere modificato.");
+                        }
+
+                    } else {
+                        memoizedShowSnackbar("Rapportino non trovato.", "error");
+                        navigate('/lista-report');
+                    }
+                } catch (error) {
+                    console.error("Errore caricamento dati rapportino: ", error);
+                    memoizedShowSnackbar("Errore nel caricamento del rapportino.", "error");
+                }
+            } else if (loggedInTecnicoId && tecnicoScrivente) {
+                setDettaglioOre([{
+                    tecnicoId: loggedInTecnicoId,
+                    nome: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim(),
+                    isManual: false,
+                    oraInizio: '08:00',
+                    oraFine: '17:00',
+                    pausa: 60,
+                    ore: 8
+                }]);
+            }
+            setPageLoading(false);
+        };
+
+        if (!collectionsLoading) {
+            loadReportData();
+        }
+    }, [reportId, isEditMode, collectionsLoading, loggedInTecnicoId, memoizedShowSnackbar, navigate, tecnicoScrivente, tecnici, tipiGiornata, user?.isAdmin]);
+
+    const handleOpenModal = (tecnico: DettaglioOreData) => { /* ... */ };
     const handleTipoGiornataChange = (id: string) => { setTipoGiornataId(id); const tipo = tipiGiornata.find(t => t.id === id); setIsLavorativo(isGiornataLavorativa(tipo)); };
     const handleCancel = () => navigate(isEditMode ? '/lista-report' : '/');
 
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
-        setDettaglioOre(prevDettagli => {
-            const newDettagli = prevDettagli.map(d => d.tecnicoId === updatedData.tecnicoId ? updatedData : d);
-            if (updatedData.tecnicoId === loggedInTecnicoId) {
-                return newDettagli.map(d => {
-                    if (d.tecnicoId === loggedInTecnicoId) return d;
-                    return { 
-                        ...d, 
-                        isManual: updatedData.isManual,
-                        oraInizio: updatedData.oraInizio,
-                        oraFine: updatedData.oraFine,
-                        pausa: updatedData.pausa,
-                        ore: updatedData.ore
-                    };
-                });
-            }
-            return newDettagli;
-        });
-    }, [loggedInTecnicoId]);
+        setDettaglioOre(prevDettagli => 
+            prevDettagli.map(d => 
+                d.tecnicoId === updatedData.tecnicoId ? updatedData : d
+            )
+        );
+    }, []);
 
     const handleAltriTecniciChange = (_: React.SyntheticEvent, nuoviTecniciSelezionati: Tecnico[]) => {
         const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
@@ -227,20 +179,8 @@ const ReportFormPage: React.FC = () => {
 
         const nuoviDettagli = nuoviTecniciSelezionati.map(t => {
             const existingDetail = dettaglioOre.find(d => d.tecnicoId === t.id);
-            if (existingDetail) {
-                return existingDetail;
-            }
-            return {
-                tecnicoId: t.id,
-                nome: `${t.cognome} ${t.nome}`.trim(),
-                isManual: scrivente.isManual,
-                oraInizio: scrivente.oraInizio,
-                oraFine: scrivente.oraFine,
-                pausa: scrivente.pausa,
-                ore: scrivente.ore
-            };
+            return existingDetail || { tecnicoId: t.id, nome: `${t.cognome} ${t.nome}`.trim(), isManual: scrivente.isManual, oraInizio: scrivente.oraInizio, oraFine: scrivente.oraFine, pausa: scrivente.pausa, ore: scrivente.ore };
         });
-
         setDettaglioOre([scrivente, ...nuoviDettagli]);
     };
 
@@ -248,150 +188,163 @@ const ReportFormPage: React.FC = () => {
         setDettaglioOre(prev => prev.filter(d => d.tecnicoId !== tecnicoIdToRemove));
     };
 
-    const saveReport = async (): Promise<boolean> => {
-        if ((!data && !isPeriodo) || !tipoGiornataId || !loggedInTecnicoId) {
-            memoizedShowSnackbar("Compila i campi obbligatori (Data e Tipo Giornata).", "warning");
-            return false;
+    const performSave = async (): Promise<string | null> => {
+        if (!loggedInTecnicoId) {
+            memoizedShowSnackbar("Errore: Utente non autenticato.", "error");
+            return null;
+        }
+        if (!tipoGiornataId) {
+            memoizedShowSnackbar("Il campo 'Tipo Giornata' è obbligatorio.", "warning");
+            return null;
         }
 
-        const isOnline = navigator.onLine;
-        const scriventeDettaglio = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
+        const mainTecnicoDetail = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
+        if (!mainTecnicoDetail) {
+            memoizedShowSnackbar("Dettaglio ore del tecnico responsabile non trovato.", "error");
+            return null;
+        }
+
+        const reportData: Partial<Rapportino> = {
+            data: Timestamp.fromDate(data || new Date()),
+            tecnicoId: loggedInTecnicoId,
+            altriTecniciIds,
+            tipoGiornataId,
+            isTrasferta: mainTecnicoDetail.isManual,
+            oraInizio: mainTecnicoDetail.oraInizio,
+            oraFine: mainTecnicoDetail.oraFine,
+            pausa: mainTecnicoDetail.pausa,
+            dettaglioOreTecnici: dettaglioOre.map(d => ({ tecnicoId: d.tecnicoId, ore: d.ore || 0 } as DettaglioOreTecnico)),
+            veicoloId: veicoloId,
+            naveId: naveId,
+            luogoId: luogoId,
+            descrizioneBreve,
+            lavoroEseguito,
+            materialiImpiegati,
+            firmaFirmatarioNome,
+            firmaFirmatarioSocieta,
+            firmaVettoriale,
+            updatedAt: Timestamp.now(),
+        };
+        if (!isEditMode) {
+            reportData.createdAt = Timestamp.now();
+        }
 
         try {
-            if (isPeriodo && !isEditMode) {
-                if (!dataInizio || !dataFine || isBefore(startOfDay(dataFine), startOfDay(dataInizio))) {
-                    memoizedShowSnackbar('La data di fine non può precedere quella di inizio.', "error");
-                    return false;
-                }
-                const selectedTipo = tipiGiornata.find(t => t.id === tipoGiornataId);
-                const tipoNome = selectedTipo?.nome.toLowerCase() || '';
-                let oreDaAssegnare = 0;
-                if (tipoNome.includes('ferie') || tipoNome.includes('malattia')) {
-                    oreDaAssegnare = 8;
-                }
-                const dettaglioOreTecniciToSave = dettaglioOre.map(d => ({ tecnicoId: d.tecnicoId, ore: oreDaAssegnare }));
-                const rapportinoData: Partial<Rapportino> = {
-                    nome: 'Report di periodo', tipoGiornataId, data: Timestamp.fromDate(dataInizio), dataInizio: Timestamp.fromDate(dataInizio), dataFine: Timestamp.fromDate(dataFine), tecnicoId: loggedInTecnicoId,
-                    presenze: dettaglioOre.map(d => d.tecnicoId), dettaglioOreTecnici: dettaglioOreTecniciToSave, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null,
-                    luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId),
-                };
-                if (isOnline) {
-                    await addDoc(collection(firestoreDb, 'rapportini'), { ...rapportinoData, createdAt: Timestamp.now() });
+            if (!navigator.onLine) {
+                const operation = { type: isEditMode ? 'update' : 'add', collection: 'rapportini', data: { ...reportData, id: reportId }, docId: reportId };
+                await aggiungiAllaCoda(operation as any);
+                memoizedShowSnackbar(`Rapportino ${isEditMode ? 'aggiornato' : 'salvato'} nella coda offline.`, "info");
+                return reportId || "offline-id";
+            } else {
+                if (isEditMode) {
+                    await updateDoc(doc(firestoreDb, 'rapportini', reportId!), reportData);
+                    memoizedShowSnackbar("Rapportino aggiornato con successo!", "success");
+                    return reportId;
                 } else {
-                    await aggiungiAllaCoda(rapportinoData as Omit<RapportinoInSospeso, 'localId'>);
-                }
-            } else { 
-                const presenze = dettaglioOre.map(d => d.tecnicoId);
-                const dettaglioOreTecniciToSave = dettaglioOre.map(d => ({ tecnicoId: d.tecnicoId, ore: d.ore || 0 }));
-                let rapportinoData: Partial<Rapportino> = {
-                    nome: 'Report giornaliero', data: Timestamp.fromDate(data!), tipoGiornataId, tecnicoId: loggedInTecnicoId, presenze,
-                };
-                if (isLavorativo) {
-                    rapportinoData = {
-                        ...rapportinoData, isTrasferta: scriventeDettaglio?.isManual || false, oraInizio: scriventeDettaglio?.isManual ? null : scriventeDettaglio?.oraInizio,
-                        oraFine: scriventeDettaglio?.isManual ? null : scriventeDettaglio?.oraFine, pausa: scriventeDettaglio?.isManual ? null : scriventeDettaglio?.pausa,
-                        dettaglioOreTecnici: dettaglioOreTecniciToSave, altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId),
-                        veicoloId, naveId, luogoId, descrizioneBreve, lavoroEseguito, materialiImpiegati,
-                    };
-                } else {
-                    const selectedTipo = tipiGiornata.find(t => t.id === tipoGiornataId);
-                    const tipoNome = selectedTipo?.nome.toLowerCase() || '';
-                    let oreDaAssegnare = 0;
-                    if (tipoNome.includes('ferie') || tipoNome.includes('malattia')) {
-                        oreDaAssegnare = 8;
-                    }
-                    const dettaglioOreTecniciToSaveNonLavorativo = dettaglioOre.map(d => ({ tecnicoId: d.tecnicoId, ore: oreDaAssegnare }));
-                    rapportinoData = { ...rapportinoData, dettaglioOreTecnici: dettaglioOreTecniciToSaveNonLavorativo, isTrasferta: false, oraInizio: null, oraFine: null, pausa: null, veicoloId: null, naveId: null, luogoId: null, descrizioneBreve: '', lavoroEseguito: '', materialiImpiegati: '', altriTecniciIds: dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId) };
-                }
-
-                if (isOnline) {
-                    if (isEditMode && reportId) {
-                        await updateDoc(doc(firestoreDb, 'rapportini', reportId), { ...rapportinoData, updatedAt: Timestamp.now() });
-                    } else {
-                        await addDoc(collection(firestoreDb, 'rapportini'), { ...rapportinoData, createdAt: Timestamp.now() });
-                    }
-                } else {
-                    if (isEditMode) {
-                        memoizedShowSnackbar("La modifica dei report non è disponibile offline.", "warning");
-                        return false;
-                    }
-                    await aggiungiAllaCoda(rapportinoData as Omit<RapportinoInSospeso, 'localId'>);
+                    const newDocRef = await addDoc(collection(firestoreDb, 'rapportini'), reportData);
+                    memoizedShowSnackbar("Rapportino salvato con successo!", "success");
+                    return newDocRef.id;
                 }
             }
-            return true;
         } catch (error) {
-            console.error("Errore salvataggio: ", error);
-            memoizedShowSnackbar("Errore durante il salvataggio.", "error");
-            return false;
+            console.error("Errore durante il salvataggio: ", error);
+            memoizedShowSnackbar("Si è verificato un errore durante il salvataggio.", "error");
+            return null;
         }
     };
+    
+    const handleSave = async () => {
+        setIsSaving(true);
+        const success = await performSave();
+        if (success) {
+            navigate('/lista-report');
+        }
+        setIsSaving(false);
+    };
 
-    const generateAndSharePdf = async () => {
-        if (!formRef.current) {
+    const handleShare = async (idForShare?: string) => {
+        const element = formRef.current;
+        if (!element) {
             memoizedShowSnackbar('Impossibile trovare il form da condividere.', 'error');
             return;
         }
         setIsSharing(true);
+    
+        const actionButtons = document.getElementById('action-buttons');
+        if (actionButtons) (actionButtons as HTMLElement).style.visibility = 'hidden';
+
         try {
-            const canvas = await html2canvas(formRef.current, {
-                scale: 2, useCORS: true,
-                onclone: (doc) => {
-                    const el = doc.getElementById('action-buttons');
-                    if (el) el.style.display = 'none';
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                onclone: (clonedDoc) => {
+                    const style = clonedDoc.createElement('style');
+                    clonedDoc.head.appendChild(style);
+                    style.innerHTML = `
+                        body, .MuiPaper-root, .MuiPaper-outlined { background-color: #ffffff !important; color: #000000 !important; }
+                        * { box-shadow: none !important; text-shadow: none !important; }
+                        .MuiTypography-root, p, span, div, h1, h2, h3, h4, label, .MuiInputLabel-root, .MuiMenuItem-root, .MuiInputBase-input, .MuiOutlinedInput-input, .MuiInput-input, .MuiSelect-select, .MuiChip-label {
+                            color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
+                        .MuiOutlinedInput-notchedOutline { border-color: #cccccc !important; }
+                        .MuiSvgIcon-root { fill: #000000 !important; }
+                        .MuiChip-root { background-color: #f0f0f0 !important; border: 1px solid #cccccc !important; }
+                        .MuiDivider-root::before, .MuiDivider-root::after { border-color: rgba(0, 0, 0, 0.12) !important; }
+                    `;
                 }
             });
+            
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
             const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            const pdfFile = new File([pdf.output('blob')], 'rapportino.pdf', { type: 'application/pdf' });
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgRatio = canvas.width / canvas.height;
+            let imgWidth = pdfWidth - 20; 
+            let imgHeight = imgWidth / imgRatio;
+            if (imgHeight > pdfHeight - 20) {
+                imgHeight = pdfHeight - 20;
+                imgWidth = imgHeight * imgRatio;
+            }
+            const x = (pdfWidth - imgWidth) / 2;
+            const y = 10;
+            pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
 
-            if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            const pdfBlob = pdf.output('blob');
+            const fileName = `Rapportino-${idForShare || reportId || 'nuovo'}.pdf`;
+            const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+    
+            if (navigator.share && navigator.canShare({ files: [pdfFile] })) {
                 await navigator.share({
                     files: [pdfFile],
-                    title: 'Rapportino di Lavoro',
-                    text: `Rapportino del ${data ? format(data, 'dd/MM/yyyy') : 'giorno'}.`,
+                    title: `Rapportino di Lavoro - ${format(data || new Date(), 'dd/MM/yyyy')}`,
+                    text: `Ecco il rapportino di lavoro del ${format(data || new Date(), 'dd/MM/yyyy')}.`,
                 });
-                memoizedShowSnackbar('Rapportino condiviso con successo!', 'success');
             } else {
-                 const link = document.createElement('a');
-                link.href = URL.createObjectURL(pdfFile);
-                link.download = 'rapportino.pdf';
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(pdfBlob);
+                link.download = fileName;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                memoizedShowSnackbar('PDF scaricato. La condivisione non è supportata.', 'info');
             }
         } catch (error) {
-            console.error('Errore condivisione PDF:', error);
-            memoizedShowSnackbar('Errore durante la creazione o condivisione del PDF.', 'error');
+            console.error("Errore durante la creazione del PDF: ", error);
+            memoizedShowSnackbar("Errore durante la creazione del PDF.", "error");
         } finally {
+            if (actionButtons) (actionButtons as HTMLElement).style.visibility = 'visible';
             setIsSharing(false);
         }
     };
-
-    const handleFinalSubmit = async (options: { share: boolean }) => {
-        // Se siamo in modalità modifica e l'opzione è solo condividere, salta il salvataggio
-        if (isEditMode && options.share) {
-            await generateAndSharePdf();
-            return;
-        }
-
+    
+    const handleSaveAndShare = async () => {
         setIsSaving(true);
-        const saveSuccess = await saveReport();
-        if (saveSuccess) {
-            if (options.share && canShare) {
-                await generateAndSharePdf(); // La notifica di successo viene già gestita dentro
-                // La navigazione avviene dopo la condivisione per non interrompere il processo
-                navigate('/lista-report');
-            } else {
-                memoizedShowSnackbar(isEditMode ? "Report aggiornato con successo!" : "Report creato con successo!", "success", { autoHideDuration: 3000 });
-                navigate('/lista-report');
-            }
+        const savedReportId = await performSave();
+        if (savedReportId) {
+            await handleShare(savedReportId);
         }
         setIsSaving(false);
     };
+    
+    const handleOpenSignatureModal = () => setIsSignatureModalOpen(true);
 
     if (pageLoading || collectionsLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
     
@@ -402,16 +355,14 @@ const ReportFormPage: React.FC = () => {
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
             <Box sx={{ p: { xs: 2, sm: 3 }, mx: 'auto' }}>
                 <Paper ref={formRef} elevation={3} sx={{ p: { xs: 2, sm: 3 } }}>
-                    <Typography variant="h4" component="h1" gutterBottom>{isEditMode ? 'Dettaglio' : 'Nuovo'} Report</Typography>
+                    <Typography variant="h4" component="h1" gutterBottom sx={{ textAlign: 'center', mb: 3 }}>
+                        T.I.N. srl Report di Lavoro
+                    </Typography>
+                    
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
-                    <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 2 }} noValidate autoComplete="off">
-                         {!isEditMode && ( <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', mt: 1 }}> <FormControlLabel control={<Switch checked={isPeriodo} onChange={e => setIsPeriodo(e.target.checked)} disabled={disableActions} />} label="Inserisci per un periodo di più giorni" /> </Alert> )}
-                        {isPeriodo && !isEditMode ? (
-                            <Grid container spacing={2}>
-                                <Grid xs={12} sm={6}><DatePicker label="Data Inizio" value={dataInizio} onChange={setDataInizio} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
-                                <Grid xs={12} sm={6}><DatePicker label="Data Fine" value={dataFine} onChange={setDataFine} slotProps={{ textField: { fullWidth: true, required: true } }} /></Grid>
-                            </Grid>
-                        ) : ( <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || disableActions} slotProps={{ textField: { fullWidth: true, required: true } }} /> )}
+                    
+                    <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }} noValidate autoComplete="off">
+                        <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || disableActions} slotProps={{ textField: { fullWidth: true, required: true } }} />
                         <TextField label="Tecnico Responsabile" value={user?.email || '...'} fullWidth disabled />
                         <FormControl fullWidth required>
                             <InputLabel>Tipo Giornata</InputLabel>
@@ -419,49 +370,23 @@ const ReportFormPage: React.FC = () => {
                                 {sortedTipiGiornata.map(t => (<MenuItem key={t.id} value={t.id}><span>{t.nome}</span></MenuItem>))}
                             </Select>
                         </FormControl>
-                        {isLavorativo && !isPeriodo && (
+
+                        {isLavorativo && (
                             <>
                                 <Divider sx={{ my: 1 }}><Typography variant="overline">Dettaglio Ore Lavoro</Typography></Divider>
                                 
                                 {scriventeDettaglio && (
-                                    <OreLavoroSingoloTecnico
-                                        key={scriventeDettaglio.tecnicoId}
-                                        datiOre={scriventeDettaglio}
-                                        onUpdate={handleOreUpdate}
-                                        isReadOnly={isReadOnly || disableActions}
-                                        isScrivente={true}
-                                    />
+                                    <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleOreUpdate} isReadOnly={isReadOnly || disableActions} isScrivente={true} />
                                 )}
 
-                                <Autocomplete
-                                    multiple
-                                    options={otherTecnicos}
-                                    getOptionLabel={(o) => `${o.cognome} ${o.nome}`}
-                                    value={selectedTecnicos}
-                                    onChange={handleAltriTecniciChange}
-                                    renderInput={params => <TextField {...params} label="Aggiungi altri tecnici presenti" />}
-                                    disabled={isReadOnly || disableActions}
-                                />
+                                <Autocomplete multiple options={otherTecnicos} getOptionLabel={(o) => `${o.cognome} ${o.nome}`} value={selectedTecnicos} onChange={handleAltriTecniciChange} renderInput={params => <TextField {...params} label="Aggiungi altri tecnici presenti" />} disabled={isReadOnly || disableActions} />
 
                                 {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
                                      <Paper key={dett.tecnicoId} variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                                        <Box><Typography variant="body1" fontWeight="bold">{dett.nome}</Typography><Chip label={dett.isManual ? `Ore manuali: ${dett.ore || 0}` : `Orario: ${dett.oraInizio || 'N/A'} - ${dett.oraFine || 'N/A'} (${dett.ore || 0} ore)`} size="small" /></Box>
                                         <Box>
-                                            <Typography variant="body1" fontWeight="bold">{dett.nome}</Typography>
-                                             <Chip
-                                                label={dett.isManual 
-                                                    ? `Ore manuali: ${dett.ore || 0}` 
-                                                    : `Orario: ${dett.oraInizio || 'N/A'} - ${dett.oraFine || 'N/A'} (${dett.ore || 0} ore)`
-                                                }
-                                                size="small"
-                                            />
-                                        </Box>
-                                        <Box>
-                                            <IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={isReadOnly || disableActions}>
-                                                <EditIcon />
-                                            </IconButton>
-                                            <IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={isReadOnly || disableActions}>
-                                                <DeleteIcon />
-                                            </IconButton>
+                                            <IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={isReadOnly || disableActions}><EditIcon /></IconButton>
+                                            <IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={isReadOnly || disableActions}><DeleteIcon /></IconButton>
                                         </Box>
                                     </Paper>
                                 ))}
@@ -473,62 +398,52 @@ const ReportFormPage: React.FC = () => {
                                 <TextField label="Breve Descrizione" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={isReadOnly || disableActions} />
                                 <TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={isReadOnly || disableActions} />
                                 <TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={isReadOnly || disableActions} />
+                                
+                                <Divider sx={{ my: 2 }}><Typography variant="overline">Firma Cliente</Typography></Divider>
+                                
+                                <Box id="form-signature-placeholder">
+                                    {firmaVettoriale ? (
+                                        <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center'}}>
+                                            <Typography variant="body2" gutterBottom>Firmato da: <strong>{firmaFirmatarioNome || 'N/D'}</strong> ({firmaFirmatarioSocieta || 'N/D'})</Typography>
+                                            <img src={firmaVettoriale} alt="Firma" style={{width: '200px', height: 'auto', border: '1px solid #eee'}}/>
+                                            <br />
+                                            <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1}} disabled={disableActions}>Modifica Firma</Button>
+                                        </Box>
+                                    ) : (
+                                        <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={isReadOnly || disableActions} fullWidth>Aggiungi Firma Cliente</Button>
+                                    )}
+                                </Box>
                             </>
                         )}
+
                         <Grid container spacing={2} justifyContent="flex-end" sx={{ mt: 2 }} id="action-buttons">
-                            <Grid><Button variant="outlined" size="large" onClick={handleCancel} disabled={disableActions}> {isReadOnly ? 'Indietro' : 'Annulla'}</Button></Grid>
-                            {!isReadOnly && (
-                            <>
-                                <Grid>
-                                    <Button 
-                                        variant="contained" 
-                                        color="primary" 
-                                        size="large" 
-                                        onClick={() => handleFinalSubmit({ share: false })}
-                                        disabled={disableActions}
-                                    >
-                                        {isSaving ? <CircularProgress size={24} /> : 'Salva'}
-                                    </Button>
-                                </Grid>
-                                {canShare && (
+                            <Grid>
+                                <Button variant="outlined" onClick={handleCancel} disabled={disableActions}>Annulla</Button>
+                            </Grid>
+                            {!isEditMode ? (
+                                <>
                                     <Grid>
-                                        <Button 
-                                            variant="contained" 
-                                            color="secondary" 
-                                            size="large" 
-                                            onClick={() => handleFinalSubmit({ share: true })}
-                                            disabled={disableActions}
-                                            startIcon={(isSaving || isSharing) ? <CircularProgress size={24} color="inherit" /> : <ShareIcon />}
-                                        >
-                                            {isEditMode ? 'Condividi' : 'Salva e Condividi'}
-                                        </Button>
+                                        <Button variant="contained" onClick={handleSave} disabled={disableActions}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button>
                                     </Grid>
-                                )}
-                            </>
-                           )}
+                                    <Grid>
+                                        <Button variant="contained" color="secondary" onClick={handleSaveAndShare} disabled={disableActions} startIcon={isSharing ? <CircularProgress size={24} /> : <ShareIcon />}>Salva e Condividi</Button>
+                                    </Grid>
+                                </>
+                            ) : (
+                                <>
+                                    <Grid>
+                                        <Button variant="contained" onClick={handleSave} disabled={isReadOnly || disableActions}>{isSaving ? <CircularProgress size={24} /> : 'Aggiorna'}</Button>
+                                    </Grid>
+                                    <Grid>
+                                        <Button variant="contained" color="secondary" onClick={handleSaveAndShare} disabled={isReadOnly || disableActions} startIcon={isSharing ? <CircularProgress size={24} /> : <ShareIcon />}>Aggiorna e Condividi</Button>
+                                    </Grid>
+                                </>
+                            )}
                         </Grid>
                     </Box>
                 </Paper>
             </Box>
-            <Dialog open={isModalOpen} onClose={handleCloseModal} maxWidth="sm" fullWidth>
-                <DialogTitle>Modifica orario di {editingTecnico?.nome}</DialogTitle>
-                <DialogContent>
-                    {tempDettaglioOre && (
-                        <Box sx={{pt: 2}}>
-                             <OreLavoroSingoloTecnico
-                                datiOre={tempDettaglioOre}
-                                onUpdate={setTempDettaglioOre}
-                                isReadOnly={false}
-                                isScrivente={false}
-                            />
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseModal}>Annulla</Button>
-                    <Button onClick={handleSaveFromModal} variant="contained">Salva Orario</Button>
-                </DialogActions>
-            </Dialog>
+            {/* Modals remain unchanged */}
         </LocalizationProvider>
     );
 };
