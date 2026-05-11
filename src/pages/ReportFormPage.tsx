@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
-    Autocomplete, Button, CircularProgress, Alert, Divider, Box, Chip, Dialog, DialogTitle, DialogContent, DialogActions, IconButton
+    Autocomplete, Button, CircularProgress, Alert, Box, Chip, Dialog, DialogTitle, DialogContent, DialogActions, IconButton
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
@@ -31,7 +31,6 @@ const isGiornataLavorativa = (tipo: TipoGiornata | undefined): boolean => {
     return !NON_LAVORATIVO_KEYWORDS.some(keyword => tipo.nome.toLowerCase().includes(keyword));
 };
 
-// Funzione per creare lo stato iniziale per un tecnico
 const createInitialDettaglio = (tecnicoId: string, nome: string): DettaglioOreData => ({
     tecnicoId,
     nome,
@@ -41,6 +40,18 @@ const createInitialDettaglio = (tecnicoId: string, nome: string): DettaglioOreDa
     pausa: 60,
     ore: 8,
 });
+
+// Helper component for sections
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <Paper variant="outlined" sx={{ p: 2, mt: 3, borderLeft: '4px solid', borderColor: 'primary.main' }}>
+        <Typography variant="h6" gutterBottom component="div" sx={{ fontWeight: 'bold', color: 'primary.dark' }}>
+            {title}
+        </Typography>
+        <Grid container spacing={3}>
+            {children}
+        </Grid>
+    </Paper>
+);
 
 const ReportFormPage: React.FC = () => {
     const navigate = useNavigate();
@@ -54,7 +65,6 @@ const ReportFormPage: React.FC = () => {
 
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
 
-    // --- INIZIALIZZAZIONE SINCRONA DELLO STATO PER EVITARE RACE CONDITION ---
     const [dettaglioOre, setDettaglioOre] = useState<DettaglioOreData[]>(() => {
         if (!isEditMode && loggedInTecnicoId) {
             return [createInitialDettaglio(loggedInTecnicoId, 'Caricamento...')];
@@ -97,7 +107,6 @@ const ReportFormPage: React.FC = () => {
 
     useEffect(() => {
         const loadData = async () => {
-            // In modalità modifica, carica i dati da Firestore
             if (isEditMode && reportId) {
                 setPageLoading(true);
                 try {
@@ -148,7 +157,6 @@ const ReportFormPage: React.FC = () => {
                     memoizedShowSnackbar("Errore nel caricamento del rapportino.", "error");
                 }
             } else if (tecnicoScrivente) {
-                // In modalità nuovo, aggiorna solo il nome del tecnico una volta caricato
                 setDettaglioOre(prev => prev.map(d => 
                     d.tecnicoId === loggedInTecnicoId 
                     ? { ...d, nome: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim() } 
@@ -319,6 +327,7 @@ const ReportFormPage: React.FC = () => {
                 imgHeight = pdfHeight - 20;
                 imgWidth = imgHeight * imgRatio;
             }
+            const imgData = canvas.toDataURL('image/png');
             pdf.addImage(imgData, 'PNG', (pdfWidth - imgWidth) / 2, 10, imgWidth, imgHeight);
             const pdfBlob = pdf.output('blob');
             const fileName = `Rapportino-${savedId}.pdf`;
@@ -361,46 +370,41 @@ const ReportFormPage: React.FC = () => {
                 <Paper 
                     ref={formRef} 
                     elevation={3} 
-                    sx={{
-                        p: { xs: 2, sm: 3 },
-                        borderTop: '5px solid',
-                        borderColor: 'primary.main'
-                    }}
+                    sx={{ p: { xs: 2, sm: 3 } }}
                 >
-                    <Box sx={{ textAlign: 'center', mb: 3 }}>
+                    <Box sx={{ textAlign: 'center', mb: 3, borderBottom: '2px solid', borderColor: 'primary.main', pb: 2 }}>
                         <Typography variant="h4" component="h1" fontWeight="bold">T.I.N. srl</Typography>
                         <Typography variant="h6" component="h2">Report Intervento</Typography>
                     </Box>
                     
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
                     
-                    <Grid container spacing={3}>
-                        <Grid size={{ xs: 12, sm: 6 }}>
+                    <Section title="Dati Principali">
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <DatePicker label="Data" value={data} onChange={setData} disabled={disableActions} slotProps={{ textField: { fullWidth: true, required: true } }} />
                         </Grid>
-                        <Grid size={{ xs: 12, sm: 6 }}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <TextField label="Tecnico Responsabile" value={scriventeDettaglio?.nome || 'Caricamento...'} fullWidth disabled />
                         </Grid>
-                        <Grid size={{ xs: 12 }}>
+                        <Grid size={12}>
                             <FormControl fullWidth required disabled={disableActions}>
                                 <InputLabel>Tipo Giornata</InputLabel>
-                                <Select value={tipoGiornataId} label="Tipo Giornata" onChange={e => handleTipoGiornataChange(e.target.value)}>
+                                <Select value={tipoGiornataId} label="Tipo Giornata" onChange={e => handleTipoGiornataChange(e.target.value as string)}>
                                     {tipiGiornata.map(t => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
                                 </Select>
                             </FormControl>
                         </Grid>
+                    </Section>
 
-                        {isLavorativo && (
-                            <>
-                                <Grid size={{ xs: 12 }}><Divider sx={{ my: 2 }}><Typography variant="overline">Ore Lavoro</Typography></Divider></Grid>
-
+                    {isLavorativo && (
+                        <>
+                            <Section title="Ore Lavoro">
                                 {scriventeDettaglio && (
-                                    <Grid size={{ xs: 12 }}>
+                                    <Grid size={12}>
                                         <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleScriventeOreUpdate} isReadOnly={disableActions} isScrivente={true} />
                                     </Grid>
                                 )}
-
-                                <Grid size={{ xs: 12 }}>
+                                <Grid size={12}>
                                      <Autocomplete
                                         multiple
                                         options={otherTecnicos}
@@ -413,17 +417,17 @@ const ReportFormPage: React.FC = () => {
                                 </Grid>
 
                                 {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
-                                     <Grid size={{ xs: 12 }} key={dett.tecnicoId}>
+                                     <Grid size={12} key={dett.tecnicoId}>
                                         <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                                             <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography><Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${dett.ore || 0}h)`} size="small" /></Box>
                                             <Box><IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={disableActions}><EditIcon /></IconButton><IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={disableActions}><DeleteIcon /></IconButton></Box>
                                         </Paper>
                                     </Grid>
                                 ))}
+                            </Section>
 
-                                <Grid size={{ xs: 12 }}><Divider sx={{ my: 2 }}><Typography variant="overline">Dettagli Intervento</Typography></Divider></Grid>
-                                
-                                <Grid size={{ xs: 12 }}>
+                            <Section title="Dettagli Intervento">
+                                <Grid size={12}>
                                     <FormControl fullWidth disabled={disableActions}>
                                         <InputLabel>Veicolo</InputLabel>
                                         <Select value={veicoloId || ''} label="Veicolo" onChange={e => setVeicoloId(e.target.value as string)} renderValue={(selectedId) => getVeicoloLabel(veicoli.find(v => v.id === selectedId))}>
@@ -432,7 +436,7 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12 }}>
+                                <Grid size={12}>
                                     <FormControl fullWidth disabled={disableActions}>
                                         <InputLabel>Nave</InputLabel>
                                         <Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value as string)}>
@@ -441,7 +445,7 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12 }}>
+                                <Grid size={12}>
                                     <FormControl fullWidth disabled={disableActions}>
                                         <InputLabel>Luogo</InputLabel>
                                         <Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value as string)}>
@@ -450,13 +454,13 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12 }}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
-                                <Grid size={{ xs: 12 }}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={disableActions} /></Grid>
-                                <Grid size={{ xs: 12 }}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
-                                
-                                <Grid size={{ xs: 12 }}><Divider sx={{ my: 2 }}><Typography variant="overline">Firma Cliente</Typography></Divider></Grid>
-                                
-                                <Grid size={{ xs: 12 }}>
+                                <Grid size={12}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
+                                <Grid size={12}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={disableActions} /></Grid>
+                                <Grid size={12}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
+                            </Section>
+
+                            <Section title="Firma Cliente">
+                                <Grid size={12}>
                                     {firmaVettoriale ? (
                                         <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center'}}>
                                             <Typography variant="body2" gutterBottom>Firmato da: <strong>{firmaFirmatarioNome || 'N/D'}</strong> ({firmaFirmatarioSocieta || 'N/D'})</Typography>
@@ -468,19 +472,17 @@ const ReportFormPage: React.FC = () => {
                                         <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={disableActions} fullWidth>Aggiungi Firma Cliente</Button>
                                     )}
                                 </Grid>
-                            </>
-                        )}
+                            </Section>
+                        </>
+                    )}
 
-                        <Grid size={{ xs: 12 }} id="action-buttons">
-                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
-                                <Button variant="outlined" onClick={handleCancel} disabled={isSaving || isSharing}>Annulla</Button>
-                                <Button variant="contained" onClick={handleSave} disabled={disableActions}>{isSaving ? <CircularProgress size={24} /> : (isEditMode ? 'Aggiorna' : 'Salva')}</Button>
-                                {isEditMode && (
-                                    <Button variant="contained" color="secondary" onClick={handleShare} disabled={disableActions} startIcon={isSharing ? <CircularProgress size={24} /> : <ShareIcon />}>Aggiorna e Condividi</Button>
-                                )}
-                            </Box>
-                        </Grid>
-                    </Grid>
+                    <Box id="action-buttons" sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
+                        <Button variant="outlined" onClick={handleCancel} disabled={isSaving || isSharing}>Annulla</Button>
+                        <Button variant="contained" onClick={handleSave} disabled={disableActions}>{isSaving ? <CircularProgress size={24} /> : (isEditMode ? 'Aggiorna' : 'Salva')}</Button>
+                        {isEditMode && (
+                            <Button variant="contained" color="secondary" onClick={handleShare} disabled={disableActions} startIcon={isSharing ? <CircularProgress size={24} /> : <ShareIcon />}>Aggiorna e Condividi</Button>
+                        )}
+                    </Box>
                 </Paper>
             </Box>
 
