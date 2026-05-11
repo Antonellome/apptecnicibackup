@@ -1,171 +1,177 @@
 
 import React from 'react';
-import { FormControlLabel, Switch, FormControl, InputLabel, Select, MenuItem, TextField, Typography, Paper, Box } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import {
+    Box, Typography, Switch, FormControlLabel, Grid, FormControl, InputLabel, Select, MenuItem, TextField
+} from '@mui/material';
+import { DettaglioOreData } from '@/models/definitions';
+import dayjs from 'dayjs';
 
-// Interfaccia per i dati delle ore, garantisce la coerenza con il componente padre
-interface DettaglioOreData {
-    tecnicoId: string;
-    nome: string;
-    isManual: boolean;
-    oraInizio: string | null;
-    oraFine: string | null;
-    pausa: number | null; // in minuti
-    ore: number | null;
-}
-
-// Interfaccia per le props del componente
 interface OreLavoroSingoloTecnicoProps {
     datiOre: DettaglioOreData;
     onUpdate: (data: DettaglioOreData) => void;
     isReadOnly: boolean;
-    isScrivente: boolean;
+    isScrivente?: boolean;
 }
 
-// Funzione per generare le fasce orarie, rende il componente auto-contenuto
-const generateTimeSlots = () => {
-    const slots = [];
+// --- GENERAZIONE OPZIONI MENU A TENDINA ---
+const generateTimeOptions = () => {
+    const options = [];
     for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 30) {
-            const hour = h.toString().padStart(2, '0');
-            const minute = m.toString().padStart(2, '0');
-            slots.push(`${hour}:${minute}`);
-        }
+        options.push(`${String(h).padStart(2, '0')}:00`);
+        options.push(`${String(h).padStart(2, '0')}:30`);
     }
-    return slots;
+    return options;
 };
-const fasceOrarie = generateTimeSlots();
-const pauseOpzioni = [0, 30, 60, 90, 120]; // in minuti
+const TIME_OPTIONS = generateTimeOptions();
+
+const PAUSA_OPTIONS = [0, 30, 60];
+
+const generateManualHourOptions = () => {
+    const options: { value: number; label: string }[] = [];
+    // Da 0 a 8 ore, con step di 0.5
+    for (let i = 0; i <= 8; i += 0.5) {
+        options.push({ value: i, label: `${i.toFixed(1)} ore` });
+    }
+    // Da 8.5 a 24 ore, con step di 0.5 (straordinari)
+    for (let i = 8.5; i <= 24; i += 0.5) {
+        const extra = i - 8;
+        options.push({ value: i, label: `8 ore + ${extra.toFixed(1)} ore` });
+    }
+    return options;
+};
+const ORE_MANUALI_OPTIONS = generateManualHourOptions();
+// --- FINE GENERAZIONE OPZIONI ---
+
 
 const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiOre, onUpdate, isReadOnly, isScrivente }) => {
-    // Se non ci sono dati, non renderizzare nulla per evitare errori
-    if (!datiOre) {
-        return null;
-    }
 
-    // Funzione per calcolare le ore totali in base a inizio, fine e pausa
-    const calculateOre = (inizio: string | null, fine: string | null, pausa: number | null): number | null => {
-        if (!inizio || !fine) return null;
-        try {
-            const start = new Date(`1970-01-01T${inizio}:00`);
-            const end = new Date(`1970-01-01T${fine}:00`);
-            // Se l'orario di fine è precedente o uguale a quello di inizio, le ore sono 0
-            if (end <= start) return 0;
-            const diffMs = end.getTime() - start.getTime();
-            const diffMinutes = diffMs / 60000;
-            const totalHours = (diffMinutes - (pausa || 0)) / 60;
-            // Arrotonda a due cifre decimali
-            return Math.round(totalHours * 100) / 100;
-        } catch (e) {
-            console.error("Errore nel calcolo delle ore:", e);
-            return null;
+    const handleValueChange = (field: keyof DettaglioOreData, value: any) => {
+        const newDati = { ...datiOre, [field]: value };
+
+        if (field === 'isManual') {
+            if (value === false) { // Passato a modalità Orario
+                const inizio = dayjs(`1970-01-01T${newDati.oraInizio}`);
+                const fine = dayjs(`1970-01-01T${newDati.oraFine}`);
+                if (fine.isAfter(inizio)) {
+                    const diff = fine.diff(inizio, 'minute');
+                    const oreCalcolate = (diff - (newDati.pausa || 0)) / 60;
+                    newDati.ore = Math.max(0, parseFloat(oreCalcolate.toFixed(2)));
+                }
+            } else { // Passato a modalità Manuale
+                 newDati.ore = 8; // Default a 8 ore
+            }
+        } else if (!newDati.isManual && (field === 'oraInizio' || field === 'oraFine' || field === 'pausa')) {
+            const inizio = dayjs(`1970-01-01T${newDati.oraInizio || '00:00'}`);
+            const fine = dayjs(`1970-01-01T${newDati.oraFine || '00:00'}`);
+            if (fine.isAfter(inizio)) {
+                const diff = fine.diff(inizio, 'minute');
+                const oreCalcolate = (diff - (newDati.pausa || 0)) / 60;
+                 newDati.ore = Math.max(0, parseFloat(oreCalcolate.toFixed(2)));
+            }
+        } else if (newDati.isManual && field === 'ore') {
+             newDati.ore = value;
         }
+
+        onUpdate(newDati);
     };
 
-    // Handler unico per aggiornare i campi e notificare il genitore
-    const handleFieldChange = <K extends keyof DettaglioOreData>(field: K, value: DettaglioOreData[K]) => {
-        const newData = { ...datiOre, [field]: value };
-        
-        // Se non siamo in modalità manuale, ricalcola le ore ogni volta che inizio, fine o pausa cambiano
-        if (field === 'oraInizio' || field === 'oraFine' || field === 'pausa') {
-            const oreCalcolate = calculateOre(
-                field === 'oraInizio' ? value as string : newData.oraInizio,
-                field === 'oraFine' ? value as string : newData.oraFine,
-                field === 'pausa' ? value as number : newData.pausa
-            );
-            newData.ore = oreCalcolate;
-        }
-        
-        // Se si passa da manuale ad automatico, ricalcola le ore
-        if (field === 'isManual' && value === false) {
-             const oreCalcolate = calculateOre(newData.oraInizio, newData.oraFine, newData.pausa);
-             newData.ore = oreCalcolate;
-        }
-
-        // Invia i dati aggiornati al componente padre
-        onUpdate(newData);
-    };
+    const switchLabel = isScrivente ? "Inserimento Manuale (per tutti)" : "Inserimento Manuale";
 
     return (
-        <Paper elevation={2} sx={{ p: 2, mb: 2, borderLeft: isScrivente ? '4px solid' : 'none', borderColor: 'primary.main' }}>
-            <Typography variant="subtitle1" component="div" sx={{ mb: 2, fontWeight: 'bold' }}>
-                {datiOre.nome} {isScrivente && '(Responsabile)'}
-            </Typography>
+        <Box sx={{ p: 2, border: '1px solid #eee', borderRadius: 2, mt: 1 }}>
             <Grid container spacing={2} alignItems="center">
-                <Grid size={12}>
-                    <FormControlLabel
-                        control={<Switch checked={datiOre.isManual} onChange={(e) => handleFieldChange('isManual', e.target.checked)} disabled={isReadOnly || !isScrivente} />}
-                        label={isScrivente ? "Inserimento Ore Manuale (per tutti i tecnici)" : "Inserimento Ore Manuale"}
+                 {isScrivente && (
+                    <Grid size={{ xs: 12 }}>
+                        <Typography variant="subtitle1" fontWeight="bold">Orario Tecnico Responsabile</Typography>
+                     </Grid>
+                 )}
+
+                <Grid size={{ xs: 12 }}>
+                    <FormControlLabel 
+                        control={
+                            <Switch 
+                                checked={datiOre.isManual}
+                                onChange={(e) => handleValueChange('isManual', e.target.checked)} 
+                                disabled={isReadOnly} 
+                            />
+                        }
+                        label={switchLabel} 
                     />
                 </Grid>
 
-                {datiOre.isManual ? (
-                    <Grid size={12}>
-                        <TextField
-                            label="Ore Lavorate"
-                            type="number"
-                            value={datiOre.ore === null ? '' : datiOre.ore}
-                            onChange={(e) => handleFieldChange('ore', e.target.value === '' ? null : parseFloat(e.target.value))}
-                            fullWidth
-                            disabled={isReadOnly}
-                            InputProps={{
-                                inputProps: {
-                                    step: 0.5,
-                                    min: 0,
-                                },
-                            }}
-                        />
-                    </Grid>
-                ) : (
+                {!datiOre.isManual ? (
                     <>
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                            <FormControl fullWidth>
+                        <Grid size={{ xs: 6, sm: 4 }}>
+                            <FormControl fullWidth disabled={isReadOnly}>
                                 <InputLabel>Inizio</InputLabel>
                                 <Select
-                                    value={datiOre.oraInizio || ''}
+                                    value={datiOre.oraInizio || '07:30'}
                                     label="Inizio"
-                                    onChange={(e) => handleFieldChange('oraInizio', e.target.value as string)}
-                                    disabled={isReadOnly || !isScrivente}
+                                    onChange={e => handleValueChange('oraInizio', e.target.value)}
                                 >
-                                    {fasceOrarie.map(f => <MenuItem key={f} value={f}>{f}</MenuItem>)}
+                                    {TIME_OPTIONS.map(time => <MenuItem key={time} value={time}>{time}</MenuItem>)}
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                            <FormControl fullWidth>
+                        <Grid size={{ xs: 6, sm: 4 }}>
+                            <FormControl fullWidth disabled={isReadOnly}>
                                 <InputLabel>Fine</InputLabel>
                                 <Select
-                                    value={datiOre.oraFine || ''}
+                                    value={datiOre.oraFine || '16:30'}
                                     label="Fine"
-                                    onChange={(e) => handleFieldChange('oraFine', e.target.value as string)}
-                                    disabled={isReadOnly || !isScrivente}
+                                    onChange={e => handleValueChange('oraFine', e.target.value)}
                                 >
-                                    {fasceOrarie.map(f => <MenuItem key={f} value={f}>{f}</MenuItem>)}
+                                    {TIME_OPTIONS.map(time => <MenuItem key={time} value={time}>{time}</MenuItem>)}
                                 </Select>
                             </FormControl>
                         </Grid>
                         <Grid size={{ xs: 12, sm: 4 }}>
-                            <FormControl fullWidth>
+                            <FormControl fullWidth disabled={isReadOnly}>
                                 <InputLabel>Pausa (min)</InputLabel>
-                                <Select
-                                    value={datiOre.pausa === null ? '' : datiOre.pausa}
-                                    label="Pausa (min)"
-                                    onChange={(e) => handleFieldChange('pausa', e.target.value === '' ? null : Number(e.target.value))}
-                                    disabled={isReadOnly || !isScrivente}
+                                <Select 
+                                    value={datiOre.pausa ?? 60} 
+                                    label="Pausa (min)" 
+                                    onChange={e => handleValueChange('pausa', Number(e.target.value))}
                                 >
-                                    {pauseOpzioni.map(p => <MenuItem key={p} value={p}>{p} min</MenuItem>)}
+                                    {PAUSA_OPTIONS.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={12}>
-                             <Typography variant="body2" sx={{ mt: 1, textAlign: 'right' }}>
-                                Totale Ore: <strong>{datiOre.ore !== null ? datiOre.ore.toFixed(2) : 'N/A'}</strong>
-                             </Typography>
+                        <Grid size={{ xs: 12 }}>
+                             <TextField
+                                label="Totale Ore Calcolato"
+                                value={(datiOre.ore ?? 0).toFixed(2)}
+                                InputProps={{
+                                    readOnly: true,
+                                    sx: {
+                                        '& input': {
+                                            textAlign: 'center'
+                                        }
+                                    }
+                                }}
+                                variant="filled"
+                                fullWidth
+                            />
                         </Grid>
                     </>
+                ) : (
+                    <Grid size={{ xs: 12 }}>
+                        <FormControl fullWidth disabled={isReadOnly}>
+                            <InputLabel>Ore Lavorate</InputLabel>
+                            <Select
+                                value={datiOre.ore ?? 8}
+                                label="Ore Lavorate"
+                                onChange={e => handleValueChange('ore', Number(e.target.value))}
+                            >
+                                {ORE_MANUALI_OPTIONS.map(opt => (
+                                    <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
                 )}
             </Grid>
-        </Paper>
+        </Box>
     );
 };
 

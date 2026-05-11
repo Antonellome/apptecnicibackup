@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import { Edit, Delete, Add } from '@mui/icons-material';
 import { collection, query, orderBy, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { db } from '@/firebase';
 import type { GenericItem } from '@/models/definitions';
 
 interface CrudManagerProps {
@@ -184,7 +184,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                         />
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={handleClose}>Annulla</Button>
+                        <Button onClick={handleClose}>Annulla</button>
                         <Button onClick={handleSave} variant='contained' disabled={loading}>
                             {loading ? <CircularProgress size={24} /> : 'Salva'}
                         </Button>

@@ -3,8 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
-    Switch, FormControlLabel, Autocomplete, Button, CircularProgress, Alert, Divider, Box,
-    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip
+    Autocomplete, Button, CircularProgress, Alert, Divider, Box, Chip, Dialog, DialogTitle, DialogContent, DialogActions, IconButton
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
@@ -15,27 +14,16 @@ import SignatureCanvas from 'react-signature-canvas';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
-import { isSameMonth, subMonths, format } from 'date-fns';
+import { isSameMonth, format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
-import { useMasterData } from '@/hooks/useMasterData';
+import { useLocalData } from '@/hooks/useLocalData';
 import { db as firestoreDb } from '@/firebase';
 import { doc, getDoc, addDoc, updateDoc, collection, Timestamp } from 'firebase/firestore';
-import { Rapportino, TipoGiornata, Tecnico, DettaglioOreTecnico } from '@/models/definitions';
-import { aggiungiAllaCoda } from '@/services/offlineSync';
+import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData } from '@/models/definitions';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-
-interface DettaglioOreData {
-    tecnicoId: string;
-    nome: string;
-    isManual: boolean;
-    oraInizio: string | null;
-    oraFine: string | null;
-    pausa: number | null;
-    ore: number | null;
-}
 
 const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'permesso', 'legge 104'];
 const isGiornataLavorativa = (tipo: TipoGiornata | undefined): boolean => {
@@ -43,21 +31,36 @@ const isGiornataLavorativa = (tipo: TipoGiornata | undefined): boolean => {
     return !NON_LAVORATIVO_KEYWORDS.some(keyword => tipo.nome.toLowerCase().includes(keyword));
 };
 
+// Funzione per creare lo stato iniziale per un tecnico
+const createInitialDettaglio = (tecnicoId: string, nome: string): DettaglioOreData => ({
+    tecnicoId,
+    nome,
+    isManual: false,
+    oraInizio: '07:30',
+    oraFine: '16:30',
+    pausa: 60,
+    ore: 8,
+});
+
 const ReportFormPage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { reportId } = useParams<{ reportId: string }>();
-    const { masterData, loading: collectionsLoading } = useMasterData();
+    const { data: masterData, loading: collectionsLoading } = useLocalData();
     const { tipiGiornata = [], tecnici = [], veicoli = [], navi = [], luoghi = [] } = masterData || {};
     const { showSnackbar } = useSnackbar();
     const isEditMode = Boolean(reportId);
     const loggedInTecnicoId = user?.uid;
 
-    const sortedTipiGiornata = useMemo(() => [...tipiGiornata].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [tipiGiornata]);
-    const sortedNavi = useMemo(() => [...navi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [navi]);
-    const sortedLuoghi = useMemo(() => [...luoghi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [luoghi]);
-    const sortedVeicoli = useMemo(() => [...veicoli].sort((a, b) => (a?.targa || '').localeCompare(b?.targa || '')), [veicoli]);
-    const sortedTecnici = useMemo(() => [...tecnici].sort((a, b) => (`${a?.cognome || ''} ${a?.nome || ''}`.trim()).localeCompare((`${b?.cognome || ''} ${b?.nome || ''}`.trim()))), [tecnici]);
+    const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
+
+    // --- INIZIALIZZAZIONE SINCRONA DELLO STATO PER EVITARE RACE CONDITION ---
+    const [dettaglioOre, setDettaglioOre] = useState<DettaglioOreData[]>(() => {
+        if (!isEditMode && loggedInTecnicoId) {
+            return [createInitialDettaglio(loggedInTecnicoId, 'Caricamento...')];
+        }
+        return [];
+    });
 
     const [data, setData] = useState<Date | null>(new Date());
     const [tipoGiornataId, setTipoGiornataId] = useState('');
@@ -73,9 +76,11 @@ const ReportFormPage: React.FC = () => {
     const [pageLoading, setPageLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
-    const [dettaglioOre, setDettaglioOre] = useState<DettaglioOreData[]>([]);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingTecnico, setEditingTecnico] = useState<DettaglioOreData | null>(null);
+    const [tempDettaglioOre, setTempDettaglioOre] = useState<DettaglioOreData | null>(null);
+
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [firmaFirmatarioNome, setFirmaFirmatarioNome] = useState('');
     const [firmaFirmatarioSocieta, setFirmaFirmatarioSocieta] = useState('');
@@ -84,15 +89,17 @@ const ReportFormPage: React.FC = () => {
 
     const formRef = useRef<HTMLDivElement>(null);
     const memoizedShowSnackbar = useCallback(showSnackbar, []);
-    const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
 
     const altriTecniciIds = useMemo(() => dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId), [dettaglioOre, loggedInTecnicoId]);
-    const otherTecnicos = useMemo(() => sortedTecnici.filter(t => t.id !== loggedInTecnicoId), [sortedTecnici, loggedInTecnicoId]);
+    const otherTecnicos = useMemo(() => tecnici.filter(t => t.id !== loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
     const selectedTecnicos = useMemo(() => otherTecnicos.filter(t => altriTecniciIds.includes(t.id)), [altriTecniciIds, otherTecnicos]);
 
+
     useEffect(() => {
-        const loadReportData = async () => {
+        const loadData = async () => {
+            // In modalità modifica, carica i dati da Firestore
             if (isEditMode && reportId) {
+                setPageLoading(true);
                 try {
                     const reportRef = doc(firestoreDb, 'rapportini', reportId);
                     const reportSnap = await getDoc(reportRef);
@@ -113,27 +120,25 @@ const ReportFormPage: React.FC = () => {
                         const tipo = tipiGiornata.find(t => t.id === report.tipoGiornataId);
                         setIsLavorativo(isGiornataLavorativa(tipo));
 
-                        const details = (report.dettaglioOreTecnici || []).map(savedDetail => {
+                        const allTecnicoDetails = (report.dettaglioOreTecnici || []).map(savedDetail => {
                             const tecnicoInfo = tecnici.find(t => t.id === savedDetail.tecnicoId);
                             return {
                                 tecnicoId: savedDetail.tecnicoId,
                                 nome: tecnicoInfo ? `${tecnicoInfo.cognome} ${tecnicoInfo.nome}`.trim() : 'Sconosciuto',
-                                isManual: report.isTrasferta, 
-                                oraInizio: report.oraInizio || '08:00', 
-                                oraFine: report.oraFine || '17:00', 
-                                pausa: report.pausa === undefined ? 60 : report.pausa,
-                                ore: savedDetail?.ore ?? 8,
+                                isManual: (savedDetail.isManual ?? report.isTrasferta) || false,
+                                oraInizio: savedDetail.oraInizio || report.oraInizio || '07:30',
+                                oraFine: savedDetail.oraFine || report.oraFine || '16:30',
+                                pausa: savedDetail.pausa ?? report.pausa ?? 60,
+                                ore: savedDetail.ore,
                             };
                         });
-                        setDettaglioOre(details);
+                        setDettaglioOre(allTecnicoDetails);
 
-                        const reportMonth = report.data.toDate().getMonth();
-                        const previousMonth = subMonths(new Date(), 1).getMonth();
-                        if (reportMonth <= previousMonth && !user?.isAdmin) {
+                        const reportDate = report.data.toDate();
+                        if (!isSameMonth(reportDate, new Date()) && !user?.isAdmin) {
                             setIsReadOnly(true);
                             setLockReason("Questo rapportino è bloccato perché appartiene a un mese precedente e non può più essere modificato.");
                         }
-
                     } else {
                         memoizedShowSnackbar("Rapportino non trovato.", "error");
                         navigate('/lista-report');
@@ -142,36 +147,65 @@ const ReportFormPage: React.FC = () => {
                     console.error("Errore caricamento dati rapportino: ", error);
                     memoizedShowSnackbar("Errore nel caricamento del rapportino.", "error");
                 }
-            } else if (loggedInTecnicoId && tecnicoScrivente) {
-                setDettaglioOre([{
-                    tecnicoId: loggedInTecnicoId,
-                    nome: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim(),
-                    isManual: false,
-                    oraInizio: '08:00',
-                    oraFine: '17:00',
-                    pausa: 60,
-                    ore: 8
-                }]);
+            } else if (tecnicoScrivente) {
+                // In modalità nuovo, aggiorna solo il nome del tecnico una volta caricato
+                setDettaglioOre(prev => prev.map(d => 
+                    d.tecnicoId === loggedInTecnicoId 
+                    ? { ...d, nome: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim() } 
+                    : d
+                ));
             }
             setPageLoading(false);
         };
 
         if (!collectionsLoading) {
-            loadReportData();
+            loadData();
         }
-    }, [reportId, isEditMode, collectionsLoading, loggedInTecnicoId, memoizedShowSnackbar, navigate, tecnicoScrivente, tecnici, tipiGiornata, user?.isAdmin]);
+    }, [reportId, isEditMode, collectionsLoading, user?.isAdmin, memoizedShowSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]);
 
-    const handleOpenModal = (tecnico: DettaglioOreData) => { /* ... */ };
+
+    const handleOpenModal = (tecnico: DettaglioOreData) => {
+        setEditingTecnico(tecnico);
+        setTempDettaglioOre(tecnico);
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => setIsModalOpen(false);
+
+    const handleSaveFromModal = () => {
+        if (tempDettaglioOre) {
+            handleOreUpdate(tempDettaglioOre);
+        }
+        handleCloseModal();
+    };
+
     const handleTipoGiornataChange = (id: string) => { setTipoGiornataId(id); const tipo = tipiGiornata.find(t => t.id === id); setIsLavorativo(isGiornataLavorativa(tipo)); };
     const handleCancel = () => navigate(isEditMode ? '/lista-report' : '/');
 
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
-        setDettaglioOre(prevDettagli => 
-            prevDettagli.map(d => 
+        setDettaglioOre(prevDettagli =>
+            prevDettagli.map(d =>
                 d.tecnicoId === updatedData.tecnicoId ? updatedData : d
             )
         );
     }, []);
+
+    const handleScriventeOreUpdate = (updatedData: DettaglioOreData) => {
+        const oldScriventeData = dettaglioOre.find(d => d.tecnicoId === updatedData.tecnicoId);
+        const modeChanged = oldScriventeData?.isManual !== updatedData.isManual;
+
+        setDettaglioOre(prevDettagli => {
+            return prevDettagli.map(d => {
+                if (d.tecnicoId === updatedData.tecnicoId) {
+                    return updatedData;
+                }
+                if (modeChanged) {
+                    return { ...d, isManual: updatedData.isManual };
+                }
+                return d;
+            });
+        });
+    };
 
     const handleAltriTecniciChange = (_: React.SyntheticEvent, nuoviTecniciSelezionati: Tecnico[]) => {
         const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
@@ -179,7 +213,7 @@ const ReportFormPage: React.FC = () => {
 
         const nuoviDettagli = nuoviTecniciSelezionati.map(t => {
             const existingDetail = dettaglioOre.find(d => d.tecnicoId === t.id);
-            return existingDetail || { tecnicoId: t.id, nome: `${t.cognome} ${t.nome}`.trim(), isManual: scrivente.isManual, oraInizio: scrivente.oraInizio, oraFine: scrivente.oraFine, pausa: scrivente.pausa, ore: scrivente.ore };
+            return existingDetail || createInitialDettaglio(t.id, `${t.cognome} ${t.nome}`.trim());
         });
         setDettaglioOre([scrivente, ...nuoviDettagli]);
     };
@@ -189,8 +223,8 @@ const ReportFormPage: React.FC = () => {
     };
 
     const performSave = async (): Promise<string | null> => {
-        if (!loggedInTecnicoId) {
-            memoizedShowSnackbar("Errore: Utente non autenticato.", "error");
+        if (!loggedInTecnicoId || !data) {
+            memoizedShowSnackbar("Errore: Utente non autenticato o data mancante.", "error");
             return null;
         }
         if (!tipoGiornataId) {
@@ -204,120 +238,94 @@ const ReportFormPage: React.FC = () => {
             return null;
         }
 
-        const reportData: Partial<Rapportino> = {
-            data: Timestamp.fromDate(data || new Date()),
+        const reportDataToSave: Omit<Rapportino, 'id'> & { [key: string]: any } = {
+            data: Timestamp.fromDate(data),
             tecnicoId: loggedInTecnicoId,
-            altriTecniciIds,
             tipoGiornataId,
             isTrasferta: mainTecnicoDetail.isManual,
             oraInizio: mainTecnicoDetail.oraInizio,
             oraFine: mainTecnicoDetail.oraFine,
             pausa: mainTecnicoDetail.pausa,
-            dettaglioOreTecnici: dettaglioOre.map(d => ({ tecnicoId: d.tecnicoId, ore: d.ore || 0 } as DettaglioOreTecnico)),
-            veicoloId: veicoloId,
-            naveId: naveId,
-            luogoId: luogoId,
-            descrizioneBreve,
-            lavoroEseguito,
-            materialiImpiegati,
-            firmaFirmatarioNome,
-            firmaFirmatarioSocieta,
-            firmaVettoriale,
+            dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => rest),
+            veicoloId: veicoloId || null,
+            naveId: naveId || null,
+            luogoId: luogoId || null,
+            descrizioneBreve: descrizioneBreve || '',
+            lavoroEseguito: lavoroEseguito || '',
+            materialiImpiegati: materialiImpiegati || '',
+            firmaFirmatarioNome: firmaFirmatarioNome || '',
+            firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
+            firmaVettoriale: firmaVettoriale || null,
             updatedAt: Timestamp.now(),
         };
+        
         if (!isEditMode) {
-            reportData.createdAt = Timestamp.now();
+            reportDataToSave.createdAt = Timestamp.now();
         }
 
+        setIsSaving(true);
         try {
-            if (!navigator.onLine) {
-                const operation = { type: isEditMode ? 'update' : 'add', collection: 'rapportini', data: { ...reportData, id: reportId }, docId: reportId };
-                await aggiungiAllaCoda(operation as any);
-                memoizedShowSnackbar(`Rapportino ${isEditMode ? 'aggiornato' : 'salvato'} nella coda offline.`, "info");
-                return reportId || "offline-id";
+            let finalId = reportId;
+            if (isEditMode && reportId) {
+                await updateDoc(doc(firestoreDb, 'rapportini', reportId), reportDataToSave);
+                memoizedShowSnackbar("Rapportino aggiornato con successo!", "success");
             } else {
-                if (isEditMode) {
-                    await updateDoc(doc(firestoreDb, 'rapportini', reportId!), reportData);
-                    memoizedShowSnackbar("Rapportino aggiornato con successo!", "success");
-                    return reportId;
-                } else {
-                    const newDocRef = await addDoc(collection(firestoreDb, 'rapportini'), reportData);
-                    memoizedShowSnackbar("Rapportino salvato con successo!", "success");
-                    return newDocRef.id;
-                }
+                const docRef = await addDoc(collection(firestoreDb, 'rapportini'), reportDataToSave);
+                finalId = docRef.id;
+                memoizedShowSnackbar("Rapportino creato con successo!", "success");
             }
+            return finalId || null;
         } catch (error) {
             console.error("Errore durante il salvataggio: ", error);
             memoizedShowSnackbar("Si è verificato un errore durante il salvataggio.", "error");
             return null;
+        } finally {
+            setIsSaving(false);
         }
     };
     
     const handleSave = async () => {
-        setIsSaving(true);
-        const success = await performSave();
-        if (success) {
-            navigate('/lista-report');
-        }
-        setIsSaving(false);
+        const savedId = await performSave();
+        if (savedId) navigate('/lista-report');
     };
 
-    const handleShare = async (idForShare?: string) => {
-        const element = formRef.current;
-        if (!element) {
-            memoizedShowSnackbar('Impossibile trovare il form da condividere.', 'error');
+    const handleShare = async () => {
+        setIsSharing(true);
+        const savedId = await performSave();
+        if (!savedId) {
+            setIsSharing(false);
+            memoizedShowSnackbar("Salvataggio fallito. Impossibile condividere.", "error");
             return;
         }
-        setIsSharing(true);
-    
+
+        const element = formRef.current;
+        if (!element) {
+            setIsSharing(false);
+            return;
+        }
+
         const actionButtons = document.getElementById('action-buttons');
         if (actionButtons) (actionButtons as HTMLElement).style.visibility = 'hidden';
 
         try {
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                backgroundColor: '#ffffff',
-                onclone: (clonedDoc) => {
-                    const style = clonedDoc.createElement('style');
-                    clonedDoc.head.appendChild(style);
-                    style.innerHTML = `
-                        body, .MuiPaper-root, .MuiPaper-outlined { background-color: #ffffff !important; color: #000000 !important; }
-                        * { box-shadow: none !important; text-shadow: none !important; }
-                        .MuiTypography-root, p, span, div, h1, h2, h3, h4, label, .MuiInputLabel-root, .MuiMenuItem-root, .MuiInputBase-input, .MuiOutlinedInput-input, .MuiInput-input, .MuiSelect-select, .MuiChip-label {
-                            color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
-                        .MuiOutlinedInput-notchedOutline { border-color: #cccccc !important; }
-                        .MuiSvgIcon-root { fill: #000000 !important; }
-                        .MuiChip-root { background-color: #f0f0f0 !important; border: 1px solid #cccccc !important; }
-                        .MuiDivider-root::before, .MuiDivider-root::after { border-color: rgba(0, 0, 0, 0.12) !important; }
-                    `;
-                }
-            });
-            
-            const imgData = canvas.toDataURL('image/png');
+            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
             const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
             const imgRatio = canvas.width / canvas.height;
-            let imgWidth = pdfWidth - 20; 
+            let imgWidth = pdfWidth - 20;
             let imgHeight = imgWidth / imgRatio;
             if (imgHeight > pdfHeight - 20) {
                 imgHeight = pdfHeight - 20;
                 imgWidth = imgHeight * imgRatio;
             }
-            const x = (pdfWidth - imgWidth) / 2;
-            const y = 10;
-            pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-
+            pdf.addImage(imgData, 'PNG', (pdfWidth - imgWidth) / 2, 10, imgWidth, imgHeight);
             const pdfBlob = pdf.output('blob');
-            const fileName = `Rapportino-${idForShare || reportId || 'nuovo'}.pdf`;
+            const fileName = `Rapportino-${savedId}.pdf`;
             const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
     
             if (navigator.share && navigator.canShare({ files: [pdfFile] })) {
-                await navigator.share({
-                    files: [pdfFile],
-                    title: `Rapportino di Lavoro - ${format(data || new Date(), 'dd/MM/yyyy')}`,
-                    text: `Ecco il rapportino di lavoro del ${format(data || new Date(), 'dd/MM/yyyy')}.`,
-                });
+                await navigator.share({ files: [pdfFile], title: `Rapportino di Lavoro`, text: `Rapportino del ${format(data || new Date(), 'dd/MM/yyyy')}` });
             } else {
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(pdfBlob);
@@ -327,7 +335,7 @@ const ReportFormPage: React.FC = () => {
                 document.body.removeChild(link);
             }
         } catch (error) {
-            console.error("Errore durante la creazione del PDF: ", error);
+            console.error("Errore PDF: ", error);
             memoizedShowSnackbar("Errore durante la creazione del PDF.", "error");
         } finally {
             if (actionButtons) (actionButtons as HTMLElement).style.visibility = 'visible';
@@ -335,115 +343,162 @@ const ReportFormPage: React.FC = () => {
         }
     };
     
-    const handleSaveAndShare = async () => {
-        setIsSaving(true);
-        const savedReportId = await performSave();
-        if (savedReportId) {
-            await handleShare(savedReportId);
-        }
-        setIsSaving(false);
-    };
-    
     const handleOpenSignatureModal = () => setIsSignatureModalOpen(true);
 
-    if (pageLoading || collectionsLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
+    if (pageLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
     
     const scriventeDettaglio = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
-    const disableActions = isSaving || isSharing;
+    const disableActions = isSaving || isSharing || isReadOnly;
+
+    const getVeicoloLabel = (veicolo: Veicolo | undefined) => {
+        if (!veicolo) return '';
+        return `${veicolo.marca || ''} ${veicolo.modello || ''} - ${veicolo.targa || 'N/A'}`.trim();
+    };
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
-            <Box sx={{ p: { xs: 2, sm: 3 }, mx: 'auto' }}>
-                <Paper ref={formRef} elevation={3} sx={{ p: { xs: 2, sm: 3 } }}>
-                    <Typography variant="h4" component="h1" gutterBottom sx={{ textAlign: 'center', mb: 3 }}>
-                        T.I.N. srl Report di Lavoro
-                    </Typography>
+            <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
+                <Paper 
+                    ref={formRef} 
+                    elevation={3} 
+                    sx={{
+                        p: { xs: 2, sm: 3 },
+                        borderTop: '5px solid',
+                        borderColor: 'primary.main'
+                    }}
+                >
+                    <Box sx={{ textAlign: 'center', mb: 3 }}>
+                        <Typography variant="h4" component="h1" fontWeight="bold">T.I.N. srl</Typography>
+                        <Typography variant="h6" component="h2">Report Intervento</Typography>
+                    </Box>
                     
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
                     
-                    <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }} noValidate autoComplete="off">
-                        <DatePicker label="Data" value={data} onChange={setData} disabled={isReadOnly || disableActions} slotProps={{ textField: { fullWidth: true, required: true } }} />
-                        <TextField label="Tecnico Responsabile" value={user?.email || '...'} fullWidth disabled />
-                        <FormControl fullWidth required>
-                            <InputLabel>Tipo Giornata</InputLabel>
-                            <Select value={tipoGiornataId} label="Tipo Giornata" onChange={e => handleTipoGiornataChange(e.target.value)} disabled={isReadOnly || disableActions}>
-                                {sortedTipiGiornata.map(t => (<MenuItem key={t.id} value={t.id}><span>{t.nome}</span></MenuItem>))}
-                            </Select>
-                        </FormControl>
+                    <Grid container spacing={3}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                            <DatePicker label="Data" value={data} onChange={setData} disabled={disableActions} slotProps={{ textField: { fullWidth: true, required: true } }} />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField label="Tecnico Responsabile" value={scriventeDettaglio?.nome || 'Caricamento...'} fullWidth disabled />
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <FormControl fullWidth required disabled={disableActions}>
+                                <InputLabel>Tipo Giornata</InputLabel>
+                                <Select value={tipoGiornataId} label="Tipo Giornata" onChange={e => handleTipoGiornataChange(e.target.value)}>
+                                    {tipiGiornata.map(t => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
+                                </Select>
+                            </FormControl>
+                        </Grid>
 
                         {isLavorativo && (
                             <>
-                                <Divider sx={{ my: 1 }}><Typography variant="overline">Dettaglio Ore Lavoro</Typography></Divider>
-                                
+                                <Grid size={{ xs: 12 }}><Divider sx={{ my: 2 }}><Typography variant="overline">Ore Lavoro</Typography></Divider></Grid>
+
                                 {scriventeDettaglio && (
-                                    <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleOreUpdate} isReadOnly={isReadOnly || disableActions} isScrivente={true} />
+                                    <Grid size={{ xs: 12 }}>
+                                        <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleScriventeOreUpdate} isReadOnly={disableActions} isScrivente={true} />
+                                    </Grid>
                                 )}
 
-                                <Autocomplete multiple options={otherTecnicos} getOptionLabel={(o) => `${o.cognome} ${o.nome}`} value={selectedTecnicos} onChange={handleAltriTecniciChange} renderInput={params => <TextField {...params} label="Aggiungi altri tecnici presenti" />} disabled={isReadOnly || disableActions} />
+                                <Grid size={{ xs: 12 }}>
+                                     <Autocomplete
+                                        multiple
+                                        options={otherTecnicos}
+                                        getOptionLabel={(o) => `${o.cognome} ${o.nome}`}
+                                        value={selectedTecnicos}
+                                        onChange={handleAltriTecniciChange}
+                                        renderInput={params => <TextField {...params} label="Aggiungi altri tecnici presenti" />}
+                                        disabled={disableActions}
+                                    />
+                                </Grid>
 
                                 {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
-                                     <Paper key={dett.tecnicoId} variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                                        <Box><Typography variant="body1" fontWeight="bold">{dett.nome}</Typography><Chip label={dett.isManual ? `Ore manuali: ${dett.ore || 0}` : `Orario: ${dett.oraInizio || 'N/A'} - ${dett.oraFine || 'N/A'} (${dett.ore || 0} ore)`} size="small" /></Box>
-                                        <Box>
-                                            <IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={isReadOnly || disableActions}><EditIcon /></IconButton>
-                                            <IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={isReadOnly || disableActions}><DeleteIcon /></IconButton>
-                                        </Box>
-                                    </Paper>
+                                     <Grid size={{ xs: 12 }} key={dett.tecnicoId}>
+                                        <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                                            <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography><Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${dett.ore || 0}h)`} size="small" /></Box>
+                                            <Box><IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={disableActions}><EditIcon /></IconButton><IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={disableActions}><DeleteIcon /></IconButton></Box>
+                                        </Paper>
+                                    </Grid>
                                 ))}
 
-                                <Divider sx={{ my: 1 }}><Typography variant="overline">Dettagli Intervento</Typography></Divider>
-                                <FormControl fullWidth><InputLabel>Nave</InputLabel><Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value)} disabled={isReadOnly || disableActions}><MenuItem value=""><em>Nessuna</em></MenuItem>{sortedNavi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}</Select></FormControl>
-                                <FormControl fullWidth><InputLabel>Luogo</InputLabel><Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value)} disabled={isReadOnly || disableActions}><MenuItem value=""><em>Nessuno</em></MenuItem>{sortedLuoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}</Select></FormControl>
-                                <FormControl fullWidth><InputLabel>Veicolo</InputLabel><Select value={veicoloId || ''} label="Veicolo" onChange={e => setVeicoloId(e.target.value)} disabled={isReadOnly || disableActions}><MenuItem value=""><em>Nessuno</em></MenuItem>{sortedVeicoli.map(v => <MenuItem key={v.id} value={v.id}>{`${v.targa || 'N/A'} - ${v.nome}`}</MenuItem>)}</Select></FormControl>
-                                <TextField label="Breve Descrizione" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={isReadOnly || disableActions} />
-                                <TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={isReadOnly || disableActions} />
-                                <TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={isReadOnly || disableActions} />
+                                <Grid size={{ xs: 12 }}><Divider sx={{ my: 2 }}><Typography variant="overline">Dettagli Intervento</Typography></Divider></Grid>
                                 
-                                <Divider sx={{ my: 2 }}><Typography variant="overline">Firma Cliente</Typography></Divider>
+                                <Grid size={{ xs: 12 }}>
+                                    <FormControl fullWidth disabled={disableActions}>
+                                        <InputLabel>Veicolo</InputLabel>
+                                        <Select value={veicoloId || ''} label="Veicolo" onChange={e => setVeicoloId(e.target.value as string)} renderValue={(selectedId) => getVeicoloLabel(veicoli.find(v => v.id === selectedId))}>
+                                            <MenuItem value=""><em>Nessuno</em></MenuItem>
+                                            {veicoli.map(v => <MenuItem key={v.id} value={v.id}>{getVeicoloLabel(v)}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                <Grid size={{ xs: 12 }}>
+                                    <FormControl fullWidth disabled={disableActions}>
+                                        <InputLabel>Nave</InputLabel>
+                                        <Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value as string)}>
+                                            <MenuItem value=""><em>Nessuna</em></MenuItem>
+                                            {navi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                <Grid size={{ xs: 12 }}>
+                                    <FormControl fullWidth disabled={disableActions}>
+                                        <InputLabel>Luogo</InputLabel>
+                                        <Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value as string)}>
+                                            <MenuItem value=""><em>Nessuno</em></MenuItem>
+                                            {luoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                <Grid size={{ xs: 12 }}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
+                                <Grid size={{ xs: 12 }}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={disableActions} /></Grid>
+                                <Grid size={{ xs: 12 }}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
                                 
-                                <Box id="form-signature-placeholder">
+                                <Grid size={{ xs: 12 }}><Divider sx={{ my: 2 }}><Typography variant="overline">Firma Cliente</Typography></Divider></Grid>
+                                
+                                <Grid size={{ xs: 12 }}>
                                     {firmaVettoriale ? (
                                         <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center'}}>
                                             <Typography variant="body2" gutterBottom>Firmato da: <strong>{firmaFirmatarioNome || 'N/D'}</strong> ({firmaFirmatarioSocieta || 'N/D'})</Typography>
-                                            <img src={firmaVettoriale} alt="Firma" style={{width: '200px', height: 'auto', border: '1px solid #eee'}}/>
+                                            <img src={firmaVettoriale} alt="Firma" style={{maxWidth: '200px', height: 'auto', border: '1px solid #eee', margin: 'auto'}}/>
                                             <br />
                                             <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1}} disabled={disableActions}>Modifica Firma</Button>
                                         </Box>
                                     ) : (
-                                        <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={isReadOnly || disableActions} fullWidth>Aggiungi Firma Cliente</Button>
+                                        <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={disableActions} fullWidth>Aggiungi Firma Cliente</Button>
                                     )}
-                                </Box>
+                                </Grid>
                             </>
                         )}
 
-                        <Grid container spacing={2} justifyContent="flex-end" sx={{ mt: 2 }} id="action-buttons">
-                            <Grid>
-                                <Button variant="outlined" onClick={handleCancel} disabled={disableActions}>Annulla</Button>
-                            </Grid>
-                            {!isEditMode ? (
-                                <>
-                                    <Grid>
-                                        <Button variant="contained" onClick={handleSave} disabled={disableActions}>{isSaving ? <CircularProgress size={24} /> : 'Salva'}</Button>
-                                    </Grid>
-                                    <Grid>
-                                        <Button variant="contained" color="secondary" onClick={handleSaveAndShare} disabled={disableActions} startIcon={isSharing ? <CircularProgress size={24} /> : <ShareIcon />}>Salva e Condividi</Button>
-                                    </Grid>
-                                </>
-                            ) : (
-                                <>
-                                    <Grid>
-                                        <Button variant="contained" onClick={handleSave} disabled={isReadOnly || disableActions}>{isSaving ? <CircularProgress size={24} /> : 'Aggiorna'}</Button>
-                                    </Grid>
-                                    <Grid>
-                                        <Button variant="contained" color="secondary" onClick={handleSaveAndShare} disabled={isReadOnly || disableActions} startIcon={isSharing ? <CircularProgress size={24} /> : <ShareIcon />}>Aggiorna e Condividi</Button>
-                                    </Grid>
-                                </>
-                            )}
+                        <Grid size={{ xs: 12 }} id="action-buttons">
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
+                                <Button variant="outlined" onClick={handleCancel} disabled={isSaving || isSharing}>Annulla</Button>
+                                <Button variant="contained" onClick={handleSave} disabled={disableActions}>{isSaving ? <CircularProgress size={24} /> : (isEditMode ? 'Aggiorna' : 'Salva')}</Button>
+                                {isEditMode && (
+                                    <Button variant="contained" color="secondary" onClick={handleShare} disabled={disableActions} startIcon={isSharing ? <CircularProgress size={24} /> : <ShareIcon />}>Aggiorna e Condividi</Button>
+                                )}
+                            </Box>
                         </Grid>
-                    </Box>
+                    </Grid>
                 </Paper>
             </Box>
-            {/* Modals remain unchanged */}
+
+            <Dialog open={isModalOpen} onClose={handleCloseModal} maxWidth="sm" fullWidth>
+                <DialogTitle>Modifica orario di {editingTecnico?.nome}</DialogTitle>
+                <DialogContent>{tempDettaglioOre && <Box sx={{pt: 2}}><OreLavoroSingoloTecnico datiOre={tempDettaglioOre} onUpdate={setTempDettaglioOre} isReadOnly={false} /></Box>}</DialogContent>
+                <DialogActions><Button onClick={handleCloseModal}>Annulla</Button><Button onClick={handleSaveFromModal} variant="contained">Salva Orario</Button></DialogActions>
+            </Dialog>
+
+             <Dialog open={isSignatureModalOpen} onClose={() => setIsSignatureModalOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Firma del Cliente</DialogTitle>
+                <DialogContent>
+                    <TextField label="Nome e Cognome Firmatario" value={firmaFirmatarioNome} onChange={(e) => setFirmaFirmatarioNome(e.target.value)} fullWidth margin="normal" />
+                    <TextField label="Società" value={firmaFirmatarioSocieta} onChange={(e) => setFirmaFirmatarioSocieta(e.target.value)} fullWidth margin="normal" />
+                    <Box sx={{ border: '1px solid black', mt: 2, width: '100%', height: 200 }}><SignatureCanvas ref={sigCanvas} penColor='black' canvasProps={{style: {width: '100%', height: '100%'}, className: 'sigCanvas'}} /></Box>
+                </DialogContent>
+                <DialogActions><Button onClick={() => sigCanvas.current?.clear()}>Pulisci</Button><Button onClick={() => setIsSignatureModalOpen(false)}>Annulla</Button><Button onClick={() => { if (sigCanvas.current) { setFirmaVettoriale(sigCanvas.current.getTrimmedCanvas().toDataURL('image/png')); } setIsSignatureModalOpen(false); }}>Salva Firma</Button></DialogActions>
+            </Dialog>
         </LocalizationProvider>
     );
 };

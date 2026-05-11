@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { db } from '@/firebase';
 import type { Rapportino, Tecnico, Ditta, Categoria, Veicolo, Cliente, TipoGiornata, Nave, Luogo, WebAppUser, Qualifica, Documento } from '@/models/definitions';
 
 export interface IDataContext {

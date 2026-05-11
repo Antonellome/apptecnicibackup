@@ -9,20 +9,8 @@ export interface BaseEntity {
     id: string;
 }
 
-// Interfaccia generica per elementi di anagrafica o dropdown.
 export interface GenericItem extends BaseEntity {
     nome: string;
-    [key: string]: any;
-}
-
-export interface FormField {
-    id: string;
-    label: string;
-    value: any;
-}
-
-export interface BaseAnagrafica {
-    id: string;
     [key: string]: any;
 }
 
@@ -36,9 +24,12 @@ export interface Ditta extends GenericItem {}
 export interface Categoria extends GenericItem {}
 export interface Luogo extends GenericItem {}
 export interface Nave extends GenericItem {}
-export interface Documento extends GenericItem {}
 
-export interface Veicolo extends GenericItem {
+// Interfaccia Veicolo aggiornata per includere marca e modello
+export interface Veicolo extends BaseEntity {
+  nome?: string; // Descrizione principale, es. "Furgone 1"
+  marca?: string;
+  modello?: string;
   targa?: string;
 }
 
@@ -50,12 +41,15 @@ export interface Tecnico extends BaseEntity {
   [key: string]: any;
 }
 
+// Interfaccia TipoGiornata aggiornata per la gestione delle tariffe locali
 export interface TipoGiornata extends BaseEntity {
   nome: string;
   colore: string;
   lavorativo: boolean;
   icona: string;
   sigla: string;
+  tariffa: number; // La tariffa (es. 80 o 10)
+  tipoTariffa: 'giornaliera' | 'oraria'; // L'unità di misura della tariffa
 }
 
 export interface Notifica extends BaseEntity {
@@ -81,25 +75,15 @@ export interface UserProfile extends BaseEntity {
     };
 }
 
-export interface WebAppUser {
-    uid: string;
-    email: string | null;
-    displayName: string | null;
-}
-
-export interface Qualifica {
-    id: string;
-    nome: string;
-}
-
 // =========================================================================
-// --- OGGETTO DATI MASTER (Single Source of Truth per Anagrafiche) ---
+// --- OGGETTO DATI MASTER (per il fetching iniziale) ---
 // =========================================================================
+
 export interface MasterData {
     tecnici: Tecnico[];
     clienti: Cliente[];
     sedi: Sede[];
-    tipiGiornata: TipoGiornata[];
+    tipiGiornata: TipoGiornata[]; // Utilizzato per il seeding iniziale del DB locale
     veicoli: Veicolo[];
     luoghi: Luogo[];
     navi: Nave[];
@@ -107,33 +91,38 @@ export interface MasterData {
     categorie: Categoria[];
 }
 
+// =========================================================================
+// --- INTERFACCIA PRINCIPALE: RAPPORTINO E SUB-OGGETTI ---
+// =========================================================================
 
-// =========================================================================
-// --- INTERFACCIA PRINCIPALE: RAPPORTINO E REPORT ---
-// =========================================================================
+export interface DettaglioOreTecnico {
+    tecnicoId: string;
+    ore: number;
+}
 
 export interface Rapportino extends BaseEntity {
   // --- Campi Fondamentali ---
-  nome: string;
+  nome: string; // Deprecato ma mantenuto per compatibilità
   data: Timestamp;
-  tecnicoId: string;
+  tecnicoId: string; // Tecnico responsabile
   tipoGiornataId: string;
 
-  // --- Gestione Periodo (per ferie, malattia, etc.) ---
+  // --- Gestione Periodo (per ferie, malattia, ecc.) ---
   dataInizio?: Timestamp;
   dataFine?: Timestamp;
 
-  // --- Gestione Presenze e Ore ---
-  presenze: string[];
-  dettaglioOreTecnici: { tecnicoId: string; ore: number; }[];
-  altriTecniciIds?: string[];
+  // --- Gestione Presenze e Ore (Struttura Dati Unificata) ---
+  dettaglioOreTecnici?: DettaglioOreTecnico[];
 
-  // --- Dettagli Orari ---
-  isTrasferta?: boolean;
+  // --- Dettagli Orari (Legacy, per compatibilità in lettura) ---
+  isTrasferta?: boolean; // Utilizzato per indicare ore manuali
   oraInizio?: string | null;
   oraFine?: string | null;
   pausa?: number | null;
-  
+  oreLavoro?: number | null; // Deprecato, usare `dettaglioOreTecnici`
+  presenze?: string[]; // Deprecato
+  altriTecniciIds?: string[];// Deprecato
+
   // --- Dettagli Descrittivi ---
   descrizioneBreve?: string;
   lavoroEseguito?: string;
@@ -143,58 +132,41 @@ export interface Rapportino extends BaseEntity {
   veicoloId?: string | null;
   naveId?: string | null;
   luogoId?: string | null;
-  clienteId?: string | null;
-  sedeId?: string | null;
-
+  
   // --- Dati Firma Cliente ---
   firmaFirmatarioNome?: string;
   firmaFirmatarioSocieta?: string;
-  firmaVettoriale?: string; // SVG o JSON
+  firmaVettoriale?: string; // SVG o base64 data URL
 
   // --- Timestamps Automatici ---
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }
 
-export type Report = Rapportino; // Alias per coerenza
-
 // =========================================================================
-// --- INTERFACCIA PER IMPOSTAZIONI E TARIFFE ---
+// --- INTERFACCE LOCALI E "ARRICCHITE" PER L'UI ---
 // =========================================================================
 
-export interface Tariffa {
-    tipoGiornataId: string;
-    nome: string; // e.g., "Lavoro Ordinario", "Ferie"
-    costo: number;
-    unita: 'ora' | 'giorno';
+// Interfaccia per lo stato del form, non per Firestore
+export interface DettaglioOreData {
+    tecnicoId: string;
+    nome: string;
+    isManual: boolean; // Corrisponde a Rapportino.isTrasferta
+    oraInizio: string | null;
+    oraFine: string | null;
+    pausa: number | null;
+    ore: number | null; // Le ore calcolate o inserite manualmente
 }
-
-export interface Impostazioni {
-    costoTrasferta: {
-        costo: number;
-        unita: 'giorno';
-    };
-    tariffe: Tariffa[];
-}
-
-
-// =========================================================================
-// --- TIPI "ARRICCHITI" PER LA VISUALIZZAZIONE NELL'UI ---
-// =========================================================================
 
 export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiornataId' | 'presenze'> {
   data: Date;
-  tipoGiornata: TipoGiornata;
+  tipoGiornata: TipoGiornata; // Arricchito con l'oggetto TipoGiornata completo dal DB locale
   tecnicoScrivente?: Tecnico;
-  presenze: Tecnico[];
+  presenze: Tecnico[]; // Lista arricchita dei tecnici
   destinazione?: string;
-  guadagno?: number;
-  cliente?: Cliente;
-  sede?: Sede;
-  nave?: Nave;
-  luogo?: Luogo;
+  guadagno?: number; // Calcolato localmente
+  veicolo?: Veicolo; // Arricchito
+  nave?: Nave; // Arricchito
+  luogo?: Luogo; // Arricchito
   isEditable?: boolean;
-  oreLavoro?: number;
 }
-
-export interface EnrichedReport extends EnrichedRapportino {};

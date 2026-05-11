@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '@/utils/firebase'; // Corretto l'import
+import { db } from '@/firebase'; // CORREZIONE: Puntato all'istanza DB corretta
 import { Tecnico, TipoGiornata, Veicolo, Nave, Luogo, Cliente, Impostazioni, Tariffa, MasterData } from '@/models/definitions';
 import { localDB } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';

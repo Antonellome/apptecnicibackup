@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { db } from '@/firebase';
 import { useAuth } from './AuthContext';
 
 // --- TIPI E INTERFACCE ---

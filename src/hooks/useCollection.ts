@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, QuerySnapshot } from 'firebase/firestore';
-import { db } from '../utils/firebase';
+import { db } from '@/firebase';
 
 interface UseCollectionReturn<T> {
   data: T[] | null;

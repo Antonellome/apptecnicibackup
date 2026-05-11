@@ -12,7 +12,7 @@ import {
     Grid,
     Link as MuiLink
 } from '@mui/material';
-import { app } from '@/utils/firebase';
+import { auth } from '@/firebase'; // CORREZIONE: importa direttamente auth dall'unica fonte corretta
 import { useAuth } from '@/hooks/useAuth';
 
 const LoginPage = () => {
@@ -23,7 +23,7 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const navigate = useNavigate();
-  const auth = getAuth(app);
+  // L'istanza auth viene importata direttamente, non è più necessario getAuth(app)
 
   useEffect(() => {
     // Questo listener attende che l'AuthContext confermi l'autenticazione
@@ -50,9 +50,6 @@ const LoginPage = () => {
         setError('Si è verificato un errore durante il login.');
       }
     } finally {
-      // **LA CORREZIONE È QUI**
-      // Indipendentemente dal successo o fallimento, disattiviamo lo spinner.
-      // Questo sblocca l'interfaccia e risolve il problema.
       setLoading(false);
     }
   };

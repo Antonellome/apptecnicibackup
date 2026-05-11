@@ -21,13 +21,14 @@ import { it } from 'date-fns/locale';
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { useMasterData } from '@/hooks/useMasterData';
-import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions';
+import { useLocalData } from '@/hooks/useLocalData'; // CORREZIONE DEFINITIVA
+import { Rapportino, EnrichedRapportino } from '@/models/definitions';
 
 const ReportListPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { masterData, loading: masterDataLoading } = useMasterData();
+  // CORREZIONE: Sostituisco il vecchio hook `useMasterData` con `useLocalData`
+  const { data: masterData, loading: masterDataLoading } = useLocalData();
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [rapportini, setRapportini] = useState<EnrichedRapportino[]>([]);
@@ -36,12 +37,13 @@ const ReportListPage = () => {
 
   useEffect(() => {
     if (!user || masterDataLoading) {
+        // Se i dati master non sono ancora caricati, attendiamo.
         if(!masterDataLoading) setLoading(false);
         return;
     }
 
     if (!masterData) {
-        setError("Dati anagrafici non disponibili.");
+        setError("Dati anagrafici non disponibili. Sincronizzazione in corso o fallita.");
         setLoading(false);
         return;
     }
@@ -51,9 +53,10 @@ const ReportListPage = () => {
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
 
+    // CORREZIONE: La query ora filtra per `tecnicoId` (l'autore del report) e non più per `presenze`
     const q = query(
       collection(db, "rapportini"), 
-      where("presenze", "array-contains", user.uid),
+      where("tecnicoId", "==", user.uid),
       where("data", ">=", Timestamp.fromDate(start)),
       where("data", "<=", Timestamp.fromDate(end)),
       orderBy("data", "desc")
@@ -64,23 +67,29 @@ const ReportListPage = () => {
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
         const naviMap = new Map(masterData.navi.map(n => [n.id, n.nome]));
         const luoghiMap = new Map(masterData.luoghi.map(l => [l.id, l.nome]));
-        const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
 
         const today = new Date();
-        const isGracePeriod = today.getDate() <= 10;
-        const currentMonthDate = today;
-        const previousMonthDate = subMonths(today, 1);
 
         const enrichedData = querySnapshot.docs.map(doc => {
             const data = doc.data() as Rapportino;
             const reportDate = (data.data as Timestamp).toDate();
-            const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Non Definito', colore: '#808080' };
+            const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Non Definito' };
             const destinazione = data.naveId ? naviMap.get(data.naveId) : (data.luogoId ? luoghiMap.get(data.luogoId) : 'Nessuna');
-            const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
             
-            const isReportInCurrentMonth = isSameMonth(reportDate, currentMonthDate);
-            const isReportInPreviousMonth = isSameMonth(reportDate, previousMonthDate);
-            const isEditable = isReportInCurrentMonth || (isGracePeriod && isReportInPreviousMonth);
+            const reportMonth = startOfMonth(reportDate);
+            const currentActiveMonth = startOfMonth(new Date());
+            const previousMonth = startOfMonth(subMonths(new Date(), 1));
+
+            let isEditable = false;
+            if (user.isAdmin) {
+                isEditable = true; // Gli admin possono modificare tutto, sempre.
+            } else {
+                if (isSameMonth(reportMonth, currentActiveMonth)) {
+                    isEditable = true;
+                } else if (isSameMonth(reportMonth, previousMonth) && today.getDate() <= 10) {
+                    isEditable = true; // Periodo di grazia
+                }
+            }
 
             return {
                 ...data,
@@ -89,7 +98,6 @@ const ReportListPage = () => {
                 isEditable: isEditable,
                 tipoGiornata: tipoGiornata,
                 destinazione: destinazione || 'Non trovato',
-                presenze: presenzeArricchite,
             } as EnrichedRapportino;
         });
 
@@ -114,9 +122,7 @@ const ReportListPage = () => {
   };
 
   const today = new Date();
-  const minDate = startOfMonth(subMonths(today, 2));
   const isNextButtonDisabled = isSameMonth(currentMonth, today);
-  const isPrevButtonDisabled = isSameMonth(currentMonth, minDate);
 
   const isLoading = loading || masterDataLoading;
 
@@ -132,7 +138,7 @@ const ReportListPage = () => {
       </Box>
 
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button variant="outlined" onClick={() => handleMonthChange(-1)} disabled={isPrevButtonDisabled}>Mese Prec.</Button>
+        <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
         <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
         <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
       </Paper>

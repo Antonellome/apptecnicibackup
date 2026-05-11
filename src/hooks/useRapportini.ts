@@ -20,7 +20,7 @@
 
 import { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore'; // Importa getDocs
-import { db } from '@/utils/firebase';
+import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { Rapportino } from '@/models/definitions';
 

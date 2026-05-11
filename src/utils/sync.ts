@@ -1,5 +1,5 @@
 import { doc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { db } from '@/firebase';
 
 /**
  * Updates the sync manifest document in Firestore with a new server timestamp

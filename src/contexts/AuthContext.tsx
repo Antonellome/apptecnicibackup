@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, ReactNode, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, db } from '@/utils/firebase';
+import { auth, db } from '@/firebase'; // CORREZIONE: Puntato all'istanza DB e Auth corretta
 import { doc, getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/models/definitions';
 

@@ -1,10 +1,9 @@
-
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../utils/firebase';
-import { Report, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '../models/definitions';
-import { rapportoConverter, tecnicoConverter, dittaConverter, categoriaConverter, veicoloConverter } from '../utils/converters';
-import { useAuth } from '../hooks/useAuth';
+import { db } from '@/firebase'; // CORREZIONE: Puntato all'istanza DB corretta
+import { Report, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '@/models/definitions';
+import { rapportoConverter, tecnicoConverter, dittaConverter, categoriaConverter, veicoloConverter } from '@/utils/converters';
+import { useAuth } from '@/hooks/useAuth';
 
 const sortByName = <T extends { nome?: string }>(data: T[]): T[] => {
   return data.sort((a, b) => {
