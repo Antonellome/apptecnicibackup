@@ -98,7 +98,11 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
 
                 {!datiOre.isManual ? (
                     <>
-                        <Grid size={{ xs: 6, sm: 4 }}>
+                        <Grid
+                            size={{
+                                xs: 6,
+                                sm: 4
+                            }}>
                             <FormControl fullWidth disabled={isReadOnly}>
                                 <InputLabel id="inizio-label">Inizio</InputLabel>
                                 <Select
@@ -111,7 +115,11 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={{ xs: 6, sm: 4 }}>
+                        <Grid
+                            size={{
+                                xs: 6,
+                                sm: 4
+                            }}>
                             <FormControl fullWidth disabled={isReadOnly}>
                                 <InputLabel id="fine-label">Fine</InputLabel>
                                 <Select
@@ -124,7 +132,11 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={{ xs: 12, sm: 4 }}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                sm: 4
+                            }}>
                             <FormControl fullWidth disabled={isReadOnly}>
                                 <InputLabel id="pausa-label">Pausa (min)</InputLabel>
                                 <Select 

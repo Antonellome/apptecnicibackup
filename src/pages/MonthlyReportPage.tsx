@@ -25,14 +25,15 @@ import { localDB } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
 import DettaglioCostiTipoGiornata from '@/components/Rapportini/DettaglioCostiTipoGiornata';
 
-// Struttura dati per il riepilogo mensile
+// --- STRUTTURA DATI MODIFICATA PER INCLUDERE IL DETTAGLIO ORE ---
 export interface RiepilogoMese {
     oreTotali: number;
     costoTotale: number;
     dettaglio: Map<string, { // la chiave è tipoGiornataId
         nome: string;
         colore: string;
-        ore: number;
+        oreOrdinarie: number;
+        oreStraordinario: number;
         costo: number;
         unita: 'g' | 'h';
         giorni: number;
@@ -73,7 +74,6 @@ const ReportMensilePage = () => {
             const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
             const enrichedData = querySnapshot.docs.map(doc => {
                 const data = doc.data() as Rapportino;
-                // Fallback per dati corrotti o vecchi
                 const oreLavoro = data.dettaglioOreTecnici?.find(d => d.tecnicoId === user.uid)?.ore ?? data.oreLavoro ?? 0;
                 const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Sconosciuto', colore: '#808080', sigla: '' };
                 const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
@@ -83,7 +83,6 @@ const ReportMensilePage = () => {
                     data: (data.data as Timestamp).toDate(),
                     tipoGiornata,
                     presenze: presenzeArricchite,
-                    // Campo normalizzato per le ore, per gestire vecchia e nuova struttura
                     oreGiorno: oreLavoro,
                 } as EnrichedRapportino;
             });
@@ -102,13 +101,12 @@ const ReportMensilePage = () => {
         fetchRapportini();
     }, [fetchRapportini]);
 
+    // --- LOGICA DI CALCOLO CORRETTA ALLA FONTE ---
     const riepilogoMese = useMemo<RiepilogoMese | null>(() => {
         if (!rapportini.length || !impostazioniLocali || !user) return null;
 
         const tariffe = impostazioniLocali.data.tariffe as TariffaLocale[];
         const tariffeMap = new Map(tariffe.map(t => [t.tipoGiornataId, t]));
-
-        // RIPRISTINO LOGICA ORIGINALE: Ricerca per nome.
         const tariffaOrdinaria = tariffe.find(t => t.nome.toLowerCase() === 'ordinaria');
         const tariffaStraordinaria = tariffe.find(t => t.nome.toLowerCase() === 'straordinario');
 
@@ -128,46 +126,45 @@ const ReportMensilePage = () => {
             riepilogo.oreTotali += oreGiorno;
 
             let costoGiorno = 0;
-            // RIPRISTINO LOGICA ORIGINALE: Switch sul nome.
+            let oreOrdinarieLoop = 0;
+            let oreStraordinarieLoop = 0;
             const tipoGiornataNome = report.tipoGiornata.nome.toLowerCase();
 
+            // 1. Calcolo suddivisione ore
+            if (['ordinaria', 'trasferta italia', 'trasferta europa', 'trasferta extraeuropea'].includes(tipoGiornataNome)) {
+                oreOrdinarieLoop = Math.min(oreGiorno, 8);
+                oreStraordinarieLoop = Math.max(0, oreGiorno - 8);
+            } else if (tipoGiornataNome === 'straordinario') {
+                oreStraordinarieLoop = oreGiorno;
+            } else {
+                oreOrdinarieLoop = oreGiorno;
+            }
+
+            // 2. Calcolo costo
             switch (tipoGiornataNome) {
                 case 'ferie':
                 case 'festivo':
                     costoGiorno = tariffaCorrente.costo;
                     break;
-
                 case 'permesso':
                 case 'legge 104':
-                case '104': // Aggiungo fallback per dati sporchi
+                case '104':
                 case 'malattia':
                     costoGiorno = oreGiorno * tariffaCorrente.costo;
                     break;
-
                 case 'straordinario':
                     costoGiorno = oreGiorno * (tariffaStraordinaria?.costo ?? 0);
                     break;
-
                 case 'ordinaria':
                 case 'trasferta italia':
                 case 'trasferta europa':
                 case 'trasferta extraeuropea':
                     if (tariffaOrdinaria) {
-                        const oreOrdinarie = Math.min(oreGiorno, 8);
-                        const oreStraordinarie = Math.max(0, oreGiorno - 8);
-                        const costoStraordinario = tariffaStraordinaria?.costo ?? tariffaOrdinaria.costo; // Fallback a costo ordinario
-                        let costoOre = (oreOrdinarie * tariffaOrdinaria.costo) + (oreStraordinarie * costoStraordinario);
-                        
-                        if (tipoGiornataNome !== 'ordinaria') { // È una trasferta
-                            costoGiorno = costoOre + tariffaCorrente.costo;
-                        } else {
-                            costoGiorno = costoOre;
-                        }
-                    } else {
-                        costoGiorno = 0; // Tariffa ordinaria non trovata, costo nullo
+                        const costoStraordinario = tariffaStraordinaria?.costo ?? tariffaOrdinaria.costo;
+                        const costoOre = (oreOrdinarieLoop * tariffaOrdinaria.costo) + (oreStraordinarieLoop * costoStraordinario);
+                        costoGiorno = tipoGiornataNome.startsWith('trasferta') ? costoOre + tariffaCorrente.costo : costoOre;
                     }
                     break;
-
                 default:
                     costoGiorno = 0;
                     break;
@@ -175,16 +172,19 @@ const ReportMensilePage = () => {
 
             riepilogo.costoTotale += costoGiorno;
 
+            // 3. Aggiornamento mappa dettaglio con i dati corretti
             const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || {
                 nome: report.tipoGiornata.nome,
                 colore: report.tipoGiornata.colore,
-                ore: 0,
+                oreOrdinarie: 0,
+                oreStraordinario: 0,
                 costo: 0,
                 unita: tariffaCorrente.unita,
                 giorni: 0,
             };
 
-            dettaglioGiorno.ore += oreGiorno;
+            dettaglioGiorno.oreOrdinarie += oreOrdinarieLoop;
+            dettaglioGiorno.oreStraordinario += oreStraordinarieLoop;
             dettaglioGiorno.costo += costoGiorno;
             if (oreGiorno > 0 || tariffaCorrente.unita === 'g') {
                 dettaglioGiorno.giorni += 1;

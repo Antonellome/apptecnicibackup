@@ -15,12 +15,16 @@ import {
 } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
-import type { EnrichedRapportino, Tecnico } from '@/models/definitions';
+import type { EnrichedRapportino, Tecnico, TariffaLocale } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
-import { useMasterData } from '@/hooks/useMasterData';
+import { useMasterData } from '@/contexts/MasterDataProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
+
+const ORE_ORDINARIE_MAX = 8;
+const TARIFFA_ORDINARIA = 10; 
+const TARIFFA_STRAORDINARIO = 15;
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement },
@@ -34,71 +38,95 @@ interface ReportMensileDialogProps {
   onClose: () => void;
   reports: EnrichedRapportino[];
   currentMonth: Date;
-  tariffe: Record<string, number>;
 }
 
-// =========================================================================
-// --- APPLICAZIONE DELLA STRATEGIA DI UNIFICAZIONE DATI ---
-// =========================================================================
-const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth, tariffe }) => {
+const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose, reports, currentMonth }) => {
   const { user } = useAuth();
-  
-  // 1. UTILIZZO DEL PROVIDER CANONICO: Recupero dati e stati dal nostro Single Source of Truth.
   const { masterData, loading, error } = useMasterData();
 
-  // 2. CALCOLI MEMORIZZATI: La logica di arricchimento viene eseguita solo quando i dati necessari sono pronti.
   const { enrichedReportsWithGuadagno, totalGuadagno, selectedTecnico } = useMemo(() => {
-      // 3. GUARDIA DI CONTROLLO (NULL-SAFETY): Se i dati master non sono ancora caricati, si esce immediatamente.
-      // Questa è la correzione cruciale che previene il crash.
-      if (!masterData) {
+      if (!masterData || !user) {
           return { enrichedReportsWithGuadagno: [], totalGuadagno: 0, selectedTecnico: null };
       }
 
-      const { tecnici, tipiGiornata } = masterData;
-      
-      const defaultTariffe = tipiGiornata.reduce((acc, tipo) => {
-          acc[tipo.nome] = 10.00;
-          return acc;
-      }, {} as Record<string, number>);
-
-      const finalTariffe = Object.keys(tariffe).length > 0 ? tariffe : defaultTariffe;
+      const { tecnici, impostazioni } = masterData;
+      const tariffeMap = new Map<string, TariffaLocale>(impostazioni.tariffe.map(t => [t.id, t]));
 
       const calculatedReports = reports.map(report => {
-          // CORREZIONE: Il report in ingresso è già un EnrichedRapportino, quindi usiamo l'oggetto tipoGiornata direttamente.
-          const tipo = report.tipoGiornata;
-          const tariffa = tipo ? (finalTariffe[tipo.nome] ?? 0) : 0;
-          const guadagno = (report.oreLavoro ?? 0) * tariffa;
+          const oreTotaliGiorno = report.oreGiorno ?? 0;
+          const tariffa = tariffeMap.get(report.tipoGiornataId);
+          const nomeTariffa = tariffa?.nome.toLowerCase() || '';
+
+          // --- FASE 1: CALCOLO ORE PER VISUALIZZAZIONE (SEMPRE ESPLICITO) ---
+          let oreOrdinarie: number;
+          let oreStraordinario: number;
+
+          const isAttivitaComplessa = nomeTariffa === 'ordinaria' || nomeTariffa.startsWith('trasferta');
+
+          if (isAttivitaComplessa) {
+              oreOrdinarie = Math.min(oreTotaliGiorno, ORE_ORDINARIE_MAX);
+              oreStraordinario = Math.max(0, oreTotaliGiorno - ORE_ORDINARIE_MAX);
+          } else if (nomeTariffa === 'straordinario') {
+              oreOrdinarie = 0;
+              oreStraordinario = oreTotaliGiorno;
+          } else {
+              // Per tutti gli altri casi (Ferie, 104, Malattia, etc.)
+              oreOrdinarie = oreTotaliGiorno;
+              oreStraordinario = 0;
+          }
+
+          // --- FASE 2: CALCOLO GUADAGNO (BASATO SULLE REGOLE) ---
+          let guadagno = 0;
+          if (tariffa) {
+              if (tariffa.unita === 'g') {
+                  // Calcolo a giornata (es. Ferie, Festivo, bonus trasferta)
+                  guadagno = tariffa.costo;
+              } else { // 'h'
+                  // Calcolo a ore, usando le ore calcolate nella Fase 1
+                  const costoBase = (nomeTariffa === 'ordinaria' || nomeTariffa.startsWith('trasferta'))
+                      ? TARIFFA_ORDINARIA
+                      : tariffa.costo;
+                  
+                  guadagno = (oreOrdinarie * costoBase) + (oreStraordinario * TARIFFA_STRAORDINARIO);
+
+                  // Logica speciale per bonus trasferta giornaliero
+                  if (nomeTariffa.startsWith('trasferta')) {
+                      const tariffaBonus = Array.from(tariffeMap.values()).find(t => t.nome.toLowerCase() === nomeTariffa && t.unita === 'g');
+                      if (tariffaBonus) {
+                          guadagno += tariffaBonus.costo;
+                      }
+                  }
+              }
+          }
+          
           return {
               ...report,
-              guadagno: guadagno,
+              guadagno,
+              oreOrdinarie,
+              oreStraordinario,
           };
       });
 
       const total = calculatedReports.reduce((sum, report) => sum + (report.guadagno ?? 0), 0);
-      const tecnico = tecnici.find((t: Tecnico) => t.id === user?.uid);
+      const tecnico = tecnici.find((t: Tecnico) => t.id === user.uid);
 
       return { enrichedReportsWithGuadagno: calculatedReports, totalGuadagno: total, selectedTecnico: tecnico };
 
-  }, [masterData, reports, tariffe, user?.uid]); // Dipendenza esplicita da masterData
+  }, [masterData, reports, user]);
 
-  const anno = currentMonth.getFullYear();
-  const mese = currentMonth.getMonth() + 1;
   const monthString = format(currentMonth, 'MMMM yyyy', { locale: it });
 
-  // Se il dialog non è aperto, non renderizzare nulla.
   if (!open) {
     return null;
   }
   
-  // --- VISTA DI CONTENUTO CONDIZIONALE ---
-  // Mostra stati diversi in base al caricamento o a errori.
   const renderContent = () => {
     if (loading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box>;
     }
 
     if (error) {
-        return <Alert severity="error">Errore nel caricamento dei dati master: {error.message}</Alert>;
+        return <Alert severity="error">Errore nel caricamento dei dati master: {error}</Alert>;
     }
 
     if (!selectedTecnico) {
@@ -111,8 +139,8 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
             tecnico={selectedTecnico}
             navi={masterData?.navi ?? []}
             luoghi={masterData?.luoghi ?? []}
-            anno={anno}
-            mese={mese}
+            anno={currentMonth.getFullYear()}
+            mese={currentMonth.getMonth() + 1}
             totalGuadagno={totalGuadagno}
         />
     );

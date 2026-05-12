@@ -1,146 +1,213 @@
 import React, { useRef, useMemo } from 'react';
 import {
-  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
-  TableHead, TableRow, Button, Divider, Icon
+    Box,
+    Typography,
+    TableContainer,
+    Table,
+    TableHead,
+    TableBody,
+    TableRow,
+    TableCell,
+    Paper,
+    Button,
+    TableFooter,
+    Alert,
 } from '@mui/material';
-import { Share, Summarize } from '@mui/icons-material';
+import { Share } from '@mui/icons-material';
 import html2canvas from 'html2canvas';
 import type { Tecnico, Nave, Luogo, EnrichedRapportino } from '@/models/definitions'; 
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
+import { useMasterData } from '@/contexts/MasterDataProvider';
+
+interface RapportinoConCalcoli extends EnrichedRapportino {
+  guadagno?: number;
+  oreOrdinarie?: number;
+  oreStraordinario?: number;
+}
 
 interface GeneratedReportViewProps {
-  rapportini: (EnrichedRapportino & { guadagno?: number })[];
+  rapportini: RapportinoConCalcoli[];
   tecnico: Tecnico;
   navi: Nave[];
   luoghi: Luogo[];
   anno: number;
   mese: number;
-  totalGuadagno?: number; // Prop per il totale guadagno
+  totalGuadagno: number;
 }
 
-// Funzione per formattare la valuta
-const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(value);
-};
+const formatCurrency = (value: number) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(value);
 
-const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnico, navi, luoghi, anno, mese, totalGuadagno = 0 }) => {
-  const printRef = useRef<HTMLDivElement>(null);
-  const theme = useTheme();
+// --- STRUTTURA DATI FINALE PER IL RIEPILOGO DETTAGLIATO ---
+interface AggregatedActivity {
+    tipoGiornataId: string;
+    nomeAttivita: string;
+    oreOrdinarie: number;
+    oreStraordinario: number;
+    giorni: number;
+    costoStimato: number;
+}
 
-  const handleShare = async () => {
-    if (!printRef.current) return;
+const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnico, navi, luoghi, anno, mese, totalGuadagno }) => {
+    const theme = useTheme();
+    const printRef = useRef<HTMLDivElement>(null);
+    const { masterData } = useMasterData();
 
-    const canvas = await html2canvas(printRef.current, { backgroundColor: '#ffffff' });
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
+    const handleShare = async () => {
+        if (!printRef.current) return; 
+        const canvas = await html2canvas(printRef.current, { scale: 2 });
+        const dataUrl = canvas.toDataURL('image/png');
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], `consuntivo_${tecnico.cognome}_${anno}_${mese}.png`, { type: 'image/png' });
 
-      const file = new File([blob], 'report.png', { type: blob.type });
-      const shareData = {
-        files: [file],
-        title: 'Report Mensile',
-        text: `Ecco il report mensile per ${tecnico.nome} ${tecnico.cognome}`,
-      };
-
-      if (navigator.canShare && navigator.canShare(shareData)) {
-        try {
-          await navigator.share(shareData);
-        } catch (error) {
-          console.error('Errore durante la condivisione:', error);
+        if (navigator.share) {
+            navigator.share({
+                title: `Consuntivo ${tecnico.nome} ${tecnico.cognome}`,
+                files: [file],
+            }).catch((error) => console.log('Errore nella condivisione', error));
+        } else {
+            alert('La condivisione Web non è supportata su questo browser.');
         }
-      } else {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'report.png';
-        link.click();
-      }
-    });
-  };
+    };
 
-  const meseNome = new Date(anno, mese - 1).toLocaleString('it-IT', { month: 'long' });
+    // --- LOGICA DI AGGREGAZIONE CON DETTAGLIO ORE ---
+    const aggregatedData = useMemo(() => {
+        if (!masterData) return [];
+        const tipiGiornataMap = new Map<string, string>(masterData.tipiGiornata.map(t => [t.id, t.nome]));
 
-  const { naviMap, luoghiMap } = useMemo(() => {
-    const naviMap: Record<string, string> = (navi || []).reduce((acc, n) => ({ ...acc, [n.id]: n.nome }), {});
-    const luoghiMap: Record<string, string> = (luoghi || []).reduce((acc, l) => ({ ...acc, [l.id]: l.nome }), {});
-    return { naviMap, luoghiMap };
-  }, [navi, luoghi]);
+        const aggregation: { [key: string]: AggregatedActivity } = {};
 
-  const oreTotali = rapportini.reduce((acc, r) => acc + (r.oreGiorno || 0), 0);
+        rapportini.forEach(r => {
+            const tipoId = r.tipoGiornataId;
+            if (!aggregation[tipoId]) {
+                aggregation[tipoId] = {
+                    tipoGiornataId: tipoId,
+                    nomeAttivita: tipiGiornataMap.get(tipoId) || 'Sconosciuto',
+                    oreOrdinarie: 0,
+                    oreStraordinario: 0,
+                    giorni: 0,
+                    costoStimato: 0,
+                };
+            }
+            aggregation[tipoId].oreOrdinarie += r.oreOrdinarie ?? 0;
+            aggregation[tipoId].oreStraordinario += r.oreStraordinario ?? 0;
+            aggregation[tipoId].costoStimato += r.guadagno ?? 0;
+            aggregation[tipoId].giorni += 1;
+        });
 
-  const headerCellStyle = {
-    fontWeight: 'bold',
-    color: theme.palette.common.white,
-  };
+        return Object.values(aggregation);
+    }, [rapportini, masterData]);
 
-  return (
-    <Paper elevation={0} sx={{ p: 2, mb: 2, border: 'none', boxShadow: 'none' }}>
-        <Box ref={printRef} sx={{p: 2}}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <Icon component={Summarize} sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
-                <Box>
-                    <Typography variant="h5" component="div" fontWeight="bold">
-                        Report Mensile Riepilogativo
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                        Periodo: {`${meseNome.charAt(0).toUpperCase() + meseNome.slice(1)} ${anno}`}
-                    </Typography>
-                </Box>
+    const { naviMap, luoghiMap } = React.useMemo(() => {
+        const naviMap = navi.reduce((acc, n) => ({ ...acc, [n.id]: n.nome }), {} as Record<string, string>);
+        const luoghiMap = luoghi.reduce((acc, l) => ({ ...acc, [l.id]: l.nome }), {} as Record<string, string>);
+        return { naviMap, luoghiMap };
+    }, [navi, luoghi]);
+
+    const totalOreGiorno = rapportini.reduce((acc, r) => acc + (r.oreGiorno ?? 0), 0);
+    const totalOreOrdinarie = rapportini.reduce((acc, r) => acc + (r.oreOrdinarie ?? 0), 0);
+    const totalOreStraordinario = rapportini.reduce((acc, r) => acc + (r.oreStraordinario ?? 0), 0);
+
+    const headerCellStyle = { fontWeight: 'bold', backgroundColor: theme.palette.grey[200] };
+    const footerCellStyle = { ...headerCellStyle, fontSize: '1.1rem' };
+
+    if (rapportini.length === 0) {
+        return <Alert severity="info">Nessun rapportino trovato per questo mese.</Alert>;
+    }
+
+    return (
+        <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+            <Box display="flex" justifyContent="flex-end" mb={2} gap={1}>
+                {navigator.share && (
+                    <Button variant="contained" startIcon={<Share />} onClick={handleShare}>Condividi</Button>
+                )}
             </Box>
+            
+            <Paper elevation={3} ref={printRef} sx={{ padding: theme.spacing(3), backgroundColor: 'white' }}>
+                <Box sx={{ textAlign: 'center', mb: 3 }}>
+                    <Typography variant="h4" component="h1" gutterBottom>Consuntivo Mensile</Typography>
+                    <Typography variant="h6" component="h2">{tecnico.nome} {tecnico.cognome}</Typography>
+                    <Typography variant="subtitle1" color="textSecondary">{dayjs(new Date(anno, mese - 1)).format('MMMM YYYY')}</Typography>
+                </Box>
 
-            {rapportini.length === 0 ? (
-                <Typography align="center" color="text.secondary" sx={{py: 5}}>Nessun dato trovato per questo mese.</Typography>
-            ) : (
-                <Box>
-                    <Box sx={{ p: 1.5, borderRadius: 2, mb: 2, border: `1px solid ${theme.palette.divider}` }}>
-                        <Typography variant="h6">{`${tecnico.nome} ${tecnico.cognome}`}</Typography>
-                        <Typography variant="subtitle1" color="text.secondary">Ore totali lavorate: <Typography component="span" fontWeight="bold" color="text.primary">{oreTotali.toFixed(2)}</Typography></Typography>
-                         {/* --- VISUALIZZAZIONE TOTALE GUADAGNO --- */}
-                        <Typography variant="subtitle1" color="text.secondary">Guadagno totale: <Typography component="span" fontWeight="bold" color="text.primary">{formatCurrency(totalGuadagno)}</Typography></Typography>
-                    </Box>
-                    <TableContainer component={Paper} variant="outlined">
-                        <Table size="small">
-                            <TableHead sx={{ backgroundColor: theme.palette.primary.main }}>
-                                <TableRow>
-                                    <TableCell sx={headerCellStyle}>Data</TableCell>
-                                    <TableCell sx={headerCellStyle}>Nave / Luogo</TableCell>
-                                    <TableCell sx={headerCellStyle}>Dettaglio</TableCell>
-                                    <TableCell align="right" sx={headerCellStyle}>Ore</TableCell>
-                                    {/* --- COLONNA GUADAGNO --- */}
-                                    <TableCell align="right" sx={headerCellStyle}>Guadagno</TableCell>
+                {/* --- TABELLA DI RIEPILOGO: CON DETTAGLIO ORE --- */}
+                <Typography variant="h5" component="h3" sx={{ mt: 4, mb: 2 }}>Dettaglio Costi per Attività</Typography>
+                <TableContainer component={Paper} elevation={0} variant="outlined">
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={headerCellStyle}>Tipo Attività</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Ore Ord.</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Ore Straord.</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Giorni</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Costo Stimato</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {aggregatedData.map((a) => (
+                                <TableRow key={a.tipoGiornataId}>
+                                    <TableCell component="th" scope="row">{a.nomeAttivita}</TableCell>
+                                    <TableCell align="right">{a.oreOrdinarie > 0 ? a.oreOrdinarie.toFixed(2) : '-'}</TableCell>
+                                    <TableCell align="right">{a.oreStraordinario > 0 ? a.oreStraordinario.toFixed(2) : '-'}</TableCell>
+                                    <TableCell align="right">{a.giorni}</TableCell>
+                                    <TableCell align="right">{formatCurrency(a.costoStimato)}</TableCell>
                                 </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {rapportini.map(r => (
-                                    <TableRow key={r.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                        <TableCell>{dayjs(r.data).format('DD/MM/YY')}</TableCell>
-                                        <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
-                                        <TableCell>{r.descrizioneBreve}</TableCell>
-                                        <TableCell align="right">{r.oreGiorno ? r.oreGiorno.toFixed(2) : '-'}</TableCell>
-                                        {/* --- CELLA GUADAGNO --- */}
-                                        <TableCell align="right">{r.guadagno ? formatCurrency(r.guadagno) : '-'}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Box>
-            )}
-            <Divider sx={{ my: 3 }} />
-            <Box sx={{display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 3}}>
-                <Typography variant="h6" align="right">Totale Ore: <Typography component="span" color="primary" variant="h5" fontWeight="bold">{oreTotali.toFixed(2)}</Typography></Typography>
-                <Typography variant="h6" align="right">Totale Guadagno: <Typography component="span" color="primary" variant="h5" fontWeight="bold">{formatCurrency(totalGuadagno)}</Typography></Typography>
-            </Box>
-        </Box>
+                            ))}
+                        </TableBody>
+                        <TableFooter>
+                           <TableRow>
+                               <TableCell sx={footerCellStyle} component="th" scope="row">TOTALI</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{totalOreOrdinarie.toFixed(2)}</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{totalOreStraordinario.toFixed(2)}</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{rapportini.length}</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{formatCurrency(totalGuadagno)}</TableCell>
+                           </TableRow>
+                        </TableFooter>
+                    </Table>
+                </TableContainer>
 
-        <Divider sx={{ my: 2 }} />
-
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="contained" startIcon={<Share />} onClick={handleShare} size="large">
-                Condividi Report
-            </Button>
+                {/* --- TABELLA DETTAGLIATA: COMPLETA E CORRETTA --- */}
+                <Typography variant="h5" component="h3" sx={{ mt: 4, mb: 2 }}>Dettaglio Giornaliero</Typography>
+                <TableContainer component={Paper} elevation={0} variant="outlined">
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={headerCellStyle}>Data</TableCell>
+                                <TableCell sx={headerCellStyle}>Destinazione</TableCell>
+                                <TableCell sx={headerCellStyle}>Descrizione</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Ore Tot.</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Ord.</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Straord.</TableCell>
+                                <TableCell sx={headerCellStyle} align="right">Guadagno</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {rapportini.map((r) => (
+                                <TableRow key={r.id}>
+                                    <TableCell>{dayjs(r.data).format('DD/MM/YY')}</TableCell>
+                                    <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
+                                    <TableCell>{r.descrizioneBreve}</TableCell>
+                                    <TableCell align="right">{r.oreGiorno?.toFixed(2) ?? '-'}</TableCell>
+                                    <TableCell align="right">{r.oreOrdinarie > 0 ? r.oreOrdinarie.toFixed(2) : '-'}</TableCell>
+                                    <TableCell align="right">{r.oreStraordinario > 0 ? r.oreStraordinario.toFixed(2) : '-'}</TableCell>
+                                    <TableCell align="right">{r.guadagno ? formatCurrency(r.guadagno) : '-'}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                        <TableFooter>
+                           <TableRow>
+                               <TableCell colSpan={3} sx={footerCellStyle} align="right">TOTALI</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{totalOreGiorno.toFixed(2)}</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{totalOreOrdinarie.toFixed(2)}</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{totalOreStraordinario.toFixed(2)}</TableCell>
+                               <TableCell sx={footerCellStyle} align="right">{formatCurrency(totalGuadagno)}</TableCell>
+                           </TableRow>
+                        </TableFooter>
+                    </Table>
+                </TableContainer>
+            </Paper>
         </Box>
-    </Paper>
-  );
+    );
 };
 
 export default GeneratedReportView;

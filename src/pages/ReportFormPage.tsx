@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Autocomplete, Button, CircularProgress, Alert, Box, Chip, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Switch, FormControlLabel
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import Grid from '@mui/material/Grid'; // Using Grid V1 for now
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShareIcon from '@mui/icons-material/Share';
@@ -24,6 +23,7 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import dayjs from 'dayjs';
 
 const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'permesso', 'legge 104'];
 const MULTI_DAY_ALLOWED_KEYWORDS = ['ferie', 'malattia'];
@@ -33,15 +33,44 @@ const isGiornataLavorativa = (tipo: TipoGiornata | undefined): boolean => {
     return !NON_LAVORATIVO_KEYWORDS.some(keyword => tipo.nome.toLowerCase().includes(keyword));
 };
 
-const createInitialDettaglio = (tecnicoId: string, nome: string, oreDefault: number = 8): DettaglioOreData => ({
-    tecnicoId,
-    nome,
-    isManual: false,
-    oraInizio: '07:30',
-    oraFine: '16:30',
-    pausa: 60,
-    ore: oreDefault,
-});
+const calculateOre = (dettaglio: Partial<DettaglioOreData>): number => {
+    if (dettaglio.isManual) {
+        return dettaglio.ore || 0;
+    }
+    const inizio = dayjs(`1970-01-01T${dettaglio.oraInizio || '00:00'}`);
+    const fine = dayjs(`1970-01-01T${dettaglio.oraFine || '00:00'}`);
+    if (fine.isAfter(inizio)) {
+        const diff = fine.diff(inizio, 'minute');
+        const oreCalcolate = (diff - (dettaglio.pausa || 0)) / 60;
+        return Math.max(0, parseFloat(oreCalcolate.toFixed(2)));
+    }
+    return 0;
+};
+
+const createInitialDettaglio = (
+    tecnicoId: string, 
+    nome: string, 
+    baseDetail?: DettaglioOreData
+): DettaglioOreData => {
+    if (baseDetail) {
+        return {
+            ...baseDetail,
+            tecnicoId,
+            nome,
+        };
+    }
+    const defaultDetail = {
+        tecnicoId,
+        nome,
+        isManual: false,
+        oraInizio: '07:30',
+        oraFine: '16:30',
+        pausa: 60,
+        ore: 8,
+    };
+    defaultDetail.ore = calculateOre(defaultDetail);
+    return defaultDetail;
+};
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <Paper variant="outlined" sx={{ p: 2, mt: 3, borderLeft: '4px solid', borderColor: 'primary.main' }}>
@@ -66,7 +95,6 @@ const ReportFormPage: React.FC = () => {
 
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
 
-    // Stati per il form
     const [dataInizio, setDataInizio] = useState<Date | null>(new Date());
     const [dataFine, setDataFine] = useState<Date | null>(new Date());
     const [isMultiDay, setIsMultiDay] = useState(false);
@@ -102,7 +130,6 @@ const ReportFormPage: React.FC = () => {
     const [firmaVettoriale, setFirmaVettoriale] = useState<string | null>(null);
     const sigCanvas = useRef<SignatureCanvas>(null);
 
-    //++++++++++ START SAFE SORTING LOGIC ++++++++++
     const getVeicoloLabel = useCallback((veicolo: Veicolo | undefined) => {
         if (!veicolo) return '';
         return `${veicolo.marca || ''} ${veicolo.modello || ''} - ${veicolo.targa || 'N/A'}`.trim();
@@ -140,7 +167,6 @@ const ReportFormPage: React.FC = () => {
         [...tipiGiornata].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')),
       [tipiGiornata]
     );
-    //++++++++++ END SAFE SORTING LOGIC ++++++++++
 
     const formRef = useRef<HTMLDivElement>(null);
     const memoizedShowSnackbar = useCallback(showSnackbar, []);
@@ -150,7 +176,7 @@ const ReportFormPage: React.FC = () => {
     const selectedTecnicos = useMemo(() => otherTecnicos.filter(t => altriTecniciIds.includes(t.id)), [altriTecniciIds, otherTecnicos]);
 
     const tipiGiornataFiltrati = useMemo(() => {
-        const sourceList = sortedTipiGiornata; // Use sorted list
+        const sourceList = sortedTipiGiornata;
         if (isMultiDay) {
             return sourceList.filter(t => MULTI_DAY_ALLOWED_KEYWORDS.some(keyword => (t?.nome || '').toLowerCase().includes(keyword)));
         }
@@ -183,15 +209,17 @@ const ReportFormPage: React.FC = () => {
 
                         const allTecnicoDetails = (report.dettaglioOreTecnici || []).map(savedDetail => {
                             const tecnicoInfo = tecnici.find(t => t.id === savedDetail.tecnicoId);
-                            return {
-                                tecnicoId: savedDetail.tecnicoId,
-                                nome: tecnicoInfo ? `${tecnicoInfo.cognome} ${tecnicoInfo.nome}`.trim() : 'Sconosciuto',
+                            const detailWithDefaults = {
                                 isManual: (savedDetail.isManual ?? report.isTrasferta) || false,
                                 oraInizio: savedDetail.oraInizio || report.oraInizio || '07:30',
                                 oraFine: savedDetail.oraFine || report.oraFine || '16:30',
                                 pausa: savedDetail.pausa ?? report.pausa ?? 60,
                                 ore: savedDetail.ore,
-                            };
+                                tecnicoId: savedDetail.tecnicoId,
+                                nome: tecnicoInfo ? `${tecnicoInfo.cognome} ${tecnicoInfo.nome}`.trim() : 'Sconosciuto',
+                            }
+                            detailWithDefaults.ore = calculateOre(detailWithDefaults);
+                            return detailWithDefaults;
                         });
                         setDettaglioOre(allTecnicoDetails);
 
@@ -223,7 +251,6 @@ const ReportFormPage: React.FC = () => {
         }
     }, [reportId, isEditMode, collectionsLoading, user?.isAdmin, memoizedShowSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]);
 
-
     const handleMultiDayToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
         const checked = event.target.checked;
         setIsMultiDay(checked);
@@ -238,7 +265,6 @@ const ReportFormPage: React.FC = () => {
              setIsLavorativo(isGiornataLavorativa(currentTipo));
         }
     };
-
 
     const handleOpenModal = (tecnico: DettaglioOreData) => {
         setEditingTecnico(tecnico);
@@ -258,7 +284,6 @@ const ReportFormPage: React.FC = () => {
     const handleTipoGiornataChange = (id: string) => {
         setTipoGiornataId(id);
         const tipo = tipiGiornata.find(t => t.id === id);
-        // In modalità multi-giorno, è sempre non lavorativo
         if (!isMultiDay) {
             setIsLavorativo(isGiornataLavorativa(tipo));
         }
@@ -266,25 +291,34 @@ const ReportFormPage: React.FC = () => {
     const handleCancel = () => navigate(isEditMode ? '/lista-report' : '/');
 
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
+        const newData = { ...updatedData, ore: calculateOre(updatedData) };
         setDettaglioOre(prevDettagli =>
             prevDettagli.map(d =>
-                d.tecnicoId === updatedData.tecnicoId ? updatedData : d
+                d.tecnicoId === newData.tecnicoId ? newData : d
             )
         );
     }, []);
 
     const handleScriventeOreUpdate = (updatedData: DettaglioOreData) => {
         const oldScriventeData = dettaglioOre.find(d => d.tecnicoId === updatedData.tecnicoId);
-        const modeChanged = oldScriventeData?.isManual !== updatedData.isManual;
+        const newScriventeData = { ...updatedData, ore: calculateOre(updatedData) };
+        
+        const modeChanged = oldScriventeData?.isManual !== newScriventeData.isManual;
 
         setDettaglioOre(prevDettagli => {
             return prevDettagli.map(d => {
-                if (d.tecnicoId === updatedData.tecnicoId) {
-                    return updatedData;
+                if (d.tecnicoId === newScriventeData.tecnicoId) {
+                    return newScriventeData;
                 }
-                // Se la modalità di inserimento dello scrivente cambia, la applichiamo a tutti
                 if (modeChanged) {
-                    return { ...d, isManual: updatedData.isManual };
+                    return {
+                        ...d,
+                        isManual: newScriventeData.isManual,
+                        oraInizio: newScriventeData.oraInizio,
+                        oraFine: newScriventeData.oraFine,
+                        pausa: newScriventeData.pausa,
+                        ore: newScriventeData.ore,
+                    };
                 }
                 return d;
             });
@@ -293,11 +327,11 @@ const ReportFormPage: React.FC = () => {
 
     const handleAltriTecniciChange = (_: React.SyntheticEvent, nuoviTecniciSelezionati: Tecnico[]) => {
         const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
-        if (!scrivente) return;
+        if (!scrivente) return; 
 
         const nuoviDettagli = nuoviTecniciSelezionati.map(t => {
             const existingDetail = dettaglioOre.find(d => d.tecnicoId === t.id);
-            return existingDetail || createInitialDettaglio(t.id, `${t.cognome} ${t.nome}`.trim());
+            return existingDetail || createInitialDettaglio(t.id, `${t.cognome} ${t.nome}`.trim(), scrivente);
         });
         setDettaglioOre([scrivente, ...nuoviDettagli]);
     };
@@ -306,7 +340,6 @@ const ReportFormPage: React.FC = () => {
         setDettaglioOre(prev => prev.filter(d => d.tecnicoId !== tecnicoIdToRemove));
     };
 
-    // LOGICA DI SALVATAGGIO PRINCIPALE (SMISTATORE)
     const handleSave = async () => {
         if (isMultiDay) {
             await handleMultiDaySave();
@@ -439,7 +472,7 @@ const ReportFormPage: React.FC = () => {
     };    
 
     const handleShare = async () => {
-        // ... (Logica di condivisione invariata, ma usa performSingleSave)
+        // ... 
     };
     
     const handleOpenSignatureModal = () => setIsSignatureModalOpen(true);
@@ -466,18 +499,34 @@ const ReportFormPage: React.FC = () => {
                                 <FormControlLabel control={<Switch checked={isMultiDay} onChange={handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={isEditMode} />
                             </Grid>
                         )}
-                        <Grid size={{ xs: 12, md: isMultiDay ? 6 : 12 }}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                md: isMultiDay ? 6 : 12
+                            }}>
                              <DatePicker label={isMultiDay ? "Dal" : "Data"} value={dataInizio} onChange={setDataInizio} disabled={disableActions} slotProps={{ textField: { fullWidth: true, required: true } }} />
                         </Grid>
                         {isMultiDay && (
-                            <Grid size={{ xs: 12, md: 6 }}>
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    md: 6
+                                }}>
                                 <DatePicker label="Al" value={dataFine} onChange={setDataFine} disabled={disableActions} slotProps={{ textField: { fullWidth: true, required: true } }} minDate={dataInizio || undefined} />
                             </Grid>
                         )}
-                        <Grid size={{ xs: 12, md: 6 }}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                md: 6
+                            }}>
                             <TextField label="Tecnico Responsabile" value={scriventeDettaglio?.nome || 'Caricamento...'} fullWidth disabled />
                         </Grid>
-                        <Grid size={{ xs: 12, md: 6 }}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                md: 6
+                            }}>
                            <FormControl fullWidth required disabled={disableActions}>
                                 <InputLabel id="tipo-giornata-label">Tipo Giornata</InputLabel>
                                 <Select
@@ -493,7 +542,6 @@ const ReportFormPage: React.FC = () => {
                         </Grid>
                     </Section>
 
-                    { /* Sezione Tecnici sempre visibile, ma il contenuto cambia */}
                     <Section title="Tecnici Coinvolti">
                          {scriventeDettaglio && !isLavorativo && (
                              <Grid size={12}><Typography variant="body2" color="text.secondary">Per giornate non lavorative (Ferie, Malattia, etc.), le ore sono impostate a 8 di default per tutti i tecnici.</Typography></Grid>
@@ -519,7 +567,7 @@ const ReportFormPage: React.FC = () => {
                                 <Grid key={dett.tecnicoId} size={12}>
                                 <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                                     <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography>
-                                        {isLavorativo ? <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${dett.ore || 0}h)`} size="small" /> : <Chip label={`8 ore di default`} size="small" />}
+                                        {isLavorativo ? <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${(dett.ore || 0).toFixed(2)}h)`} size="small" /> : <Chip label={`8 ore di default`} size="small" />}
                                     </Box>
                                     <Box>
                                         {isLavorativo && <IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={disableActions}><EditIcon /></IconButton>}
@@ -533,7 +581,11 @@ const ReportFormPage: React.FC = () => {
                     {isLavorativo && (
                         <>
                             <Section title="Dettagli Intervento">
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        md: 6
+                                    }}>
                                     <FormControl fullWidth disabled={disableActions}>
                                         <InputLabel id="nave-label">Nave</InputLabel>
                                         <Select
@@ -548,7 +600,11 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        md: 6
+                                    }}>
                                     <FormControl fullWidth disabled={disableActions}>
                                         <InputLabel id="luogo-label">Luogo</InputLabel>
                                         <Select

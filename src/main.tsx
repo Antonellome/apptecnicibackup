@@ -7,6 +7,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SnackbarProvider } from './contexts/SnackbarContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { MasterDataProvider } from './contexts/MasterDataProvider';
 import { syncMasterData } from './services/dataSync';
 import './index.css';
 import { CircularProgress, Box, Typography } from '@mui/material';
@@ -59,9 +60,11 @@ root.render(
       <AuthProvider>
         <SnackbarProvider>
           <NotificationProvider>
-            <AppInitializer>
-                <RouterProvider router={router} future={{ v7_startTransition: true }} />
-            </AppInitializer>
+            <MasterDataProvider>
+              <AppInitializer>
+                  <RouterProvider router={router} future={{ v7_startTransition: true }} />
+              </AppInitializer>
+            </MasterDataProvider>
           </NotificationProvider>
         </SnackbarProvider>
       </AuthProvider>

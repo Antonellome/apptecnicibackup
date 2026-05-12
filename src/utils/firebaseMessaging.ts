@@ -1,6 +1,6 @@
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db, app } from "./firebase";
+import { db, app } from "@/firebase";
 
 const VAPID_KEY = "BIvIQohxlYqW7gficYtCso06NArpaqE0va_j1PRJ63W159OTpQk-Be_nW9PLd-_46l4YqKC4W2iOVoORNocHbyk";
 
