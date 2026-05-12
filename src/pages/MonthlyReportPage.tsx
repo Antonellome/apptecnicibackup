@@ -19,17 +19,17 @@ import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
-import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, Tecnico, Impostazioni, TipoGiornata } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { localDB } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
 import DettaglioCostiTipoGiornata from '@/components/Rapportini/DettaglioCostiTipoGiornata';
 
-// Define the structure for our summary
+// Struttura dati per il riepilogo mensile
 export interface RiepilogoMese {
     oreTotali: number;
     costoTotale: number;
-    dettaglio: Map<string, {
+    dettaglio: Map<string, { // la chiave è tipoGiornataId
         nome: string;
         colore: string;
         ore: number;
@@ -37,8 +37,6 @@ export interface RiepilogoMese {
         unita: 'ora' | 'giorno';
         giorni: number;
     }>;
-    costoTrasferte: number;
-    giorniTrasferta: number;
 }
 
 const ReportMensilePage = () => {
@@ -51,6 +49,7 @@ const ReportMensilePage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // ... (fetchRapportini rimane invariato)
     const fetchRapportini = useCallback(async () => {
         if (!user || !masterData) {
             if(!masterDataLoading) setLoading(false);
@@ -110,56 +109,80 @@ const ReportMensilePage = () => {
             oreTotali: 0,
             costoTotale: 0,
             dettaglio: new Map(),
-            costoTrasferte: 0,
-            giorniTrasferta: 0
         };
 
         for (const report of rapportini) {
-            // CERCA LE ORE SPECIFICHE DELL'UTENTE LOGGATO
             const dettaglioUtente = (report.dettaglioOreTecnici || []).find(d => d.tecnicoId === user.uid);
-            const oreGiorno = dettaglioUtente ? (dettaglioUtente.ore || 0) : 0;
+            const oreGiorno = dettaglioUtente?.ore ?? 0;
 
-            // Se non ci sono ore per l'utente in questo giorno, non ha senso processarlo per il suo report personale
+            // Se l'utente ha 0 ore registrate per quel giorno, non contribuisce al suo report personale.
             if (oreGiorno === 0 && (report.dettaglioOreTecnici || []).length > 0) {
-                 // Se ci sono altri tecnici ma l'utente loggato ha 0 ore, salta al prossimo report.
-                 // Questo previene che giorni lavorati solo da altri appaiano a zero nel report.
                 continue;
             }
-            
+
             riepilogo.oreTotali += oreGiorno;
-            
+
             const tariffa = tariffeMap.get(report.tipoGiornata.id);
             let costoGiorno = 0;
+
             if (tariffa) {
-                if (tariffa.unita === 'ora') {
-                    costoGiorno = oreGiorno * tariffa.costo;
-                } else { // 'giorno'
+                // NUOVA LOGICA DI CALCOLO UNIFICATA E CORRETTA
+                const tipoGiornataNome = report.tipoGiornata.nome.toLowerCase();
+
+                if (tariffa.unita === 'g') {
+                    // TARIFFE GIORNALIERE (Ferie, Festivo, Trasferte)
                     costoGiorno = tariffa.costo;
+
+                    // Se è una trasferta, aggiungiamo il costo delle ore lavorate
+                    if (tipoGiornataNome.includes('trasferta')) {
+                        const tariffaOrdinaria = impostazioni.tariffe.find(t => t.nome.toLowerCase() === 'ordinaria');
+                        const tariffaStraordinaria = impostazioni.tariffe.find(t => t.nome.toLowerCase() === 'straordinario');
+                        if(tariffaOrdinaria && tariffaStraordinaria) {
+                            const oreOrdinarie = Math.min(oreGiorno, 8);
+                            const oreStraordinarie = Math.max(0, oreGiorno - 8);
+                            costoGiorno += (oreOrdinarie * tariffaOrdinaria.costo) + (oreStraordinarie * tariffaStraordinaria.costo);
+                        }
+                    }
+                } else if (tariffa.unita === 'h') {
+                    // TARIFFE ORARIE (Ordinaria, Straordinario, Permesso, Malattia, etc.)
+                    if (tipoGiornataNome === 'ordinaria') {
+                         const tariffaStraordinaria = impostazioni.tariffe.find(t => t.nome.toLowerCase() === 'straordinario');
+                         if(tariffaStraordinaria) {
+                            const oreOrdinarie = Math.min(oreGiorno, 8);
+                            const oreStraordinarie = Math.max(0, oreGiorno - 8);
+                            costoGiorno = (oreOrdinarie * tariffa.costo) + (oreStraordinarie * tariffaStraordinaria.costo);
+                         }
+                    } else {
+                        // Per tutte le altre tariffe orarie (Straordinario puro, Permesso, etc.)
+                        costoGiorno = oreGiorno * tariffa.costo;
+                    }
                 }
             }
+
             riepilogo.costoTotale += costoGiorno;
 
-            if (report.isTrasferta) {
-                riepilogo.giorniTrasferta += 1;
-                riepilogo.costoTotale += impostazioni.costoTrasferta.costo;
-                riepilogo.costoTrasferte += impostazioni.costoTrasferta.costo;
-            }
-
+            // Aggiornamento del dettaglio per tipo giornata
             const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || {
                 nome: report.tipoGiornata.nome,
                 colore: report.tipoGiornata.colore,
                 ore: 0,
                 costo: 0,
-                unita: tariffa?.unita || 'ora',
+                unita: tariffa?.unita || 'h',
                 giorni: 0,
             };
+
             dettaglioGiorno.ore += oreGiorno;
             dettaglioGiorno.costo += costoGiorno;
-            dettaglioGiorno.giorni += 1;
+            // Conta come "giorno" solo se ci sono ore o se la tariffa è giornaliera
+            if (oreGiorno > 0 || tariffa?.unita === 'g') {
+                 dettaglioGiorno.giorni += 1;
+            }
             riepilogo.dettaglio.set(report.tipoGiornata.id, dettaglioGiorno);
         }
-        return riepilogo;
+
+        return riepilogo.oreTotali > 0 || riepilogo.dettaglio.size > 0 ? riepilogo : null;
     }, [rapportini, impostazioniLocali, user]);
+
 
     const handleMonthChange = (increment: number) => {
         setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
@@ -179,17 +202,20 @@ const ReportMensilePage = () => {
                 <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
                 <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
             </Paper>
-            
             {isLoadingPage && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 4}}>
                     <CircularProgress />
                 </Box>
             )}
             {error && <Alert severity="error">{error}</Alert>}
-            
-            {!isLoadingPage && !error && riepilogoMese && riepilogoMese.oreTotali > 0 && (
+            {!isLoadingPage && !error && riepilogoMese && (
                  <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, md: 5, lg: 4 }}>
+                    <Grid
+                        size={{
+                            xs: 12,
+                            md: 5,
+                            lg: 4
+                        }}>
                         <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                             <Typography variant="h5" gutterBottom>Riepilogo</Typography>
                             <TableContainer component={Paper} variant="outlined">
@@ -208,16 +234,20 @@ const ReportMensilePage = () => {
                             </TableContainer>
                         </Paper>
                     </Grid>
-                    <Grid size={{ xs: 12, md: 7, lg: 8 }}>
+                    <Grid
+                        size={{
+                            xs: 12,
+                            md: 7,
+                            lg: 8
+                        }}>
                         <DettaglioCostiTipoGiornata dettaglio={riepilogoMese.dettaglio} />
                     </Grid>
-                    <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
+                    <Grid sx={{ mt: 2 }} size={12}>
                         <ActivityBreakdown riepilogo={riepilogoMese} />
                     </Grid>
                 </Grid>
             )}
-
-            {!isLoadingPage && !error && (!riepilogoMese || riepilogoMese.oreTotali === 0) && (
+            {!isLoadingPage && !error && !riepilogoMese && (
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
                     <Typography variant="h6">Nessun dato per questo mese</Typography>
                     <Typography color="text.secondary">Non sono stati trovati rapportini per il periodo selezionato.</Typography>

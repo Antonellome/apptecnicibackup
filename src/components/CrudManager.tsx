@@ -111,7 +111,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
             if (err instanceof Error) {
                 setError(`Eliminazione fallita: ${err.message}`);
             } else {
-                setError('Si è verificato un errore sconosciuto durante l\'eliminazione.');
+                setError('Si è verificato un errore sconosciuto durante l'eliminazione.');
             }
         } finally {
             handleCloseConfirmDialog();
@@ -184,7 +184,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                         />
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={handleClose}>Annulla</button>
+                        <Button onClick={handleClose}>Annulla</Button>
                         <Button onClick={handleSave} variant='contained' disabled={loading}>
                             {loading ? <CircularProgress size={24} /> : 'Salva'}
                         </Button>
@@ -196,7 +196,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                 <DialogTitle>Conferma Eliminazione</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Sei sicuro di voler eliminare l&apos;elemento <Typography component="span" fontWeight="bold">{itemToDelete?.nome}</Typography>?
+                        Sei sicuro di voler eliminare l'elemento "{itemToDelete?.nome}"?
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>

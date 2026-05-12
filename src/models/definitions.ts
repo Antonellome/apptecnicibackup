@@ -75,6 +75,12 @@ export interface UserProfile extends BaseEntity {
     };
 }
 
+export interface Tariffa extends BaseEntity {
+    clienteId: string;
+    clienteNome: string;
+    tariffaOraria: number;
+}
+
 // =========================================================================
 // --- OGGETTO DATI MASTER (per il fetching iniziale) ---
 // =========================================================================

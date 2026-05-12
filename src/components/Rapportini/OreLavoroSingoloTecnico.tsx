@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
     Box, Typography, Switch, FormControlLabel, Grid, FormControl, InputLabel, Select, MenuItem, TextField
@@ -28,11 +27,9 @@ const PAUSA_OPTIONS = [0, 30, 60];
 
 const generateManualHourOptions = () => {
     const options: { value: number; label: string }[] = [];
-    // Da 0 a 8 ore, con step di 0.5
     for (let i = 0; i <= 8; i += 0.5) {
         options.push({ value: i, label: `${i.toFixed(1)} ore` });
     }
-    // Da 8.5 a 24 ore, con step di 0.5 (straordinari)
     for (let i = 8.5; i <= 24; i += 0.5) {
         const extra = i - 8;
         options.push({ value: i, label: `8 ore + ${extra.toFixed(1)} ore` });
@@ -81,12 +78,12 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
         <Box sx={{ p: 2, border: '1px solid #eee', borderRadius: 2, mt: 1 }}>
             <Grid container spacing={2} alignItems="center">
                  {isScrivente && (
-                    <Grid size={{ xs: 12 }}>
+                    <Grid size={12}>
                         <Typography variant="subtitle1" fontWeight="bold">Orario Tecnico Responsabile</Typography>
                      </Grid>
                  )}
 
-                <Grid size={{ xs: 12 }}>
+                <Grid size={12}>
                     <FormControlLabel 
                         control={
                             <Switch 
@@ -103,8 +100,9 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                     <>
                         <Grid size={{ xs: 6, sm: 4 }}>
                             <FormControl fullWidth disabled={isReadOnly}>
-                                <InputLabel>Inizio</InputLabel>
+                                <InputLabel id="inizio-label">Inizio</InputLabel>
                                 <Select
+                                    labelId="inizio-label"
                                     value={datiOre.oraInizio || '07:30'}
                                     label="Inizio"
                                     onChange={e => handleValueChange('oraInizio', e.target.value)}
@@ -115,8 +113,9 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                         </Grid>
                         <Grid size={{ xs: 6, sm: 4 }}>
                             <FormControl fullWidth disabled={isReadOnly}>
-                                <InputLabel>Fine</InputLabel>
+                                <InputLabel id="fine-label">Fine</InputLabel>
                                 <Select
+                                    labelId="fine-label"
                                     value={datiOre.oraFine || '16:30'}
                                     label="Fine"
                                     onChange={e => handleValueChange('oraFine', e.target.value)}
@@ -127,8 +126,9 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                         </Grid>
                         <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth disabled={isReadOnly}>
-                                <InputLabel>Pausa (min)</InputLabel>
+                                <InputLabel id="pausa-label">Pausa (min)</InputLabel>
                                 <Select 
+                                    labelId="pausa-label"
                                     value={datiOre.pausa ?? 60} 
                                     label="Pausa (min)" 
                                     onChange={e => handleValueChange('pausa', Number(e.target.value))}
@@ -137,7 +137,7 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={{ xs: 12 }}>
+                        <Grid size={12}>
                              <TextField
                                 label="Totale Ore Calcolato"
                                 value={(datiOre.ore ?? 0).toFixed(2)}
@@ -155,10 +155,11 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                         </Grid>
                     </>
                 ) : (
-                    <Grid size={{ xs: 12 }}>
+                    <Grid size={12}>
                         <FormControl fullWidth disabled={isReadOnly}>
-                            <InputLabel>Ore Lavorate</InputLabel>
+                            <InputLabel id="ore-manuali-label">Ore Lavorate</InputLabel>
                             <Select
+                                labelId="ore-manuali-label"
                                 value={datiOre.ore ?? 8}
                                 label="Ore Lavorate"
                                 onChange={e => handleValueChange('ore', Number(e.target.value))}

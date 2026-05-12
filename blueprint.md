@@ -25,26 +25,30 @@
 
 ---
 
-# Architettura "Local-First" e Specifiche Funzionali (dal 24/07/2024)
+# Architettura "Local-First" e Specifiche Funzionali (Revisione del 24/07/2024)
 
 ## 1. Architettura di Base e Database Locale
 
 L'app adotta un'architettura **"Local-First"**.
 
-*   **Database Locale (IndexedDB):** L'app opera primariamente su un database locale che contiene **tutte** le collezioni necessarie: anagrafiche (navi, luoghi, veicoli, etc.), tecnici, rapportini e una nuova collezione per le **tariffe**.
-*   **Autonomia Operativa:** Grazie a questo database, l'app è in grado di funzionare in modo quasi completamente autonomo, anche per funzionalità complesse come il calcolo dei costi nei report.
-*   **Sincronizzazione con Firestore:** Esiste un sistema di sincronizzazione (`sync`) che ha due compiti:
-    1.  **Download:** Aggiornare le collezioni del database locale (le anagrafiche) con i dati più recenti provenienti da Firestore.
-    2.  **Upload:** Inviare i rapportini creati o modificati in locale a Firestore, per renderli disponibili all'app Master Office.
+*   **Database Locale (IndexedDB):** L'app opera primariamente su un database locale che contiene **tutte** le collezioni necessarie: anagrafiche (navi, luoghi, veicoli, etc.), tecnici, rapportini e una collezione per le **tariffe**.
+*   **Autonomia Operativa:** L'app è progettata per la massima utilizzabilità offline. La creazione, modifica e consultazione dei rapportini deve essere istantanea e avvenire sempre e solo tramite il database locale. La connessione a internet non deve mai essere un fattore bloccante per l'operatività quotidiana.
+*   **Sincronizzazione con Firestore:** Esiste un sistema di sincronizzazione (`sync`) che opera in background e ha due compiti:
+    1.  **Download Reattivo:** La sincronizzazione delle anagrafiche (clienti, navi, ecc.) **non è basata su un timer** (es. 24 ore). Al contrario, il sistema è **reattivo**: quando un dato su una collezione in Firestore viene modificato (es. un cliente viene aggiornato dall'app Master Office), il sistema forza l'aggiornamento di quella specifica collezione nel database locale dei dispositivi dei tecnici, garantendo dati sempre freschi senza attese.
+    2.  **Upload:** Invia i rapportini creati o modificati in locale a Firestore, per renderli disponibili all'app Master Office.
 
 ## 2. Gestione Tariffe Personalizzate
 
 *   **Tariffe Locali e Personalizzabili:** La tabella dei `tipiGiornata` e le relative tariffe sono a **uso esclusivo dell'app Tecnici**.
-*   **Dati Iniziali:** L'app parte con una tabella di tariffe standard.
+*   **Dati Iniziali:** L'app parte con una tabella di tariffe standard (definite nel codice come fallback).
 *   **Modifica Locale:** Il tecnico può **modificare** queste tariffe in qualsiasi momento. Le modifiche vengono salvate **solo nel database locale** del suo dispositivo e non vengono sincronizzate con Firestore.
 *   **Calcoli Locali:** La pagina "I Miei Report" utilizzerà i rapportini e questa tabella di tariffe (potenzialmente personalizzata) per eseguire tutti i calcoli dei costi direttamente sul dispositivo.
 
-## 3. Specifiche Funzionali del Form Rapportino
+## 3. Policy di Conservazione Dati Locali
+
+*   **Pulizia Automatica dei Rapportini:** Per ottimizzare lo spazio di archiviazione e mantenere le prestazioni del dispositivo, i rapportini salvati nel database locale che hanno una data **superiore a 3 mesi** devono essere automaticamente eliminati dall'app.
+
+## 4. Specifiche Funzionali del Form Rapportino
 
 1.  **Inserimento Ore Tecnico Responsabile:**
     *   Deve supportare una doppia modalità:
@@ -142,6 +146,31 @@ import { useAlert } from '@/contexts/AlertContext';
 
 // ... (codice del form come da snapshot precedente)
 ```
+
+---
+
+# Strategia di Test e Garanzia di Qualità (QA) - In Vigore dal 25/07/2024
+
+Per garantire la stabilità dell'applicazione e prevenire regressioni (rotture di funzionalità esistenti) durante le fasi di correzione degli errori e di sviluppo futuro, viene adottata una strategia di test automatizzati a due livelli. L'obiettivo è sostituire il controllo manuale e la discussione reattiva con un processo di verifica automatico, rapido e affidabile.
+
+## Livello 1: Test di Logica con Vitest (Lo Scudo della Logica)
+
+*   **Scopo:** Proteggere il "cervello" dell'applicazione, ovvero le logiche di business critiche.
+*   **Tecnologia:** `Vitest` + `React Testing Library`.
+*   **Area di Copertura Primaria:** La funzione di calcolo dei costi nella pagina `MonthlyReportPage.tsx`.
+*   **Modalità Operativa:** Verrà scritto un test unitario che fornisce al componente un set di dati di input predefinito (rapportini e tariffe fittizi) e verifica che l'output (il costo totale e i dettagli) corrisponda esattamente al risultato atteso, calcolato secondo le regole definite in questo blueprint. Questo test garantisce che la logica di calcolo non venga mai alterata accidentalmente.
+
+## Livello 2: Test End-to-End con Playwright (Lo Scudo Visivo)
+
+*   **Scopo:** Proteggere la "faccia" e le "mani" dell'applicazione, ovvero l'integrità visiva e l'interattività dei componenti fondamentali, con un focus maniacale sul form di inserimento dei rapportini.
+*   **Tecnologia:** `Playwright`.
+*   **Area di Copertura Primaria:** Il form di creazione/modifica dei rapportini (`ReportFormPage.tsx` e componenti figli).
+*   **Modalità Operativa (Visual Regression Testing):**
+    1.  **Screenshot d'Oro:** Verrà creato uno screenshot di riferimento (`form-rapportino-GOLD.png`) del form nello stato attuale e funzionante. Questo screenshot rappresenta il "modello di perfezione" visiva.
+    2.  **Confronto Automatico:** Ad ogni esecuzione dei test, Playwright aprirà un browser, navigherà al form, scatterà un nuovo screenshot e lo confronterà, pixel per pixel, con lo screenshot d'oro.
+    3.  **Fallimento Immediato:** Se anche un solo pixel è diverso, il test fallirà, segnalando immediatamente e in modo inequivocabile una regressione visiva. Questo impedisce qualsiasi modifica accidentale al layout, ai componenti o alla presentazione del form.
+
+Questo approccio a doppio scudo ci permetterà di affrontare la correzione degli errori di build e lo sviluppo futuro con la massima sicurezza, eliminando il ciclo di "riparazione-rottura" e garantendo che le funzionalità chiave rimangano sempre stabili e funzionanti come previsto.
 
 ---
 

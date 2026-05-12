@@ -1,26 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
-    Box,
-    Typography,
-    Paper,
-    TextField,
-    Button,
-    List,
-    ListItem,
-    ListItemText,
-    Divider,
-    CircularProgress,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
+    Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
 import { localDB } from '@/db/local-db';
-import { Impostazioni } from '@/models/definitions';
+import { Tariffa, TariffaLocale } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { MasterDataContext } from '@/contexts/MasterDataProvider';
 
 const ForceUpdateButton = () => {
     const [updating, setUpdating] = useState(false);
@@ -29,7 +18,6 @@ const ForceUpdateButton = () => {
     const handleForceUpdate = async () => {
         setUpdating(true);
         showSnackbar("Forzando l'aggiornamento dell'app...", 'info');
-
         try {
             if ('serviceWorker' in navigator) {
                 const registrations = await navigator.serviceWorker.getRegistrations();
@@ -37,16 +25,12 @@ const ForceUpdateButton = () => {
                     await registration.unregister();
                 }
             }
-
             if ('caches' in window) {
                 const keys = await caches.keys();
                 await Promise.all(keys.map(key => caches.delete(key)));
             }
-
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-
+            await localDB.delete(); // Pulisce completamente il database Dexie
+            setTimeout(() => { window.location.reload(); }, 2000);
         } catch (error) {
             console.error("Errore durante l'aggiornamento forzato:", error);
             showSnackbar("Errore durante l'aggiornamento forzato. Prova a pulire la cache del browser manualmente.", 'error');
@@ -65,60 +49,55 @@ const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
+    const masterDataContext = useContext(MasterDataContext);
 
     const impostazioniLive = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
 
-    const [impostazioni, setImpostazioni] = useState<Impostazioni | null>(null);
+    const [tariffe, setTariffe] = useState<Tariffa[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
     useEffect(() => {
-        if (impostazioniLive) {
-            const data = JSON.parse(JSON.stringify(impostazioniLive.data)); // Deep clone
-            data.tariffe.forEach((t: any) => {
-                if (t.nome.toLowerCase() === 'ferie' || t.nome.toLowerCase() === 'malattia') {
-                    t.unita = 'giorno';
-                }
-            });
-            setImpostazioni(data);
+        // La fonte di verità ora sono le impostazioni caricate dal MasterDataProvider,
+        // che a sua volta legge da Dexie. Questa pagina non deve più contenere logica di fallback.
+        if (impostazioniLive?.data?.tariffe) {
+            const tariffeOrdinate = [...impostazioniLive.data.tariffe].sort((a,b) => a.nome.localeCompare(b.nome));
+            setTariffe(tariffeOrdinate);
+            setIsDirty(false);
         }
     }, [impostazioniLive]);
 
-    const handleTariffaChange = (tipoId: string, value: string) => {
+    const handleTariffaChange = (id: string, value: string) => {
         const valueWithDot = value.replace(',', '.');
         if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
-            setImpostazioni(prev => {
-                if (!prev) return null;
-                const newTariffe = prev.tariffe.map(t =>
-                    t.tipoGiornataId === tipoId ? { ...t, costo: Number(valueWithDot) } : t
-                );
-                return { ...prev, tariffe: newTariffe };
-            });
+            setTariffe(prev =>
+                prev.map(t =>
+                    t.tipoGiornataId === id ? { ...t, costo: Number(valueWithDot) } : t
+                )
+            );
             setIsDirty(true);
         }
     };
-
-    const handleTrasfertaChange = (value: string) => {
-        const valueWithDot = value.replace(',', '.');
-        if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
-            setImpostazioni(prev => prev ? { ...prev, costoTrasferta: { ...prev.costoTrasferta, costo: Number(valueWithDot) } } : null);
-            setIsDirty(true);
-        }
-    };
-
+    
     const handleSalva = async () => {
-        if (!impostazioni) {
-            showSnackbar('Nessuna impostazione da salvare.', 'error');
+        if (!impostazioniLive) {
+            showSnackbar('Dati originali non trovati.', 'error');
             return;
         }
         setIsSaving(true);
+
+        const dataToSave = {
+            ...impostazioniLive.data,
+            tariffe: tariffe,
+        };
+
         try {
-            await localDB.tariffe_locali.put({ id: 'main', data: impostazioni, timestamp: new Date() });
-            showSnackbar('Impostazioni salvate con successo in locale!', 'success');
+            await localDB.tariffe_locali.put({ id: 'main', data: dataToSave, timestamp: new Date() });
+            showSnackbar('Tariffe salvate con successo in locale!', 'success');
             setIsDirty(false);
         } catch (error) {
-            console.error("Errore during il salvataggio in locale:", error);
-            showSnackbar('Errore durante il salvataggio delle impostazioni.', 'error');
+            console.error("Errore durante il salvataggio in locale:", error);
+            showSnackbar('Errore durante il salvataggio delle tariffe.', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -145,7 +124,7 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    if (!impostazioni) {
+    if (!masterDataContext?.masterData) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
     }
 
@@ -154,47 +133,34 @@ const SettingsPage: React.FC = () => {
             <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>Impostazioni</Typography>
 
             <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-                <Typography variant="h6" gutterBottom>Gestione Tariffe Locali</Typography>
+                <Typography variant="h6" gutterBottom>Gestione Tariffe</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Queste tariffe sono salvate solo su questo dispositivo e vengono usate per i calcoli nel report mensile. Non modificano i dati centrali.
                 </Typography>
                 <List>
-                    <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                        <ListItemText primary="Costo Trasferta" primaryTypographyProps={{ fontWeight: 'bold' }} />
-                        <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
-                            <TextField
-                                type="text"
-                                size="small"
-                                value={impostazioni.costoTrasferta.costo.toFixed(2)}
-                                onChange={(e) => handleTrasfertaChange(e.target.value)}
-                                sx={{ width: '100px' }}
-                                inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
-                                disabled={isSaving}
-                            />
-                            <Typography variant="body1" sx={{ ml: 1 }}>€/{impostazioni.costoTrasferta.unita === 'ora' ? 'h' : 'g'}</Typography>
-                        </Box>
-                    </ListItem>
-                    <Divider sx={{ my: 1 }} />
-                    {impostazioni.tariffe.map((tariffa) => (
-                        <ListItem key={tariffa.tipoGiornataId} sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                            <ListItemText primary={tariffa.nome} />
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
-                                <TextField
-                                    type="text"
-                                    size="small"
-                                    value={tariffa.costo.toFixed(2)}
-                                    onChange={(e) => handleTariffaChange(tariffa.tipoGiornataId, e.target.value)}
-                                    sx={{ width: '100px' }}
-                                    inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
-                                    disabled={isSaving}
-                                />
-                                <Typography variant="body1" sx={{ ml: 1 }}>€/{tariffa.unita === 'ora' ? 'h' : 'g'}</Typography>
-                            </Box>
-                        </ListItem>
+                    {tariffe.map((tariffa, index) => (
+                        <React.Fragment key={tariffa.tipoGiornataId}>
+                            {index > 0 && <Divider component="li" />}
+                            <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                                <ListItemText primary={tariffa.nome} />
+                                <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
+                                    <TextField
+                                        type="text"
+                                        size="small"
+                                        value={tariffa.costo.toFixed(2)}
+                                        onChange={(e) => handleTariffaChange(tariffa.tipoGiornataId, e.target.value)}
+                                        sx={{ width: '100px' }}
+                                        inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
+                                        disabled={isSaving}
+                                    />
+                                    <Typography variant="body1" sx={{ ml: 1 }}>€/{tariffa.unita}</Typography>
+                                </Box>
+                            </ListItem>
+                        </React.Fragment>
                     ))}
                 </List>
                 <Button variant="contained" sx={{ mt: 2 }} onClick={handleSalva} disabled={isSaving || !isDirty}>
-                    {isSaving ? <CircularProgress size={24} /> : 'Salva Tariffe in Locale'}
+                    {isSaving ? <CircularProgress size={24} /> : 'Salva Tariffe'}
                 </Button>
             </Paper>
 
