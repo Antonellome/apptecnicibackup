@@ -478,9 +478,15 @@ const ReportFormPage: React.FC = () => {
                             <TextField label="Tecnico Responsabile" value={scriventeDettaglio?.nome || 'Caricamento...'} fullWidth disabled />
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}>
-                            <FormControl fullWidth required disabled={disableActions}>
-                                <InputLabel>Tipo Giornata</InputLabel>
-                                <Select value={tipoGiornataId} label="Tipo Giornata" onChange={e => handleTipoGiornataChange(e.target.value as string)}>
+                           <FormControl fullWidth required disabled={disableActions}>
+                                <InputLabel id="tipo-giornata-label">Tipo Giornata</InputLabel>
+                                <Select
+                                    labelId="tipo-giornata-label"
+                                    id="tipo-giornata-select"
+                                    value={tipoGiornataId}
+                                    label="Tipo Giornata"
+                                    onChange={e => handleTipoGiornataChange(e.target.value as string)}
+                                >
                                     {tipiGiornataFiltrati.map(t => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
                                 </Select>
                             </FormControl>
@@ -529,8 +535,14 @@ const ReportFormPage: React.FC = () => {
                             <Section title="Dettagli Intervento">
                                 <Grid size={{ xs: 12, md: 6 }}>
                                     <FormControl fullWidth disabled={disableActions}>
-                                        <InputLabel>Nave</InputLabel>
-                                        <Select value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value as string)}>
+                                        <InputLabel id="nave-label">Nave</InputLabel>
+                                        <Select
+                                            labelId="nave-label"
+                                            id="nave-select"
+                                            value={naveId || ''}
+                                            label="Nave"
+                                            onChange={e => setNaveId(e.target.value as string)}
+                                        >
                                             <MenuItem value=""><em>Nessuna</em></MenuItem>
                                             {sortedNavi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}
                                         </Select>
@@ -538,8 +550,14 @@ const ReportFormPage: React.FC = () => {
                                 </Grid>
                                 <Grid size={{ xs: 12, md: 6 }}>
                                     <FormControl fullWidth disabled={disableActions}>
-                                        <InputLabel>Luogo</InputLabel>
-                                        <Select value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value as string)}>
+                                        <InputLabel id="luogo-label">Luogo</InputLabel>
+                                        <Select
+                                            labelId="luogo-label"
+                                            id="luogo-select"
+                                            value={luogoId || ''}
+                                            label="Luogo"
+                                            onChange={e => setLuogoId(e.target.value as string)}
+                                        >
                                             <MenuItem value=""><em>Nessuno</em></MenuItem>
                                             {sortedLuoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}
                                         </Select>
@@ -547,8 +565,15 @@ const ReportFormPage: React.FC = () => {
                                 </Grid>
                                 <Grid size={12}>
                                     <FormControl fullWidth disabled={disableActions}>
-                                        <InputLabel>Veicolo</InputLabel>
-                                        <Select value={veicoloId || ''} label="Veicolo" onChange={e => setVeicoloId(e.target.value as string)} renderValue={(selectedId) => getVeicoloLabel(sortedVeicoli.find(v => v.id === selectedId))}>
+                                        <InputLabel id="veicolo-label">Veicolo</InputLabel>
+                                        <Select
+                                            labelId="veicolo-label"
+                                            id="veicolo-select"
+                                            value={veicoloId || ''}
+                                            label="Veicolo"
+                                            onChange={e => setVeicoloId(e.target.value as string)}
+                                            renderValue={(selectedId) => getVeicoloLabel(sortedVeicoli.find(v => v.id === selectedId))}
+                                        >
                                             <MenuItem value=""><em>Nessuno</em></MenuItem>
                                             {sortedVeicoli.map(v => <MenuItem key={v.id} value={v.id}>{getVeicoloLabel(v)}</MenuItem>)}
                                         </Select>

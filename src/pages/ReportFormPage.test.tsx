@@ -4,9 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ReportFormPage from './ReportFormPage';
 import { BrowserRouter } from 'react-router-dom';
-import { aggiungiAllaCoda } from '@/services/offlineSync';
+import { addDoc } from 'firebase/firestore';
 
-// ============== MOCKING DEPENDENCIES ============== 
+// ============== MOCKING DEPENDENCIES (REVISED) ============== 
 
 // 1. react-router-dom
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -14,7 +14,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return {
     ...actual,
     useNavigate: () => vi.fn(),
-    useParams: () => ({ id: undefined }),
+    useParams: () => ({ reportId: undefined }), // Corrected from 'id' to 'reportId'
   };
 });
 
@@ -26,18 +26,16 @@ vi.mock('@/hooks/useAuth', () => ({
   }),
 }));
 
-// 3. Master Data Hook
-const mockMasterData = {
-    clienti: [{ id: 'cli1', nome: 'Cliente Prova' }],
-    destinazioni: [{ id: 'dest1', nome: 'Destinazione Prova' }],
-    tecnici: [{ id: 'tec1', nome: 'Tecnico Prova' }],
-    tipiFatturazione: [{ id: 'tf1', nome: 'Tipo Fatt Prova' }],
-    tipiLavoro: [{ id: 'tl1', nome: 'Tipo Lavoro Prova' }],
+// 3. Local Data Hook (CORRECTED from useMasterData)
+const mockLocalData = {
+    navi: [{ id: 'nave1', nome: 'Nave Prova' }],
+    luoghi: [{ id: 'luogo1', nome: 'Luogo Prova' }],
+    tecnici: [{ id: 'test-uid', nome: 'Test', cognome: 'User' }],
     veicoli: [{ id: 'vei1', marca: 'Fiat', modello: 'Doblò', targa: 'AB123CD' }],
-    tipiGiornata: [{ id: 'tg1', nome: 'Ordinaria', tipo: 'oraria', tariffa: 10 }],
+    tipiGiornata: [{ id: 'tg1', nome: 'Ordinaria'}],
 };
-vi.mock('@/hooks/useMasterData', () => ({
-  useMasterData: () => ({ masterData: mockMasterData, loading: false, error: null }),
+vi.mock('@/hooks/useLocalData', () => ({
+  useLocalData: () => ({ data: mockLocalData, loading: false, error: null }),
 }));
 
 // 4. Snackbar Context
@@ -46,14 +44,18 @@ vi.mock('@/contexts/SnackbarContext', () => ({
 }));
 
 // 5. Firebase / Offline Sync
-vi.mock('@/services/offlineSync');
 vi.mock('@/firebase', () => ({ db: {} }));
 vi.mock('firebase/firestore', () => ({
-  doc: vi.fn(), getDoc: vi.fn(), addDoc: vi.fn(), updateDoc: vi.fn(), collection: vi.fn(),
-  Timestamp: { fromDate: (date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 }) },
+  doc: vi.fn(), 
+  getDoc: vi.fn(), 
+  addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })), // Mock addDoc to resolve with a ref
+  updateDoc: vi.fn(), 
+  collection: vi.fn(),
+  writeBatch: vi.fn(() => ({ commit: vi.fn(), set: vi.fn() })),
+  Timestamp: { fromDate: (date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 }), now: () => ({ seconds: Date.now() / 1000, nanoseconds: 0 })},
 }));
 
-// 6. Signature Canvas (Corretto per Hoisting)
+// 6. Signature Canvas
 vi.mock('react-signature-canvas', () => {
     const signaturePadMock = {
         clear: vi.fn(),
@@ -69,48 +71,56 @@ vi.mock('react-signature-canvas', () => {
 
 // 7. MUI Grid
 vi.mock('@mui/material/Grid', () => ({
-  default: ({ children, ...props }) => <div {...props}>{children}</div>,
+  default: ({ children, ...props }) => <div data-testid="grid" {...props}>{children}</div>,
 }));
 
-// ============== TEST SUITE ============== 
+// ============== TEST SUITE (REVISED) ============== 
 
 describe('ReportFormPage', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+     vi.clearAllMocks();
+     (addDoc as any).mockClear();
+  });
 
-  it('dovrebbe corrispondere allo snapshot nello stato iniziale', () => {
+  it('dovrebbe corrispondere allo snapshot nello stato iniziale', async () => {
     const { container } = render(<BrowserRouter><ReportFormPage /></BrowserRouter>);
+    await screen.findByText('Ordinaria'); // Wait for async data to load
     expect(container).toMatchSnapshot();
   });
 
-  it('dovrebbe compilare il modulo intero e inviare i dati correttamente', async () => {
+  it('dovrebbe compilare il modulo e salvare i dati', async () => {
     const user = userEvent.setup();
     render(<BrowserRouter><ReportFormPage /></BrowserRouter>);
 
-    // 1. Compilare campi
-    await user.click(screen.getByRole('combobox', { name: /cliente/i }));
-    await user.click(await screen.findByText('Cliente Prova'));
-    await user.type(screen.getByRole('textbox', { name: /descrizione lavoro/i }), 'Test descrizione lavoro');
-    
-    // 2. Firma
-    await user.click(screen.getByRole('button', { name: /aggiungi firma/i }));
-    await user.click(await screen.findByRole('button', { name: /salva firma/i }));
+    // Attendere il caricamento dei dati asincroni
+    await screen.findByText('Test User');
 
-    // 3. Salva
+    // Selezionare Tipo Giornata
+    await user.click(screen.getByLabelText(/Tipo Giornata/i));
+    await user.click(await screen.findByRole('option', { name: 'Ordinaria' }));
+
+    // Selezionare Nave
+    await user.click(screen.getByLabelText(/Nave/i));
+    await user.click(await screen.findByRole('option', { name: /Nave Prova/i }));
+    
+    // Inserire descrizione
+    await user.type(screen.getByLabelText(/Breve Descrizione Lavoro/i), 'Test descrizione lavoro');
+
+    // Salvare
     await user.click(screen.getByRole('button', { name: /salva/i }));
 
-    // 4. Verifica
+    // Verificare che la funzione di salvataggio sia stata chiamata
     await waitFor(() => {
-        expect(aggiungiAllaCoda).toHaveBeenCalledOnce();
+        expect(addDoc).toHaveBeenCalledOnce();
     });
 
-    const submittedData = (aggiungiAllaCoda as any).mock.calls[0][0];
+    // Verificare il contenuto dei dati inviati
+    const submittedData = (addDoc as any).mock.calls[0][1];
     expect(submittedData).toEqual(expect.objectContaining({
-        userId: 'test-uid',
-        userEmail: 'test@test.com',
-        cliente: expect.objectContaining({ id: 'cli1', nome: 'Cliente Prova' }),
-        descrizioneLavoro: 'Test descrizione lavoro',
-        isNew: true,
-        firmaCliente: 'data:image/png;base64,fakesignature',
+        tecnicoId: 'test-uid',
+        tipoGiornataId: 'tg1',
+        naveId: 'nave1',
+        descrizioneBreve: 'Test descrizione lavoro',
     }));
   });
 });

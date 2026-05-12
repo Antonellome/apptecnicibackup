@@ -68,9 +68,15 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
         if (field.name === 'categoriaId') return categorieMap?.get(value as string)?.nome || null;
         
         // Gestione select generiche
-        if (field.type === 'select' && field.options) {
-            const foundOption = field.options.find(opt => opt.id === value); // Confronta per id
-            return foundOption?.nome || String(value);
+        if (field.type === 'select' && field.options && field.options.length > 0) {
+            // Controlla se le opzioni sono oggetti o stringhe
+            if (typeof field.options[0] === 'object' && field.options[0] !== null) {
+                const foundOption = (field.options as { id: string; nome: string }[]).find(opt => opt.id === value);
+                return foundOption?.nome || String(value);
+            } else {
+                const stringValue = String(value);
+                return (field.options as string[]).includes(stringValue) ? stringValue : null;
+            }
         }
 
         const stringValue = String(value);

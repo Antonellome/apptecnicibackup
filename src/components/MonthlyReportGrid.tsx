@@ -105,7 +105,7 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
                     p: 1,
                 }}
             >
-                <Tooltip title={`${tipoGiornata?.nome || 'N/D'} - Ore: ${rapportino.oreLavoro || 'N/A'}`}>
+                <Tooltip title={`${tipoGiornata?.nome || 'N/D'} - Ore: ${rapportino.oreGiorno || 'N/A'}`}>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{sigla}</Typography>
                 </Tooltip>
             </TableCell>

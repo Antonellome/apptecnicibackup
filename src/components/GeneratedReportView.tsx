@@ -5,12 +5,12 @@ import {
 } from '@mui/material';
 import { Share, Summarize } from '@mui/icons-material';
 import html2canvas from 'html2canvas';
-import type { Tecnico, Nave, Luogo, EnrichedReport } from '@/models/definitions'; 
+import type { Tecnico, Nave, Luogo, EnrichedRapportino } from '@/models/definitions'; 
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
 
 interface GeneratedReportViewProps {
-  rapportini: (EnrichedReport & { guadagno?: number })[];
+  rapportini: (EnrichedRapportino & { guadagno?: number })[];
   tecnico: Tecnico;
   navi: Nave[];
   luoghi: Luogo[];
@@ -65,7 +65,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
     return { naviMap, luoghiMap };
   }, [navi, luoghi]);
 
-  const oreTotali = rapportini.reduce((acc, r) => acc + (r.oreLavoro || 0), 0);
+  const oreTotali = rapportini.reduce((acc, r) => acc + (r.oreGiorno || 0), 0);
 
   const headerCellStyle = {
     fontWeight: 'bold',
@@ -115,7 +115,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                                         <TableCell>{dayjs(r.data).format('DD/MM/YY')}</TableCell>
                                         <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
                                         <TableCell>{r.descrizioneBreve}</TableCell>
-                                        <TableCell align="right">{r.oreLavoro ? r.oreLavoro.toFixed(2) : '-'}</TableCell>
+                                        <TableCell align="right">{r.oreGiorno ? r.oreGiorno.toFixed(2) : '-'}</TableCell>
                                         {/* --- CELLA GUADAGNO --- */}
                                         <TableCell align="right">{r.guadagno ? formatCurrency(r.guadagno) : '-'}</TableCell>
                                     </TableRow>

@@ -1,8 +1,7 @@
-import React from 'react';
 import { TextField, Button, Box, Autocomplete } from '@mui/material';
-import { FormField, BaseAnagrafica } from '@/models/definitions';
+import { FormField, BaseEntity } from '@/models/definitions';
 
-interface AnagraficaFormProps<T extends BaseAnagrafica> {
+interface AnagraficaFormProps<T extends BaseEntity> {
     fields: FormField[];
     formData: T;
     onFormChange: (name: string, value: any) => void;
@@ -13,25 +12,26 @@ interface AnagraficaFormProps<T extends BaseAnagrafica> {
     getAutocompleteLabel?: (option: any) => string;
 }
 
-const AnagraficaForm = <T extends BaseAnagrafica>({ 
-    fields, 
-    formData, 
-    onFormChange, 
-    onSave, 
-    onCancel, 
+const AnagraficaForm = <T extends BaseEntity>({
+    fields,
+    formData,
+    onFormChange,
+    onSave,
+    onCancel,
     isEditing,
     autocompleteOptions = {},
     getAutocompleteLabel = (option: any) => option.nome || '',
 }: AnagraficaFormProps<T>) => {
 
     const renderField = (field: FormField) => {
+        const fieldId = field.id as keyof T;
         if (autocompleteOptions[field.id]) {
             return (
                 <Autocomplete
                     key={field.id}
                     options={autocompleteOptions[field.id]}
                     getOptionLabel={getAutocompleteLabel}
-                    value={autocompleteOptions[field.id].find(opt => opt.id === formData[field.id]) || null}
+                    value={autocompleteOptions[field.id].find(opt => opt.id === formData[fieldId]) || null}
                     onChange={(_, newValue) => {
                         onFormChange(field.id, newValue ? newValue.id : '');
                     }}
@@ -52,7 +52,7 @@ const AnagraficaForm = <T extends BaseAnagrafica>({
                 key={field.id}
                 name={field.id}
                 label={field.label}
-                value={formData[field.id] || ''}
+                value={formData[fieldId] || ''}
                 onChange={(e) => onFormChange(e.target.name, e.target.value)}
                 fullWidth
                 margin="normal"

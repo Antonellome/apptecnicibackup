@@ -1,7 +1,7 @@
-import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback, useContext } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
-import type { TipoGiornata, Impostazioni, TariffaLocale, MasterData } from '@/models/definitions';
+import type { TipoGiornata, Impostazioni, TariffaLocale, MasterData, Tecnico, Cliente, Veicolo, Luogo, Nave, Sede, Ditta, Categoria } from '@/models/definitions';
 import { localDB } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box } from '@mui/material';
@@ -15,8 +15,16 @@ export interface MasterDataContextType {
 
 export const MasterDataContext = createContext<MasterDataContextType | undefined>(undefined);
 
-const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni' | 'rapportini'>)[] = [
-    'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti'
+export const useMasterData = () => {
+    const context = useContext(MasterDataContext);
+    if (context === undefined) {
+        throw new Error('useMasterData must be used within a MasterDataProvider');
+    }
+    return context;
+};
+
+const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni'>)[] = [
+    'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti', 'sedi', 'ditte', 'categorie'
 ];
 
 type BlueprintTariff = { nome: string; costo: number; unita: 'g' | 'h'; };
@@ -34,7 +42,6 @@ const TARIFFS_BLUEPRINT: BlueprintTariff[] = [
     { nome: 'Trasferta Italia', costo: 20, unita: 'g' },
 ];
 
-// MAPPA BASATA SUL NOME: l'unica fonte di verità per i calcoli.
 const blueprintMapByName = new Map(TARIFFS_BLUEPRINT.map(t => [t.nome.toLowerCase(), t]));
 
 export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -47,7 +54,6 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         setError(null);
 
         try {
-            // AZIONE DEFINITIVA: Pulisce i dati corrotti dalle mie esecuzioni precedenti.
             await localDB.tariffe_locali.clear();
 
             const loadedAnagrafiche: { [key: string]: any[] } = {};
@@ -57,23 +63,19 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 loadedAnagrafiche[key] = items;
                 await localDB.anagrafiche.put({ id: key, data: items, timestamp: new Date() });
             }
+            
             const tipiGiornataDaDB = loadedAnagrafiche.tipiGiornata as TipoGiornata[];
             const cachedImpostazioni = await localDB.tariffe_locali.get('main');
             const cachedTariffeMap = new Map(cachedImpostazioni?.data?.tariffe?.map((t: TariffaLocale) => [t.id, t]) || []);
 
-            // LOGICA DI CREAZIONE TARIFFA - ROBUSTA E BASATA SUL NOME
             const finalTariffe: TariffaLocale[] = tipiGiornataDaDB.map((tipoGiornata) => {
                 const lookupName = tipoGiornata.nome?.toLowerCase() || '';
-                
-                // 1. Cerca il blueprint tramite il nome.
                 let blueprintDefault = blueprintMapByName.get(lookupName);
 
-                // 2. Se non lo trova, prova con le varianti conosciute (dati sporchi).
                 if (!blueprintDefault) {
                     if (lookupName === '104') {
                         blueprintDefault = blueprintMapByName.get('legge 104');
                     }
-                    // Aggiungere altri alias qui se necessario
                 }
 
                 const cachedTariff = cachedTariffeMap.get(tipoGiornata.id);
@@ -96,10 +98,21 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
             };
             await localDB.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
 
-            setMasterData({
-                ...loadedAnagrafiche,
+            // COSTRUZIONE ESPLICITA E SICURA DELL'OGGETTO MASTERDATA
+            const finalMasterData: MasterData = {
+                tecnici: (loadedAnagrafiche.tecnici || []) as Tecnico[],
+                clienti: (loadedAnagrafiche.clienti || []) as Cliente[],
+                tipiGiornata: tipiGiornataDaDB || [],
+                veicoli: (loadedAnagrafiche.veicoli || []) as Veicolo[],
+                luoghi: (loadedAnagrafiche.luoghi || []) as Luogo[],
+                navi: (loadedAnagrafiche.navi || []) as Nave[],
+                sedi: (loadedAnagrafiche.sedi || []) as Sede[],
+                ditte: (loadedAnagrafiche.ditte || []) as Ditta[],
+                categorie: (loadedAnagrafiche.categorie || []) as Categoria[],
                 impostazioni: finalImpostazioni,
-            } as MasterData);
+            };
+
+            setMasterData(finalMasterData);
 
         } catch (err: any) {
             console.error("Errore critico durante il caricamento dei dati master:", err);
