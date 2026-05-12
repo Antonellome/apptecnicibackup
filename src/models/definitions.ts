@@ -11,7 +11,19 @@ export interface BaseEntity {
 
 export interface GenericItem extends BaseEntity {
     nome: string;
+    costo?: number; // Aggiunto per compatibilità
     [key: string]: any;
+}
+
+// Alias per retrocompatibilità
+export type Anagrafica = GenericItem;
+export type BaseAnagrafica = GenericItem;
+
+export interface FormField {
+    name: string;
+    label: string;
+    type: 'text' | 'number' | 'select';
+    options?: string[];
 }
 
 // =========================================================================
@@ -22,12 +34,13 @@ export interface Cliente extends GenericItem {}
 export interface Sede extends GenericItem {}
 export interface Ditta extends GenericItem {}
 export interface Categoria extends GenericItem {}
+export interface Qualifica extends GenericItem {}
 export interface Luogo extends GenericItem {}
 export interface Nave extends GenericItem {}
+export interface Documento extends GenericItem {}
 
-// Interfaccia Veicolo aggiornata per includere marca e modello
 export interface Veicolo extends BaseEntity {
-  nome?: string; // Descrizione principale, es. "Furgone 1"
+  nome?: string; 
   marca?: string;
   modello?: string;
   targa?: string;
@@ -41,15 +54,14 @@ export interface Tecnico extends BaseEntity {
   [key: string]: any;
 }
 
-// Interfaccia TipoGiornata aggiornata per la gestione delle tariffe locali
 export interface TipoGiornata extends BaseEntity {
   nome: string;
   colore: string;
   lavorativo: boolean;
   icona: string;
   sigla: string;
-  tariffa: number; // La tariffa (es. 80 o 10)
-  tipoTariffa: 'giornaliera' | 'oraria'; // L'unità di misura della tariffa
+  tariffa: number; 
+  tipoTariffa: 'giornaliera' | 'oraria';
 }
 
 export interface Notifica extends BaseEntity {
@@ -69,16 +81,29 @@ export interface UserProfile extends BaseEntity {
     nome: string;
     cognome: string;
     attivo: boolean;
+    isAdmin?: boolean; // Aggiunto per risolvere gli errori
     categoria?: {
         id: string;
         nome: string;
     };
 }
+// Alias per retrocompatibilità
+export type WebAppUser = UserProfile;
 
 export interface Tariffa extends BaseEntity {
     clienteId: string;
     clienteNome: string;
     tariffaOraria: number;
+}
+
+// Definito per SettingsPage
+export interface TariffaLocale extends GenericItem {
+    tipoGiornataId: string;
+    unita: string;
+}
+
+export interface Impostazioni {
+    [key: string]: any;
 }
 
 // =========================================================================
@@ -89,12 +114,13 @@ export interface MasterData {
     tecnici: Tecnico[];
     clienti: Cliente[];
     sedi: Sede[];
-    tipiGiornata: TipoGiornata[]; // Utilizzato per il seeding iniziale del DB locale
+    tipiGiornata: TipoGiornata[]; 
     veicoli: Veicolo[];
     luoghi: Luogo[];
     navi: Nave[];
     ditte: Ditta[];
     categorie: Categoria[];
+    impostazioni: Impostazioni;
 }
 
 // =========================================================================
@@ -104,75 +130,68 @@ export interface MasterData {
 export interface DettaglioOreTecnico {
     tecnicoId: string;
     ore: number;
+    isManual: boolean;
+    oraInizio: string | null;
+    oraFine: string | null;
+    pausa: number | null;
 }
 
 export interface Rapportino extends BaseEntity {
-  // --- Campi Fondamentali ---
-  nome: string; // Deprecato ma mantenuto per compatibilità
+  nome: string; 
   data: Timestamp;
-  tecnicoId: string; // Tecnico responsabile
+  tecnicoId: string; 
   tipoGiornataId: string;
-
-  // --- Gestione Periodo (per ferie, malattia, ecc.) ---
   dataInizio?: Timestamp;
   dataFine?: Timestamp;
-
-  // --- Gestione Presenze e Ore (Struttura Dati Unificata) ---
   dettaglioOreTecnici?: DettaglioOreTecnico[];
-
-  // --- Dettagli Orari (Legacy, per compatibilità in lettura) ---
-  isTrasferta?: boolean; // Utilizzato per indicare ore manuali
+  isTrasferta?: boolean; 
   oraInizio?: string | null;
   oraFine?: string | null;
   pausa?: number | null;
-  oreLavoro?: number | null; // Deprecato, usare `dettaglioOreTecnici`
-  presenze?: string[]; // Deprecato
-  altriTecniciIds?: string[];// Deprecato
-
-  // --- Dettagli Descrittivi ---
+  oreLavoro?: number | null; 
+  presenze?: string[]; 
+  altriTecniciIds?: string[];
   descrizioneBreve?: string;
   lavoroEseguito?: string;
   materialiImpiegati?: string;
-
-  // --- Riferimenti Anagrafici ---
   veicoloId?: string | null;
   naveId?: string | null;
   luogoId?: string | null;
-  
-  // --- Dati Firma Cliente ---
   firmaFirmatarioNome?: string;
   firmaFirmatarioSocieta?: string;
-  firmaVettoriale?: string; // SVG o base64 data URL
-
-  // --- Timestamps Automatici ---
+  firmaVettoriale?: string; 
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }
+// Alias per retrocompatibilità
+export type Report = Rapportino;
 
 // =========================================================================
 // --- INTERFACCE LOCALI E "ARRICCHITE" PER L'UI ---
 // =========================================================================
 
-// Interfaccia per lo stato del form, non per Firestore
 export interface DettaglioOreData {
     tecnicoId: string;
     nome: string;
-    isManual: boolean; // Corrisponde a Rapportino.isTrasferta
+    isManual: boolean; 
     oraInizio: string | null;
     oraFine: string | null;
     pausa: number | null;
-    ore: number | null; // Le ore calcolate o inserite manualmente
+    ore: number | null; 
 }
 
 export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiornataId' | 'presenze'> {
   data: Date;
-  tipoGiornata: TipoGiornata; // Arricchito con l'oggetto TipoGiornata completo dal DB locale
+  tipoGiornata: TipoGiornata; 
   tecnicoScrivente?: Tecnico;
-  presenze: Tecnico[]; // Lista arricchita dei tecnici
+  presenze: Tecnico[]; 
   destinazione?: string;
-  guadagno?: number; // Calcolato localmente
-  veicolo?: Veicolo; // Arricchito
-  nave?: Nave; // Arricchito
-  luogo?: Luogo; // Arricchito
+  guadagno?: number; 
+  veicolo?: Veicolo; 
+  nave?: Nave; 
+  luogo?: Luogo; 
   isEditable?: boolean;
 }
+// Alias per retrocompatibilità
+export type EnrichedReport = EnrichedRapportino;
+

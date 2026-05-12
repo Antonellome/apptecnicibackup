@@ -85,7 +85,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
              if (err instanceof Error) {
                 setError(`Salvataggio fallito: ${err.message}`);
             } else {
-                setError('Si è verificato un errore sconosciuto durante il salvataggio.');
+                setError("Si è verificato un errore sconosciuto durante il salvataggio.");
             }
         } finally {
             setLoading(false);
@@ -111,7 +111,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
             if (err instanceof Error) {
                 setError(`Eliminazione fallita: ${err.message}`);
             } else {
-                setError('Si è verificato un errore sconosciuto durante l'eliminazione.');
+                setError("Si è verificato un errore sconosciuto durante l'eliminazione.");
             }
         } finally {
             handleCloseConfirmDialog();
@@ -196,7 +196,7 @@ const CrudManager = ({ collectionName, title, itemLabel, description, nameField 
                 <DialogTitle>Conferma Eliminazione</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Sei sicuro di voler eliminare l'elemento "{itemToDelete?.nome}"?
+                        {`Sei sicuro di voler eliminare l'elemento "${itemToDelete?.nome}"?`}
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
