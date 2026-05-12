@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
-import type { TipoGiornata, Impostazioni, Tariffa, MasterData } from '@/models/definitions';
+import type { TipoGiornata, Impostazioni, TariffaLocale, MasterData } from '@/models/definitions';
 import { localDB } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box } from '@mui/material';
@@ -19,7 +19,9 @@ const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni' | 'rapporti
     'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti'
 ];
 
-const TARIFFS_BLUEPRINT: Omit<Tariffa, 'tipoGiornataId' | 'nome'> & { nome: string }[] = [
+type BlueprintTariff = { nome: string; costo: number; unita: 'g' | 'h'; };
+
+const TARIFFS_BLUEPRINT: BlueprintTariff[] = [
     { nome: 'Ferie', costo: 80, unita: 'g' },
     { nome: 'Festivo', costo: 80, unita: 'g' },
     { nome: 'Legge 104', costo: 10, unita: 'h' },
@@ -27,10 +29,13 @@ const TARIFFS_BLUEPRINT: Omit<Tariffa, 'tipoGiornataId' | 'nome'> & { nome: stri
     { nome: 'Ordinaria', costo: 10, unita: 'h' },
     { nome: 'Permesso', costo: 10, unita: 'h' },
     { nome: 'Straordinario', costo: 15, unita: 'h' },
-    { nome: 'Trasferta Europa', costo: 50, unita: 'g' },
+    { nome: 'Trasferta Europa', costo: 40, unita: 'g' },
     { nome: 'Trasferta Extraeuropea', costo: 80, unita: 'g' },
     { nome: 'Trasferta Italia', costo: 20, unita: 'g' },
 ];
+
+// MAPPA BASATA SUL NOME: l'unica fonte di verità per i calcoli.
+const blueprintMapByName = new Map(TARIFFS_BLUEPRINT.map(t => [t.nome.toLowerCase(), t]));
 
 export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [masterData, setMasterData] = useState<MasterData | null>(null);
@@ -42,6 +47,9 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         setError(null);
 
         try {
+            // AZIONE DEFINITIVA: Pulisce i dati corrotti dalle mie esecuzioni precedenti.
+            await localDB.tariffe_locali.clear();
+
             const loadedAnagrafiche: { [key: string]: any[] } = {};
             for (const key of ANAGRAFICA_COLLECTIONS) {
                 const querySnapshot = await getDocs(collection(db, key));
@@ -49,44 +57,43 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 loadedAnagrafiche[key] = items;
                 await localDB.anagrafiche.put({ id: key, data: items, timestamp: new Date() });
             }
-            const tipiGiornata = loadedAnagrafiche.tipiGiornata as TipoGiornata[];
-
+            const tipiGiornataDaDB = loadedAnagrafiche.tipiGiornata as TipoGiornata[];
             const cachedImpostazioni = await localDB.tariffe_locali.get('main');
+            const cachedTariffeMap = new Map(cachedImpostazioni?.data?.tariffe?.map((t: TariffaLocale) => [t.id, t]) || []);
 
-            const reconciledTariffe: Tariffa[] = TARIFFS_BLUEPRINT.map(blueprintTariff => {
-                const tipoGiornataCorrispondente = tipiGiornata.find(tg => tg.nome.toLowerCase() === blueprintTariff.nome.toLowerCase());
-                const cachedTariff = cachedImpostazioni?.data?.tariffe?.find(t => t.nome === blueprintTariff.nome);
+            // LOGICA DI CREAZIONE TARIFFA - ROBUSTA E BASATA SUL NOME
+            const finalTariffe: TariffaLocale[] = tipiGiornataDaDB.map((tipoGiornata) => {
+                const lookupName = tipoGiornata.nome?.toLowerCase() || '';
+                
+                // 1. Cerca il blueprint tramite il nome.
+                let blueprintDefault = blueprintMapByName.get(lookupName);
 
-                let finalCost = blueprintTariff.costo; // Inizia con il valore corretto dal blueprint
-
-                if (cachedTariff?.costo !== undefined) {
-                    // Se esiste un costo salvato, decidiamo se tenerlo o forzare la correzione.
-                    const isWrongFerie = blueprintTariff.nome === 'Ferie' && cachedTariff.costo === 18;
-                    const isWrongFestivo = blueprintTariff.nome === 'Festivo' && cachedTariff.costo === 0;
-                    const isWrongPermesso = blueprintTariff.nome === 'Permesso' && cachedTariff.costo === 0;
-
-                    if (isWrongFerie || isWrongFestivo || isWrongPermesso) {
-                        // Questo è uno dei miei errori passati. Lo distruggo e uso il valore del blueprint.
-                        finalCost = blueprintTariff.costo;
-                    } else {
-                        // Non è un errore noto, quindi è una personalizzazione dell'utente. La mantengo.
-                        finalCost = cachedTariff.costo;
+                // 2. Se non lo trova, prova con le varianti conosciute (dati sporchi).
+                if (!blueprintDefault) {
+                    if (lookupName === '104') {
+                        blueprintDefault = blueprintMapByName.get('legge 104');
                     }
+                    // Aggiungere altri alias qui se necessario
                 }
 
+                const cachedTariff = cachedTariffeMap.get(tipoGiornata.id);
+                const id = tipoGiornata.id;
+                const costo = cachedTariff?.costo ?? blueprintDefault?.costo ?? 0;
+                const unita = blueprintDefault?.unita ?? 'h';
+
                 return {
-                    tipoGiornataId: tipoGiornataCorrispondente?.id || blueprintTariff.nome.toLowerCase().replace(/\s+/g, '-'),
-                    nome: blueprintTariff.nome,
-                    costo: finalCost,
-                    unita: blueprintTariff.unita, // L'unità è sempre dettata dal blueprint.
+                    id: id,
+                    tipoGiornataId: id,
+                    nome: tipoGiornata.nome,
+                    costo: costo,
+                    unita: unita,
                 };
             });
 
             const finalImpostazioni: Impostazioni = {
                 ...(cachedImpostazioni?.data || {}),
-                tariffe: reconciledTariffe
+                tariffe: finalTariffe
             };
-
             await localDB.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
 
             setMasterData({
@@ -94,9 +101,9 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 impostazioni: finalImpostazioni,
             } as MasterData);
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("Errore critico durante il caricamento dei dati master:", err);
-            setError("Impossibile caricare dati essenziali. L'app potrebbe non funzionare correttamente.");
+            setError(`Errore critico durante il caricamento dei dati master: ${err.message}`);
         } finally {
             setLoading(false);
         }
@@ -108,7 +115,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
 
     const contextValue: MasterDataContextType = { masterData, loading, error, refetchData: fetchAndCacheData };
 
-    if (loading && !masterData) return <FullScreenLoader />;
+    if (loading && !masterData && !error) return <FullScreenLoader />;
     if (error) return <Box sx={{ p: 4 }}><Alert severity="error">{error}</Alert></Box>;
 
     return (
