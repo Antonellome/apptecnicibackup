@@ -10,6 +10,7 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import NotificationItem from '@/components/notifiche/NotificationItem';
+import { markNotificationAsReadOnServer } from '@/services/notificationService'; // <-- 1. IMPORTAZIONE
 
 const NotifichePage: React.FC = () => {
     const { user, userProfile } = useAuth();
@@ -26,8 +27,21 @@ const NotifichePage: React.FC = () => {
         }
     };
 
-    const handleMarkAsRead = (id: string) => {
+    // 2. FUNZIONE POTENZIATA
+    const handleMarkAsRead = async (id: string) => {
+        // Aggiornamento ottimistico dell'UI per reattività immediata
         markAsRead(id);
+
+        // Chiamata sicura al backend per rendere la modifica persistente
+        const success = await markNotificationAsReadOnServer(id);
+
+        if (!success) {
+            // Se il server fallisce, potremmo voler implementare una logica di rollback,
+            // ma per ora logghiamo l'errore e l'UI rimarrà (erroneamente) letta.
+            // In una versione futura, potremmo ri-marcare la notifica come non letta nello stato locale.
+            console.error(`[UI] Fallimento nel segnare la notifica ${id} come letta sul server.`);
+            showSnackbar("Errore di sincronizzazione con il server.", "warning");
+        }
     }
 
     const formattaData = (timestamp: any): string => {

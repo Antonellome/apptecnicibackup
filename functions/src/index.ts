@@ -115,12 +115,6 @@ export const rapportiniTrigger = onDocumentWritten("rapportini/{rapportinoId}", 
   logger.info("Ricalcoli completati.");
 });
 
-/**
- * @name recalculateAndSaveSummary
- * @description Ricalcola il riepilogo mensile per un dato tecnico, anno e mese.
- *   ATTENZIONE: Questa funzione ora utilizza una TRANSAZIONE Firestore per garantire
- *   l'atomicità e prevenire race conditions durante salvataggi concorrenti.
- */
 async function recalculateAndSaveSummary(tecnicoId: string, year: number, month: number) {
   const summaryId = `${year}-${String(month + 1).padStart(2, "0")}_${tecnicoId}`;
   logger.info(`Inizio ricalcolo per: ${summaryId}`);
@@ -174,10 +168,6 @@ async function recalculateAndSaveSummary(tecnicoId: string, year: number, month:
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  // --- MODIFICA CRITICA: Blocco di Transazione Atomica ---
-  // Questo blocco garantisce che l'operazione di scrittura sul riepilogo sia isolata.
-  // Se due funzioni vengono eseguite contemporaneamente per lo stesso riepilogo,
-  // la transazione previene la sovrascrittura e la corruzione dei dati.
   const summaryRef = db.collection("riepiloghiMensili").doc(summaryId);
   try {
     await db.runTransaction(async (transaction) => {
@@ -186,24 +176,126 @@ async function recalculateAndSaveSummary(tecnicoId: string, year: number, month:
     logger.info(`Riepilogo salvato in TRANSAZIONE per ${summaryId}:`, summaryData);
   } catch (error) {
     logger.error(`TRANSAZIONE FALLITA per il riepilogo ${summaryId}. L'operazione verrà ritentata automaticamente da Firestore.`, error);
-    // Rilancio l'errore per far sapere alla funzione chiamante che qualcosa è andato storto.
     throw error;
   }
 }
 
-// La funzione checkInTrigger rimane invariata
-export const checkInTrigger = onDocumentCreated("checkin_giornalieri/{checkinId}", async (event) => {
-    const snap = event.data;
-    if (!snap) {
-        logger.error("Evento di creazione check-in senza dati. Impossibile procedere.");
-        return;
-    }
-    const checkinData = snap.data();
-    const checkinDate = (checkinData.data as admin.firestore.Timestamp).toDate();
-    const expireAt = new Date(checkinDate.getTime());
-    expireAt.setHours(expireAt.getHours() + 24);
-    logger.info(`Impostazione scadenza per check-in ${event.params.checkinId} a ${expireAt.toISOString()}`);
-    return snap.ref.update({ 
-        expireAt: admin.firestore.Timestamp.fromDate(expireAt) 
-    });
+// Correzione: uso di onDocumentWritten e firma dell'evento corretta
+export const checkInTrigger = onDocumentWritten("checkin_giornalieri/{checkinId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined>) => {
+  // Il trigger si attiva solo alla creazione del documento
+  if (!event.data?.after || event.data?.before) {
+    logger.info(`Trigger ignorato per ${event.params.checkinId} (non è una creazione).`);
+    return;
+  }
+  
+  const snap = event.data.after;
+  const checkinData = snap.data();
+
+  if (!checkinData) {
+      logger.error("Evento di creazione check-in senza dati. Impossibile procedere.");
+      return;
+  }
+
+  const checkinDate = (checkinData.data as admin.firestore.Timestamp).toDate();
+  const expireAt = new Date(checkinDate.getTime());
+  expireAt.setHours(expireAt.getHours() + 24);
+
+  logger.info(`Impostazione scadenza per check-in ${event.params.checkinId} a ${expireAt.toISOString()}`);
+  
+  return snap.ref.update({
+      expireAt: admin.firestore.Timestamp.fromDate(expireAt)
+  });
 });
+
+//------------------------------------------------------------------
+// FUNZIONE PER MARCARE UNA NOTIFICA COME LETTA
+//------------------------------------------------------------------
+
+/**
+ * Marca una notifica come letta nel database Firestore.
+ *
+ * Questa funzione è richiamabile direttamente dall'app client (App Master).
+ * Richiede che l'utente sia autenticato e che venga passato l'ID della notifica.
+ *
+ * @param {CallableRequest<{notificationId: string}>} request - L'oggetto richiesta inviato dal client.
+ *        Deve contenere `notificationId`.
+ * @returns {Promise<{status: string, message: string}>} - Un oggetto che conferma il successo dell'operazione.
+ */
+export const markNotificationAsRead = onCall(async (request: CallableRequest<{notificationId: string}>) => {
+    // 1. Controllo di Autenticazione: L'utente deve essere loggato.
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "È necessario essere autenticati per eseguire questa operazione."
+      );
+    }
+
+    const uid = request.auth.uid;
+    const { notificationId } = request.data;
+
+    // 2. Validazione dell'Input: Dobbiamo avere l'ID della notifica.
+    if (!notificationId || typeof notificationId !== "string") {
+      throw new HttpsError(
+        "invalid-argument",
+        "L'ID della notifica (notificationId) è obbligatorio e deve essere una stringa."
+      );
+    }
+    
+    logger.info(`Richiesta di lettura per notifica ${notificationId} da utente ${uid}.`);
+
+    // Riferimento al documento della notifica in Firestore
+    const notificationRef = db.collection("notifications").doc(notificationId);
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(notificationRef);
+
+            // 3. Controllo Esistenza e Sicurezza
+            if (!doc.exists) {
+                throw new HttpsError(
+                    "not-found",
+                    "Nessuna notifica trovata con questo ID."
+                );
+            }
+            
+            const notificationData = doc.data();
+            
+            // Verifica che l'utente sia il destinatario della notifica
+            if (notificationData?.recipientId !== uid) {
+                throw new HttpsError(
+                    "permission-denied",
+                    "Non si dispone dei permessi per modificare questa notifica."
+                );
+            }
+
+            // 4. Aggiornamento del documento all'interno della transazione
+            transaction.update(notificationRef, {
+                status: "read", // Cambia lo stato
+                readAt: admin.firestore.FieldValue.serverTimestamp(), // Registra il momento della lettura
+                readBy: uid, // Registra chi l'ha letta
+            });
+        });
+
+      logger.info(
+        `TRANSAZIONE COMPLETATA: Notifica ${notificationId} marcata come letta dall'utente ${uid}.`
+      );
+
+      return {
+        status: "success",
+        message: "Notifica aggiornata con successo.",
+      };
+    } catch (error) {
+      logger.error(
+        `Errore durante l'aggiornamento della notifica ${notificationId}:`,
+        error
+      );
+      
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError(
+        "internal",
+        "Si è verificato un errore interno durante l'aggiornamento della notifica."
+      );
+    }
+  });
