@@ -1,19 +1,29 @@
 { pkgs, ... }: {
-  # CAMBIA DA "stable-24.05" A "stable-24.11"
-  # Questo è il cuore del problema. Senza questo, resterai sempre alla v22.10.
+  # Aggiornato il canale a una versione che supporta nativamente Node.js 22
   channel = "stable-24.11";
 
+  # Pacchetti da installare nell'ambiente
   packages = [
     pkgs.nodejs_22
   ];
 
+  # Configurazione specifica di IDX
   idx = {
+    # Estensioni VS Code
     extensions = [
-      "astro-build.astro-vscode"
-      "csstools.postcss"
-      "bradlc.vscode-tailwindcss"
+      "vite.vscode-vite"
+      "dbaeumer.vscode-eslint"
+      "esbenp.prettier-vscode"
     ];
 
+    # Configurazione del workspace
+    workspace = {
+      onCreate = {
+        npm-install = "npm install";
+      };
+    };
+
+    # Configurazione dell'anteprima (Preview) per il server di sviluppo
     previews = {
       enable = true;
       previews = {
@@ -21,13 +31,6 @@
           command = [ "npm" "run" "dev" "--" "--port" "$PORT" "--host" "0.0.0.0" ];
           manager = "web";
         };
-      };
-    };
-
-    workspace = {
-      onCreate = {
-        # Rimuoviamo i vecchi moduli per sicurezza
-        install-dependencies = "rm -rf node_modules && npm install";
       };
     };
   };

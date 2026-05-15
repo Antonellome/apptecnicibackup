@@ -1,7 +1,8 @@
 import React from 'react';
 import {
-    Box, Typography, Switch, FormControlLabel, Grid, FormControl, InputLabel, Select, MenuItem, TextField
+    Box, Typography, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem, TextField
 } from '@mui/material';
+import Grid from '@mui/material/Grid'; // <-- IMPORT CORRETTO (V2)
 import { DettaglioOreData } from '@/models/definitions';
 import dayjs from 'dayjs';
 

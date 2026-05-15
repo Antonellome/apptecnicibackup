@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFieldArray, Control, UseFormRegister, UseFormSetValue } from 'react-hook-form';
-import { Grid, Box, Typography, Button, IconButton, Autocomplete, TextField } from '@mui/material';
+import { Box, Typography, Button, IconButton, Autocomplete, TextField } from '@mui/material';
+import Grid from '@mui/material/Grid'; // <-- IMPORT CORRETTO (V2)
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Tecnico } from '@/models/definitions';
 
@@ -23,7 +24,11 @@ const DettaglioOreSection: React.FC<DettaglioOreSectionProps> = ({ control, regi
       {fields.map((item, index) => (
         <Box key={item.id} sx={{ mb: 2, p: 2, border: '1px solid #ccc', borderRadius: '4px' }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, sm: 6 }}>
+            <Grid
+              size={{
+                xs: 12,
+                sm: 6
+              }}>
               <Autocomplete
                 options={tecnici}
                 getOptionLabel={(option) => option.nome || ''}
@@ -33,7 +38,11 @@ const DettaglioOreSection: React.FC<DettaglioOreSectionProps> = ({ control, regi
                 }
               />
             </Grid>
-            <Grid size={{ xs: 10, sm: 4 }}>
+            <Grid
+              size={{
+                xs: 10,
+                sm: 4
+              }}>
                {/* Placeholder for OreLavoroSingoloTecnico - logic will be more complex here */}
               <TextField 
                 fullWidth
@@ -42,7 +51,11 @@ const DettaglioOreSection: React.FC<DettaglioOreSectionProps> = ({ control, regi
                 {...register(`dettaglioOreTecnici.${index}.ore`)}
               />
             </Grid>
-            <Grid size={{ xs: 2, sm: 2 }}>
+            <Grid
+              size={{
+                xs: 2,
+                sm: 2
+              }}>
               <IconButton onClick={() => remove(index)}>
                 <DeleteIcon />
               </IconButton>

@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
-import { Grid, Typography, Divider, Box } from '@mui/material';
+import { Typography, Divider, Box } from '@mui/material';
+import Grid from '@mui/material/Grid'; // <-- IMPORT CORRETTO (V2)
 
 interface FormSectionProps {
   title: string;
@@ -8,7 +9,7 @@ interface FormSectionProps {
 
 const FormSection: React.FC<FormSectionProps> = ({ title, children }) => {
   return (
-    <Grid size={12} sx={{ mb: 4 }}>
+    <Grid sx={{ mb: 4 }} size={12}>
       <Box mb={2}>
         <Typography variant="h6" component="h2" gutterBottom>{title}</Typography>
         <Divider />

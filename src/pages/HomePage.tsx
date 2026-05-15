@@ -19,7 +19,7 @@ const HomePage: React.FC = () => {
 
     const dashboardItems = [
         { title: 'Nuovo report', path: '/nuovo-report', icon: <PostAddIcon sx={iconStyles} /> },
-        { title: 'I miei Report', path: '/lista-report', icon: <ArticleIcon sx={iconStyles} /> },
+        { title: 'I miei Report', path: './lista-report', icon: <ArticleIcon sx={iconStyles} /> },
         { title: 'Report Mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={iconStyles} /> },
         { 
             title: 'Notifiche',
@@ -66,7 +66,7 @@ const HomePage: React.FC = () => {
                 
                 <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ maxWidth: '500px', mb: 4 }}>
                     {dashboardItems.map((item) => (
-                        <Grid size={{ xs: 6 }} key={item.title}>
+                        <Grid key={item.title} size={6}>
                             <ButtonBase
                                 onClick={() => navigate(item.path)}
                                 sx={{

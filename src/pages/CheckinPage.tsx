@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, FormControl, InputLabel, Select, MenuItem, Button, CircularProgress, Alert, Grid } from '@mui/material';
+import { Box, Typography, Paper, FormControl, InputLabel, Select, MenuItem, Button, CircularProgress, Alert } from '@mui/material';
+import Grid from '@mui/material/Grid'; // <-- IMPORT CORRETTO (V2)
 import { useNavigate } from 'react-router-dom';
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -100,7 +101,6 @@ const CheckinPage: React.FC = () => {
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
-                        {/* --- CORREZIONE DEFINITIVA --- */}
                         <Grid size={12}>
                             <FormControl fullWidth required>
                                 <InputLabel id="nave-label">Nave</InputLabel>
@@ -114,7 +114,6 @@ const CheckinPage: React.FC = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        {/* --- CORREZIONE DEFINITIVA --- */}
                         <Grid size={12}>
                             <FormControl fullWidth required>
                                 <InputLabel id="luogo-label">Luogo</InputLabel>
@@ -131,8 +130,7 @@ const CheckinPage: React.FC = () => {
 
                         {error && <Grid size={12}><Alert severity="error">{error}</Alert></Grid>}
                         
-                        {/* --- CORREZIONE DEFINITIVA --- */}
-                        <Grid size={12} sx={{ mt: 2 }}>
+                        <Grid sx={{ mt: 2 }} size={12}>
                             <Button 
                                 type="submit" 
                                 variant="contained" 
