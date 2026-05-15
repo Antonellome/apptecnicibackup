@@ -9,6 +9,7 @@ import { SnackbarProvider } from './contexts/SnackbarContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { MasterDataProvider } from './contexts/MasterDataProvider';
 import { syncMasterData } from './services/dataSync';
+import { sincronizzaConFirebase, sincronizzaCondivisioni } from './services/offlineSync.ts';
 import './index.css';
 import { CircularProgress, Box, Typography } from '@mui/material';
 
@@ -16,17 +17,33 @@ const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) =
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const handleOnlineSync = async () => {
+        console.log("Rilevata connessione online. Avvio sincronizzazione completa...");
+        await sincronizzaConFirebase();
+        await sincronizzaCondivisioni();
+        console.log("Sincronizzazione completata.");
+    };
+
     useEffect(() => {
         const initialize = async () => {
             try {
                 await syncMasterData();
+                window.addEventListener('online', handleOnlineSync);
+                if (navigator.onLine) {
+                    await handleOnlineSync();
+                }
                 setLoading(false);
             } catch (err) {
                 console.error(err);
                 setError("Impossibile sincronizzare i dati. L'applicazione non può partire.");
             }
         };
+
         initialize();
+
+        return () => {
+            window.removeEventListener('online', handleOnlineSync);
+        };
     }, []);
 
     if (loading) {

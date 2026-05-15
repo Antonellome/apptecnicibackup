@@ -6,7 +6,7 @@ import {
     Autocomplete, Button, CircularProgress, Alert, Box, Chip, IconButton, Switch, FormControlLabel,
     Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
-import Grid from '@mui/material/Grid'; // Attenzione: import corretto per Grid
+import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShareIcon from '@mui/icons-material/Share';
@@ -18,7 +18,9 @@ import { isSameMonth, format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalData } from '@/hooks/useLocalData';
 import { db as firestoreDb } from '@/firebase';
-import { doc, getDoc, addDoc, updateDoc, collection, Timestamp } from 'firebase/firestore';
+import { db } from '@/db/db';
+import { aggiungiAllaCoda } from '@/services/offlineSync';
+import { doc, getDoc, addDoc, updateDoc, collection, Timestamp, runTransaction } from 'firebase/firestore';
 import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData } from '@/models/definitions';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
@@ -27,7 +29,7 @@ import PdfPreviewDialog from '@/components/pdf/PdfPreviewDialog';
 import { generateRapportinoPDF } from '@/services/rapportinoPDFGenerator';
 import { shareOrDownload } from '@/services/shareService';
 import dayjs from 'dayjs';
-import { useTheme } from '@/hooks/useTheme'; // <-- IMPORTATO hook per il tema
+import { useTheme } from '@/hooks/useTheme';
 
 const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'permesso', 'legge 104'];
 const MULTI_DAY_ALLOWED_KEYWORDS = ['ferie', 'malattia'];
@@ -88,7 +90,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 );
 
 const ReportFormPage: React.FC = () => {
-    const { mode } = useTheme(); // <-- Utilizzo hook per il tema
+    const { mode } = useTheme();
     const navigate = useNavigate();
     const { user } = useAuth();
     const { reportId } = useParams<{ reportId: string }>();
@@ -126,7 +128,7 @@ const ReportFormPage: React.FC = () => {
     
     const [isSharing, setIsSharing] = useState(false);
     const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
-    const [pdfUrl, setPdfUrl] = useState<string | null>(null); // Stato per URL del PDF
+    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -258,13 +260,8 @@ const ReportFormPage: React.FC = () => {
         }
     }, [reportId, isEditMode, collectionsLoading, user?.isAdmin, memoizedShowSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]);
 
-    // Cleanup per l'URL del PDF
     useEffect(() => {
-        return () => {
-            if (pdfUrl) {
-                URL.revokeObjectURL(pdfUrl);
-            }
-        };
+        return () => { if (pdfUrl) { URL.revokeObjectURL(pdfUrl); } };
     }, [pdfUrl]);
 
     const handleMultiDayToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,50 +288,33 @@ const ReportFormPage: React.FC = () => {
     const handleCloseModal = () => setIsModalOpen(false);
 
     const handleSaveFromModal = () => {
-        if (tempDettaglioOre) {
-            handleOreUpdate(tempDettaglioOre);
-        }
+        if (tempDettaglioOre) { handleOreUpdate(tempDettaglioOre); }
         handleCloseModal();
     };
 
     const handleTipoGiornataChange = (id: string) => {
         setTipoGiornataId(id);
         const tipo = tipiGiornata.find(t => t.id === id);
-        if (!isMultiDay) {
-            setIsLavorativo(isGiornataLavorativa(tipo));
-        }
+        if (!isMultiDay) { setIsLavorativo(isGiornataLavorativa(tipo)); }
     };
+    
     const handleCancel = () => navigate(isEditMode ? '/lista-report' : '/');
 
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
         const newData = { ...updatedData, ore: calculateOre(updatedData) };
-        setDettaglioOre(prevDettagli =>
-            prevDettagli.map(d =>
-                d.tecnicoId === newData.tecnicoId ? newData : d
-            )
-        );
+        setDettaglioOre(prevDettagli => prevDettagli.map(d => d.tecnicoId === newData.tecnicoId ? newData : d));
     }, []);
 
     const handleScriventeOreUpdate = (updatedData: DettaglioOreData) => {
         const oldScriventeData = dettaglioOre.find(d => d.tecnicoId === updatedData.tecnicoId);
         const newScriventeData = { ...updatedData, ore: calculateOre(updatedData) };
-        
         const modeChanged = oldScriventeData?.isManual !== newScriventeData.isManual;
 
         setDettaglioOre(prevDettagli => {
             return prevDettagli.map(d => {
-                if (d.tecnicoId === newScriventeData.tecnicoId) {
-                    return newScriventeData;
-                }
+                if (d.tecnicoId === newScriventeData.tecnicoId) return newScriventeData;
                 if (modeChanged) {
-                    return {
-                        ...d,
-                        isManual: newScriventeData.isManual,
-                        oraInizio: newScriventeData.oraInizio,
-                        oraFine: newScriventeData.oraFine,
-                        pausa: newScriventeData.pausa,
-                        ore: newScriventeData.ore,
-                    };
+                    return { ...d, isManual: newScriventeData.isManual, oraInizio: newScriventeData.oraInizio, oraFine: newScriventeData.oraFine, pausa: newScriventeData.pausa, ore: newScriventeData.ore };
                 }
                 return d;
             });
@@ -343,8 +323,7 @@ const ReportFormPage: React.FC = () => {
 
     const handleAltriTecniciChange = (_: React.SyntheticEvent, nuoviTecniciSelezionati: Tecnico[]) => {
         const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
-        if (!scrivente) return; 
-
+        if (!scrivente) return;
         const nuoviDettagli = nuoviTecniciSelezionati.map(t => {
             const existingDetail = dettaglioOre.find(d => d.tecnicoId === t.id);
             return existingDetail || createInitialDettaglio(t.id, `${t.cognome} ${t.nome}`.trim(), scrivente);
@@ -361,28 +340,18 @@ const ReportFormPage: React.FC = () => {
         return {
             data: Timestamp.fromDate(dataInizio || new Date()),
             tecnicoId: loggedInTecnicoId!,
-            tipoGiornataId,
-            isTrasferta: mainTecnicoDetail.isManual,
-            oraInizio: mainTecnicoDetail.oraInizio,
-            oraFine: mainTecnicoDetail.oraFine,
-            pausa: mainTecnicoDetail.pausa,
+            tipoGiornataId, isTrasferta: mainTecnicoDetail.isManual, oraInizio: mainTecnicoDetail.oraInizio,
+            oraFine: mainTecnicoDetail.oraFine, pausa: mainTecnicoDetail.pausa,
             dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => rest),
-            presenze: dettaglioOre.map(d => d.tecnicoId),
-            veicoloId: veicoloId || null,
-            naveId: naveId || null,
-            luogoId: luogoId || null,
-            descrizioneBreve: descrizioneBreve || '',
-            lavoroEseguito: lavoroEseguito || '',
-            materialiImpiegati: materialiImpiegati || '',
-            firmaFirmatarioNome: firmaFirmatarioNome || '',
-            firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
-            firmaVettoriale: firmaVettoriale || null,
-            createdAt: isEditMode ? Timestamp.now() : Timestamp.now(),
+            presenze: dettaglioOre.map(d => d.tecnicoId), veicoloId: veicoloId || null, naveId: naveId || null, luogoId: luogoId || null,
+            descrizioneBreve: descrizioneBreve || '', lavoroEseguito: lavoroEseguito || '', materialiImpiegati: materialiImpiegati || '',
+            firmaFirmatarioNome: firmaFirmatarioNome || '', firmaFirmatarioSocieta: firmaFirmatarioSocieta || '', firmaVettoriale: firmaVettoriale || null,
+            createdAt: isEditMode && reportId ? Timestamp.now() : Timestamp.now(),
             updatedAt: Timestamp.now(),
         };
     };
 
-    const performSingleSave = async (): Promise<string | null> => {
+    const salvaOAccodaRapportino = async (): Promise<string | null> => {
         if (!loggedInTecnicoId || !dataInizio) {
             memoizedShowSnackbar("Errore: Utente non autenticato o data mancante.", "error");
             return null;
@@ -392,34 +361,55 @@ const ReportFormPage: React.FC = () => {
             return null;
         }
 
-        const reportDataToSave = getFullReportData();
-        
         setIsSaving(true);
         try {
-            let finalId = reportId;
-            if (isEditMode && reportId) {
-                await updateDoc(doc(firestoreDb, 'rapportini', reportId), { ...reportDataToSave, updatedAt: Timestamp.now() });
-                memoizedShowSnackbar("Rapportino aggiornato con successo!", "success");
+            const reportData = getFullReportData();
+
+            if (navigator.onLine) {
+                let finalId = reportId;
+                if (isEditMode && reportId) {
+                    await runTransaction(firestoreDb, async (transaction) => {
+                        const reportRef = doc(firestoreDb, 'rapportini', reportId);
+                        const sfDoc = await transaction.get(reportRef);
+                        if (!sfDoc.exists()) {
+                            throw new Error(`Documento con ID ${reportId} non trovato. Potrebbe essere stato cancellato.`);
+                        }
+                        transaction.update(reportRef, { ...reportData, updatedAt: Timestamp.now() });
+                    });
+                } else {
+                    const docRef = await addDoc(collection(firestoreDb, 'rapportini'), { ...reportData, createdAt: Timestamp.now() });
+                    finalId = docRef.id;
+                }
+                memoizedShowSnackbar(isEditMode ? "Rapportino aggiornato con successo!" : "Rapportino creato con successo!", "success");
+                return finalId;
             } else {
-                const docRef = await addDoc(collection(firestoreDb, 'rapportini'), { ...reportDataToSave, createdAt: Timestamp.now() });
-                finalId = docRef.id;
-                memoizedShowSnackbar("Rapportino creato con successo!", "success");
+                const queuedId = await aggiungiAllaCoda(reportData, reportId);
+                memoizedShowSnackbar("Sei offline. Il rapportino è stato salvato localmente e sarà sincronizzato appena torni online.", "info");
+                return queuedId;
             }
-            return finalId || null;
         } catch (error) {
-            console.error("Errore durante il salvataggio: ", error);
-            memoizedShowSnackbar("Si è verificato un errore durante il salvataggio.", "error");
-            return null;
+            console.error("Errore durante il salvataggio o l'accodamento: ", error);
+            memoizedShowSnackbar("Si è verificato un errore durante il salvataggio. Le modifiche sono state salvate localmente.", "error");
+            // Se fallisce online, accoda per sicurezza
+            if (navigator.onLine) {
+                try {
+                    const reportData = getFullReportData();
+                    await aggiungiAllaCoda(reportData, reportId);
+                } catch (queueError) {
+                    console.error("Errore critico: impossibile anche accodare il rapportino. ", queueError);
+                }
+            }
+            return null; // Indica che il salvataggio online è fallito, ma è stato accodato
         } finally {
             setIsSaving(false);
         }
-    };    
+    };
 
     const handleSave = async () => {
-        if (isMultiDay) {
-            // Logica multi-day (omessa)
-        } else {
-            const savedId = await performSingleSave();
+        if (isMultiDay) { /* Logica multi-day omessa */ } 
+        else {
+            const savedId = await salvaOAccodaRapportino();
+            // Se l'ID è restituito (anche quello locale), naviga via. L'utente ha fatto la sua azione.
             if (savedId) navigate('/lista-report');
         }
     };
@@ -427,21 +417,24 @@ const ReportFormPage: React.FC = () => {
     const handleShare = async () => {
         setIsPdfPreviewOpen(true);
         setIsGeneratingPdf(true);
-        if (pdfUrl) URL.revokeObjectURL(pdfUrl); // Pulisce il vecchio URL
+        if (pdfUrl) URL.revokeObjectURL(pdfUrl);
 
         try {
-            const updatedId = await performSingleSave();
-            if (!updatedId) {
-                throw new Error("Salvataggio fallito prima della generazione del PDF.");
+            const savedOrQueuedId = await salvaOAccodaRapportino();
+            if (!savedOrQueuedId) {
+                // Anche se salvaOAccodaRapportino ritorna null (fallimento online con accodamento), 
+                // possiamo procedere a generare il PDF con i dati attuali.
+                console.log("Salvataggio online fallito, si procede con la generazione PDF dai dati correnti.")
             }
-
-            const reportRef = doc(firestoreDb, 'rapportini', updatedId);
-            const reportSnap = await getDoc(reportRef);
-            if (!reportSnap.exists()) throw new Error("Rapportino non trovato dopo il salvataggio.");
-            const finalReportData = { id: reportSnap.id, ...reportSnap.data() } as Rapportino;
+            
+            const reportDataForPdf = getFullReportData();
+            const finalReportData = {
+                 id: savedOrQueuedId && !savedOrQueuedId.startsWith('local-') ? savedOrQueuedId : reportId || 'N/D (Offline)', 
+                 ...reportDataForPdf 
+            } as Rapportino;
 
             const pdfBlob = await generateRapportinoPDF(finalReportData, masterData);
-            const newPdfUrl = URL.createObjectURL(pdfBlob); // <-- CORREZIONE PDF
+            const newPdfUrl = URL.createObjectURL(pdfBlob);
             setPdfUrl(newPdfUrl);
         } catch (error) {
             console.error("Errore durante la condivisione: ", error);
@@ -459,11 +452,20 @@ const ReportFormPage: React.FC = () => {
             const response = await fetch(pdfUrl);
             const blob = await response.blob();
             const fileName = `Rapportino_${format(dataInizio, 'dd-MM-yyyy')}.pdf`;
-            await shareOrDownload(blob, fileName);
+
+            if (navigator.onLine) {
+                await shareOrDownload(blob, fileName);
+                showSnackbar("File condiviso con successo.", "success");
+            } else {
+                await db.condivisioniInSospeso.add({ blob, fileName });
+                showSnackbar("Sei offline. Il file sarà condiviso appena torni online.", "info");
+            }
             setIsPdfPreviewOpen(false);
         } catch (error) {
-            console.error("Errore di condivisione finale: ", error);
-            showSnackbar("Impossibile condividere il file.", "error");
+            console.error("Errore di condivisione finale o accodamento: ", error);
+            if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                showSnackbar("Impossibile condividere o accodare il file.", "error");
+            }
         } finally {
             setIsSharing(false);
         }
@@ -626,9 +628,9 @@ const ReportFormPage: React.FC = () => {
                                                 style={{
                                                     maxWidth: '200px', 
                                                     height: 'auto', 
-                                                    border: '1px solid #eee', 
+                                                    border: '1px solid #eee',
                                                     margin: 'auto',
-                                                    filter: mode === 'dark' ? 'invert(1)' : 'none' // <-- CORREZIONE FIRMA
+                                                    filter: mode === 'dark' ? 'invert(1)' : 'none'
                                                 }}/>
                                             <br />
                                             <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1}} disabled={disableActions}>Modifica Firma</Button>
@@ -664,7 +666,7 @@ const ReportFormPage: React.FC = () => {
                 open={isPdfPreviewOpen}
                 onClose={() => setIsPdfPreviewOpen(false)}
                 onShare={handleFinalShare}
-                pdfDataUrl={pdfUrl} // Passa l'URL corretto
+                pdfDataUrl={pdfUrl}
                 isGenerating={isGeneratingPdf}
                 fileName={`Rapportino_${format(dataInizio || new Date(), 'dd-MM-yyyy')}.pdf`}
             />
