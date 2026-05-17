@@ -62,6 +62,7 @@ export interface UserProfile extends BaseEntity {
 export type WebAppUser = UserProfile; // Alias per retrocompatibilità
 
 // ANAGRAFICHE GENERICHE
+export type Anagrafica = GenericItem; // ++ AGGIUNTO PER RISOLVERE ERRORE IN useAnagrafiche
 export type Cliente = GenericItem;
 export type Sede = GenericItem;
 export type Ditta = GenericItem;
@@ -188,6 +189,18 @@ export interface Notifica extends BaseEntity {
     createdAt: Timestamp;
     readBy: { [key: string]: boolean };
     hiddenFor?: { [key: string]: boolean };
+}
+
+// ++ FIX: Definizioni aggiunte per la pagina Presenze
+export interface DayInfo {
+    tipo: 'LAVORO' | 'FERIE' | 'MALATTIA' | 'PERMESSO' | 'RIPOSO';
+    ore?: number;
+    tooltip?: string;
+}
+
+export interface RiepilogoMensile {
+    id: string; // E.g., "tecnicoId_yyyy-MM"
+    giorni: { [day: string]: DayInfo };
 }
 
 // =========================================================================

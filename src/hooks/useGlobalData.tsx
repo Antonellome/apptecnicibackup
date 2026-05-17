@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase'; // CORREZIONE: Puntato all'istanza DB corretta
-import { Report, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '@/models/definitions';
+import { Rapportino, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '@/models/definitions';
 import { rapportoConverter, tecnicoConverter, dittaConverter, categoriaConverter, veicoloConverter } from '@/utils/converters';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -48,7 +48,7 @@ const subscribeToCollection = <T,>(
 
 export const useGlobalData = () => {
   const { user } = useAuth();
-  const [rapportini, setRapportini] = useState<Report[]>([]);
+  const [rapportini, setRapportini] = useState<Rapportino[]>([]);
   const [tecnici, setTecnici] = useState<Tecnico[]>([]);
   const [ditte, setDitte] = useState<Ditta[]>([]);
   const [categorie, setCategorie] = useState<Categoria[]>([]);
@@ -88,7 +88,7 @@ export const useGlobalData = () => {
 
     try {
       const unsubscribers = [
-        subscribeToCollection<Report>('rapportini', setRapportini, onDataLoaded, rapportoConverter),
+        subscribeToCollection<Rapportino>('rapportini', setRapportini, onDataLoaded, rapportoConverter),
         subscribeToCollection<Tecnico>('tecnici', setTecnici, onDataLoaded, tecnicoConverter),
         subscribeToCollection<Ditta>('ditte', setDitte, onDataLoaded, dittaConverter, true),
         subscribeToCollection<Categoria>('categorie', setCategorie, onDataLoaded, categoriaConverter, true),

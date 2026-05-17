@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { db as localDb } from '@/services/localDatabase'; // Assuming a local DB service
-import { MasterData } from '@/models/definitions';
+import { Impostazioni, MasterData } from '@/models/definitions';
 
 // Questo è un hook simulato. In una vera implementazione, 
 // questo hook si interfaccerà con IndexedDB (tramite Dexie.js o simile)
@@ -17,7 +17,7 @@ export const useLocalData = () => {
             setLoading(true);
             try {
                 // Simuliamo il fetch di tutte le anagrafiche in parallelo dal DB locale
-                const [tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie] = await Promise.all([
+                const [tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie, impostazioniArr] = await Promise.all([
                     localDb.table('tecnici').toArray(),
                     localDb.table('clienti').toArray(),
                     localDb.table('sedi').toArray(),
@@ -27,7 +27,10 @@ export const useLocalData = () => {
                     localDb.table('navi').toArray(),
                     localDb.table('ditte').toArray(),
                     localDb.table('categorie').toArray(),
+                    localDb.table('impostazioni').toArray(),
                 ]);
+
+                const impostazioni: Impostazioni = impostazioniArr[0] || { tariffe: [] };
 
                 setData({
                     tecnici,
@@ -39,6 +42,7 @@ export const useLocalData = () => {
                     navi,
                     ditte,
                     categorie,
+                    impostazioni, // ++ FIX: Aggiunta la proprietà mancante
                 });
 
             } catch (err) {

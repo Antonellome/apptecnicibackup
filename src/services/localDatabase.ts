@@ -11,7 +11,9 @@ import {
     Nave, 
     Ditta, 
     Categoria,
-    SyncEvent
+    SyncEvent,
+    Impostazioni, // ++ FIX: Importato il tipo
+    MasterData
 } from '@/models/definitions';
 
 /**
@@ -30,7 +32,8 @@ export class LocalDatabase extends Dexie {
     public navi!: Table<Nave, string>;
     public ditte!: Table<Ditta, string>;
     public categorie!: Table<Categoria, string>;
-    public syncQueue!: Table<SyncEvent, number>; // Tabella per la coda di sincronizzazione
+    public syncQueue!: Table<SyncEvent, number>;
+    public impostazioni!: Table<Impostazioni, string>; // ++ FIX: Aggiunta tabella
 
     constructor() {
         super('RisoTecniciDB'); // Nome del database
@@ -50,30 +53,33 @@ export class LocalDatabase extends Dexie {
         });
 
         this.version(2).stores({
-            // Manteniamo le tabelle esistenti
-            ...this.verno.stores, // Mantiene le definizioni delle versioni precedenti
-            // Aggiungiamo la nuova tabella
-            syncQueue: '++id, type, syncStatus' // Chiave primaria auto-incrementante e indici
+            syncQueue: '++id, type, syncStatus'
         });
 
-        // Imposta la tabella per l'uso
+        // ++ FIX: Creata nuova versione per aggiungere la tabella impostazioni
+        this.version(3).stores({
+            impostazioni: 'id', // Assumiamo che le impostazioni abbiano un ID
+        });
+
+        // Assegnazione delle tabelle per l'uso nel codice
+        this.rapportini = this.table('rapportini');
+        this.tecnici = this.table('tecnici');
+        this.clienti = this.table('clienti');
+        this.sedi = this.table('sedi');
+        this.tipiGiornata = this.table('tipiGiornata');
+        this.veicoli = this.table('veicoli');
+        this.luoghi = this.table('luoghi');
+        this.navi = this.table('navi');
+        this.ditte = this.table('ditte');
+        this.categorie = this.table('categorie');
         this.syncQueue = this.table('syncQueue');
+        this.impostazioni = this.table('impostazioni');
     }
 
     /**
      * Popola le tabelle delle anagrafiche con i dati master provenienti da Firestore.
      */
-    public async populateMasterData(masterData: {
-        tecnici: Tecnico[];
-        clienti: Cliente[];
-        sedi: Sede[];
-        tipiGiornata: TipoGiornata[];
-        veicoli: Veicolo[];
-        luoghi: Luogo[];
-        navi: Nave[];
-        ditte: Ditta[];
-        categorie: Categoria[];
-    }) {
+    public async populateMasterData(masterData: MasterData) { // ++ FIX: Usiamo il tipo MasterData completo
         try {
             await this.transaction('rw', this.tables, async () => {
                 await this.tecnici.bulkPut(masterData.tecnici);
@@ -85,6 +91,11 @@ export class LocalDatabase extends Dexie {
                 await this.navi.bulkPut(masterData.navi);
                 await this.ditte.bulkPut(masterData.ditte);
                 await this.categorie.bulkPut(masterData.categorie);
+                // ++ FIX: Aggiunto salvataggio delle impostazioni
+                if (masterData.impostazioni) {
+                    // Assumiamo che ci sia un solo documento di impostazioni con un id fisso
+                    await this.impostazioni.put({ ...masterData.impostazioni, id: 'default' });
+                }
             });
             console.log("Local database populated successfully with master data.");
         } catch (error) {

@@ -1,17 +1,17 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Box, Paper, Typography, CircularProgress, Alert, IconButton, Tooltip } from '@mui/material';
+import { Box, Paper, Typography, CircularProgress, Alert, IconButton, Tooltip, SxProps, Theme } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
-import { getMonth, getYear, format, getDaysInMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isWeekend, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, addMonths, subMonths } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useLocalData } from '@/hooks/useLocalData';
 import { db } from '@/firebase';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Tecnico, RiepilogoMensile, DayInfo } from '@/models/definitions';
 import { useAuth } from '@/hooks/useAuth';
 
 // --- STILI ---
-const cellStyle = {
+const cellStyle: SxProps<Theme> = {
     minWidth: 40,
     textAlign: 'center',
     padding: '8px 4px',
@@ -19,7 +19,7 @@ const cellStyle = {
     position: 'relative',
 };
 
-const headerCellStyle = {
+const headerCellStyle: SxProps<Theme> = {
     ...cellStyle,
     fontWeight: 'bold',
     backgroundColor: '#f5f5f5',
@@ -27,9 +27,12 @@ const headerCellStyle = {
     borderBottom: '2px solid #ddd',
 };
 
-const weekendCellStyle = (isWeekendDay: boolean) => (isWeekendDay ? { backgroundColor: '#fafafa' } : {});
+// ++ FIX: Restituisce uno stile solo se è un weekend, altrimenti undefined
+const weekendCellStyle = (isWeekendDay: boolean): SxProps<Theme> | undefined => (
+    isWeekendDay ? { backgroundColor: '#fafafa' } : undefined
+);
 
-const tecnicoNameStyle = {
+const tecnicoNameStyle: SxProps<Theme> = {
     position: 'sticky',
     left: 0,
     zIndex: 1,
@@ -43,13 +46,13 @@ const tecnicoNameStyle = {
 
 const CalendarHeader: React.FC<{ days: Date[] }> = ({ days }) => (
     <Box sx={{ display: 'flex' }}>
-        <Box sx={{ ...headerCellStyle, ...tecnicoNameStyle }}>
+        <Box sx={{...headerCellStyle, ...tecnicoNameStyle}}>
             <Typography variant="body2" fontWeight="bold">Tecnico</Typography>
         </Box>
         {days.map(day => {
             const isWeekendDay = isWeekend(day);
             return (
-                <Box key={day.toISOString()} sx={{ ...headerCellStyle, ...weekendCellStyle(isWeekendDay) }}>
+                <Box key={day.toISOString()} sx={{...headerCellStyle, ...weekendCellStyle(isWeekendDay)}}>
                     <Typography variant="caption" display="block">{format(day, 'E', { locale: it })}</Typography>
                     <Typography variant="body2">{format(day, 'd')}</Typography>
                 </Box>
@@ -81,7 +84,7 @@ const DayCell: React.FC<{ dayInfo?: DayInfo; isWeekendDay: boolean }> = ({ dayIn
 
     return (
         <Tooltip title={tooltip} placement="top">
-            <Box sx={{ ...cellStyle, ...weekendCellStyle(isWeekendDay) }}>
+            <Box sx={{...cellStyle, ...weekendCellStyle(isWeekendDay)}}>
                 <Typography variant="body2" sx={{ color, fontWeight: text !== '-' ? 'bold' : 'normal' }}>
                     {text}
                 </Typography>
@@ -198,7 +201,7 @@ const PresenzePage: React.FC = () => {
                                 const riepilogoTecnico = riepiloghi.get(tecnico.id);
                                 return (
                                     <Box key={tecnico.id} sx={{ display: 'flex' }}>
-                                        <Box sx={{ ...cellStyle, ...tecnicoNameStyle }}>
+                                        <Box sx={{...cellStyle, ...tecnicoNameStyle}}>
                                             <Typography variant="body2">
                                                 {tecnico.cognome} {tecnico.nome}
                                             </Typography>

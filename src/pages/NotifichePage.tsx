@@ -6,14 +6,14 @@ import {
     Box,
     CircularProgress,
 } from '@mui/material';
-import { useGlobalData } from '@/contexts/GlobalDataProvider';
+import { useGlobalData, Notification } from '@/contexts/GlobalDataProvider';
 import { useAuth } from '@/hooks/useAuth';
 import NotificationItem from '@/components/notifiche/NotificationItem';
 import { Timestamp } from 'firebase/firestore';
+import { Notifica } from '@/models/definitions';
 
 const NotifichePage: React.FC = () => {
     const { userProfile } = useAuth();
-    // 1. Recupero le funzioni aggiornate, inclusa deleteNotification
     const { notifications, loading, markNotificationAsRead, deleteNotification } = useGlobalData();
 
     const handleMarkAsRead = async (id: string) => {
@@ -24,7 +24,6 @@ const NotifichePage: React.FC = () => {
         }
     };
 
-    // 2. Aggiungo la funzione per gestire l'eliminazione
     const handleDelete = async (id: string) => {
         try {
             await deleteNotification(id);
@@ -39,7 +38,7 @@ const NotifichePage: React.FC = () => {
         return date.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    if (loading) {
+    if (loading || !userProfile) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
                 <CircularProgress />
@@ -53,6 +52,21 @@ const NotifichePage: React.FC = () => {
         const timeB = b.createdAt?.toMillis() || 0;
         return timeB - timeA;
     });
+
+    // Funzione di trasformazione per garantire la compatibilità
+    const transformNotification = (notification: Notification): Notifica => {
+        const isUnread = notification.status === 'unread';
+        return {
+            id: notification.id,
+            title: notification.title,
+            createdAt: notification.createdAt,
+            // ++ FIX: Mappatura esplicita per creare un oggetto Notifica valido
+            body: notification.title || 'Nessun dettaglio disponibile', // Usa title per body
+            senderId: 'Sistema', // Fornisce un default per senderId
+            recipientId: userProfile.uid,
+            readBy: isUnread ? {} : { [userProfile.uid]: true },
+        };
+    };
 
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
@@ -69,16 +83,15 @@ const NotifichePage: React.FC = () => {
                 </Box>
             ) : (
                 <Box>
-                    {sortedNotifications.map((notifica) => {
-                        const isUnread = notifica.status === 'unread';
+                    {sortedNotifications.map((notification) => {
+                        const notificaForChild = transformNotification(notification);
                         return (
                             <NotificationItem 
-                                key={notifica.id}
-                                notification={notifica}
-                                isUnread={isUnread}
-                                onMarkAsRead={() => handleMarkAsRead(notifica.id)}
-                                // 3. Passo la funzione di eliminazione al componente figlio
-                                onDelete={() => handleDelete(notifica.id)}
+                                key={notification.id}
+                                notification={notificaForChild} // Passa l'oggetto trasformato
+                                isUnread={notification.status === 'unread'}
+                                onMarkAsRead={() => handleMarkAsRead(notification.id)}
+                                onDelete={() => handleDelete(notification.id)}
                                 formattaData={formattaData}
                             />
                         );
