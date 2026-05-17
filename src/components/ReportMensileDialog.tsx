@@ -54,7 +54,7 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
 
       const calculatedReports = reports.map(report => {
           const oreTotaliGiorno = report.oreGiorno ?? 0;
-          const tariffa = tariffeMap.get(report.tipoGiornataId);
+          const tariffa = tariffeMap.get(report.tipoGiornata.id);
           const nomeTariffa = tariffa?.nome.toLowerCase() || '';
 
           // --- FASE 1: CALCOLO ORE PER VISUALIZZAZIONE (SEMPRE ESPLICITO) ---

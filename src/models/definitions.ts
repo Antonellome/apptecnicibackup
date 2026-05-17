@@ -57,6 +57,7 @@ export interface UserProfile extends BaseEntity {
     cognome: string;
     attivo: boolean;
     isAdmin?: boolean; // Mantenuto per risolvere gli errori
+    categoria?: Categoria; // ++ AGGIUNTO PER RISOLVERE ERRORI DI BUILD
 }
 export type WebAppUser = UserProfile; // Alias per retrocompatibilità
 

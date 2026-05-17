@@ -69,7 +69,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, isUnr
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <Box sx={{ pt: 2, mt: 1, borderTop: 1, borderColor: 'divider' }}>
                     <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                        {notification.message}
+                        {notification.body}
                     </Typography>
                     <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
                         <Typography variant="caption" color="text.secondary">

@@ -6,8 +6,9 @@ import { router } from './routes/index.tsx';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SnackbarProvider } from './contexts/SnackbarContext';
+import { NotificationProvider } from './contexts/NotificationContext'; // <-- IMPORTATO
 import { MasterDataProvider } from './contexts/MasterDataProvider';
-import { GlobalDataProvider } from './contexts/GlobalDataProvider'; // Importa il nuovo provider
+import { GlobalDataProvider } from './contexts/GlobalDataProvider';
 import { syncMasterData, startSyncProcess, stopSyncProcess } from './services/dataSync';
 import { sincronizzaConFirebase, sincronizzaCondivisioni } from './services/offlineSync.ts';
 import './index.css';
@@ -80,10 +81,12 @@ root.render(
       <AuthProvider>
         <SnackbarProvider>
           <MasterDataProvider>
-            <GlobalDataProvider> {/* Inserito il nuovo provider */} 
-              <AppInitializer>
-                  <RouterProvider router={router} future={{ v7_startTransition: true }} />
-              </AppInitializer>
+            <GlobalDataProvider>
+              <NotificationProvider> {/* <-- AGGIUNTO */} 
+                <AppInitializer>
+                    <RouterProvider router={router} future={{ v7_startTransition: true }} />
+                </AppInitializer>
+              </NotificationProvider>
             </GlobalDataProvider>
           </MasterDataProvider>
         </SnackbarProvider>

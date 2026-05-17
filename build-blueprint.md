@@ -21,10 +21,29 @@ Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono e
 
 ## Log Errori di Build
 
-**Errori Rilevati:** 0
+**Errori Rilevati:** 82 (Build Fallita)
 
 ---
 
 ## Log Modifiche
 
-*(In questa sezione verranno registrate tutte le modifiche future)*
+- **2024-07-29 (Sessione di Debug Build - Fase 1):** Iniziata la risoluzione sistematica di 82 errori di tipo TypeScript emersi durante il comando `npm run build`.
+    - **`src/components/Rapportini/PdfPreviewDialog.tsx`:** Rimosso import `Box` non utilizzato.
+    - **`src/components/ReportMensileDialog.tsx`:** Corretto l'accesso alla proprietà `tipoGiornata.id` (era `tipoGiornataId`).
+    - **`src/components/notifiche/NotificationItem.tsx`:** Sostituita la proprietà inesistente `message` con `body`.
+    - **`src/models/definitions.ts`:** Aggiunta la proprietà `categoria` all'interfaccia `UserProfile` per risolvere errori a catena.
+    - **`src/contexts/AuthContext.tsx`:** Errore risolto implicitamente dalla modifica a `definitions.ts`.
+    - **`src/contexts/NotificationContext.tsx`:** Rimosso import `Timestamp` non utilizzato e corretta la logica di gestione della proprietà `hiddenFor` per allinearla a quella di `readBy` (da array a mappa), risolvendo un errore di tipo critico.
+
+- **2024-07-29 (Sessione di Debug Test):** Risoluzione completa dell'ambiente di test `vitest` in `src/pages/ReportFormPage.test.tsx`.
+    - **Problema:** I test fallivano a causa della mancanza dei `Provider` di contesto di React.
+    - **Soluzione:** Creata una funzione `customRender` che avvolge il componente in fase di test con tutti i `Provider` necessari.
+    - **Stato Finale:** Tutti i test vengono superati con successo.
+
+- **2024-07-29:** Corretti 5 errori di build in `src/components/Rapportini/OreLavoroSingoloTecnico.test.tsx`.
+
+- **2024-07-29:** Corretti 4 errori di tipo in `src/components/GeneratedReportView.tsx`.
+
+- **2024-07-29:** Corretto 1 errore di tipo in `src/components/PrintableTechnicianList.tsx`.
+
+- **2024-07-29:** Risolto un errore di runtime critico in `src/main.tsx` aggiungendo il `NotificationProvider`.

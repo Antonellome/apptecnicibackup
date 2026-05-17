@@ -6,7 +6,32 @@ import ReportFormPage from './ReportFormPage';
 import { BrowserRouter } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
 
-// ============== MOCKING DEPENDENCIES (REVISED) ============== 
+// ============== PROVIDERS & THEME SETUP (CORRECTED) ============== 
+import { ThemeProvider } from '@/contexts/ThemeContext'; // <-- THE CORRECT ONE
+import { SnackbarProvider } from '@/contexts/SnackbarContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
+
+// Helper to render components with all necessary providers
+const AllTheProviders = ({ children }) => {
+  return (
+    <BrowserRouter>
+      <ThemeProvider> {/** Correct Provider for useTheme hook */}
+        <SnackbarProvider>
+          <NotificationProvider>
+            {children}
+          </NotificationProvider>
+        </SnackbarProvider>
+      </ThemeProvider>
+    </BrowserRouter>
+  );
+};
+
+// Custom render function that uses the wrapper
+const customRender = (ui, options) =>
+  render(ui, { wrapper: AllTheProviders, ...options });
+
+
+// ============== MOCKING DEPENDENCIES ============== 
 
 // 1. react-router-dom
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -14,7 +39,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return {
     ...actual,
     useNavigate: () => vi.fn(),
-    useParams: () => ({ reportId: undefined }), // Corrected from 'id' to 'reportId'
+    useParams: () => ({ reportId: undefined }),
   };
 });
 
@@ -26,7 +51,7 @@ vi.mock('@/hooks/useAuth', () => ({
   }),
 }));
 
-// 3. Local Data Hook (CORRECTED from useMasterData)
+// 3. Local Data Hook
 const mockLocalData = {
     navi: [{ id: 'nave1', nome: 'Nave Prova' }],
     luoghi: [{ id: 'luogo1', nome: 'Luogo Prova' }],
@@ -38,17 +63,22 @@ vi.mock('@/hooks/useLocalData', () => ({
   useLocalData: () => ({ data: mockLocalData, loading: false, error: null }),
 }));
 
-// 4. Snackbar Context
-vi.mock('@/contexts/SnackbarContext', () => ({
-  useSnackbar: () => ({ showSnackbar: vi.fn() }),
-}));
+// 4. Snackbar Context - Mock is kept, but provider is now correctly wrapping
+vi.mock('@/contexts/SnackbarContext', async (importOriginal) => {
+    const actual = await importOriginal()
+    return {
+        ...actual,
+        useSnackbar: () => ({ showSnackbar: vi.fn() }),
+    }
+});
+
 
 // 5. Firebase / Offline Sync
 vi.mock('@/firebase', () => ({ db: {} }));
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(), 
   getDoc: vi.fn(), 
-  addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })), // Mock addDoc to resolve with a ref
+  addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })),
   updateDoc: vi.fn(), 
   collection: vi.fn(),
   writeBatch: vi.fn(() => ({ commit: vi.fn(), set: vi.fn() })),
@@ -74,7 +104,7 @@ vi.mock('@mui/material/Grid', () => ({
   default: ({ children, ...props }) => <div data-testid="grid" {...props}>{children}</div>,
 }));
 
-// ============== TEST SUITE (REVISED) ============== 
+// ============== TEST SUITE ============== 
 
 describe('ReportFormPage', () => {
   beforeEach(() => {
@@ -83,38 +113,38 @@ describe('ReportFormPage', () => {
   });
 
   it('dovrebbe corrispondere allo snapshot nello stato iniziale', async () => {
-    const { container } = render(<BrowserRouter><ReportFormPage /></BrowserRouter>);
+    const { container } = customRender(<ReportFormPage />);
     await screen.findByText('Ordinaria'); // Wait for async data to load
     expect(container).toMatchSnapshot();
   });
 
   it('dovrebbe compilare il modulo e salvare i dati', async () => {
     const user = userEvent.setup();
-    render(<BrowserRouter><ReportFormPage /></BrowserRouter>);
+    customRender(<ReportFormPage />);
 
-    // Attendere il caricamento dei dati asincroni
+    // Wait for async data to load
     await screen.findByText('Test User');
 
-    // Selezionare Tipo Giornata
+    // Select a value
     await user.click(screen.getByLabelText(/Tipo Giornata/i));
     await user.click(await screen.findByRole('option', { name: 'Ordinaria' }));
 
-    // Selezionare Nave
+    // Select another value
     await user.click(screen.getByLabelText(/Nave/i));
     await user.click(await screen.findByRole('option', { name: /Nave Prova/i }));
     
-    // Inserire descrizione
+    // Type in a field
     await user.type(screen.getByLabelText(/Breve Descrizione Lavoro/i), 'Test descrizione lavoro');
 
-    // Salvare
+    // Save
     await user.click(screen.getByRole('button', { name: /salva/i }));
 
-    // Verificare che la funzione di salvataggio sia stata chiamata
+    // Verify that the save function was called
     await waitFor(() => {
         expect(addDoc).toHaveBeenCalledOnce();
     });
 
-    // Verificare il contenuto dei dati inviati
+    // Verify the content of the submitted data
     const submittedData = (addDoc as any).mock.calls[0][1];
     expect(submittedData).toEqual(expect.objectContaining({
         tecnicoId: 'test-uid',

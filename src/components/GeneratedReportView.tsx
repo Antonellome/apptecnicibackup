@@ -60,7 +60,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], `consuntivo_${tecnico.cognome}_${anno}_${mese}.png`, { type: 'image/png' });
 
-        if (navigator.share) {
+        if (typeof navigator.share === 'function') {
             navigator.share({
                 title: `Consuntivo ${tecnico.nome} ${tecnico.cognome}`,
                 files: [file],
@@ -78,7 +78,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
         const aggregation: { [key: string]: AggregatedActivity } = {};
 
         rapportini.forEach(r => {
-            const tipoId = r.tipoGiornataId;
+            const tipoId = r.tipoGiornata.id;
             if (!aggregation[tipoId]) {
                 aggregation[tipoId] = {
                     tipoGiornataId: tipoId,
@@ -118,7 +118,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
     return (
         <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
             <Box display="flex" justifyContent="flex-end" mb={2} gap={1}>
-                {navigator.share && (
+                {typeof navigator.share === 'function' && (
                     <Button variant="contained" startIcon={<Share />} onClick={handleShare}>Condividi</Button>
                 )}
             </Box>
@@ -188,8 +188,8 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                                     <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
                                     <TableCell>{r.descrizioneBreve}</TableCell>
                                     <TableCell align="right">{r.oreGiorno?.toFixed(2) ?? '-'}</TableCell>
-                                    <TableCell align="right">{r.oreOrdinarie > 0 ? r.oreOrdinarie.toFixed(2) : '-'}</TableCell>
-                                    <TableCell align="right">{r.oreStraordinario > 0 ? r.oreStraordinario.toFixed(2) : '-'}</TableCell>
+                                    <TableCell align="right">{r.oreOrdinarie && r.oreOrdinarie > 0 ? r.oreOrdinarie.toFixed(2) : '-'}</TableCell>
+                                    <TableCell align="right">{r.oreStraordinario && r.oreStraordinario > 0 ? r.oreStraordinario.toFixed(2) : '-'}</TableCell>
                                     <TableCell align="right">{r.guadagno ? formatCurrency(r.guadagno) : '-'}</TableCell>
                                 </TableRow>
                             ))}

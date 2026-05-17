@@ -71,7 +71,7 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
         if (field.type === 'select' && field.options && field.options.length > 0) {
             // Controlla se le opzioni sono oggetti o stringhe
             if (typeof field.options[0] === 'object' && field.options[0] !== null) {
-                const foundOption = (field.options as { id: string; nome: string }[]).find(opt => opt.id === value);
+                const foundOption = (field.options as unknown as { id: string; nome: string }[]).find(opt => opt.id === value);
                 return foundOption?.nome || String(value);
             } else {
                 const stringValue = String(value);

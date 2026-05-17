@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import OreLavoroSingoloTecnico from './OreLavoroSingoloTecnico';
@@ -7,7 +6,7 @@ import type { DettaglioOreData } from '@/models/definitions';
 // Mock per il componente Grid, per semplificare lo snapshot
 vi.mock('@mui/material/Grid', () => ({
     // Usiamo la versione 2 della Grid API per coerenza
-    default: (props) => <div {...props} />
+    default: (props: any) => <div {...props} />
 }));
 
 describe('OreLavoroSingoloTecnico', () => {
@@ -15,6 +14,8 @@ describe('OreLavoroSingoloTecnico', () => {
   // Test di Snapshot: Modalità ORARIO
   it('dovrebbe corrispondere allo snapshot in modalità ORARIO', () => {
     const mockDatiOre: DettaglioOreData = {
+      tecnicoId: 'test-id',
+      nome: 'Test Nome',
       isManual: false,
       oraInizio: '07:30',
       oraFine: '16:30',
@@ -30,6 +31,8 @@ describe('OreLavoroSingoloTecnico', () => {
   // Test di Snapshot: Modalità MANUALE
   it('dovrebbe corrispondere allo snapshot in modalità MANUALE', () => {
     const mockDatiOre: DettaglioOreData = {
+      tecnicoId: 'test-id',
+      nome: 'Test Nome',
       isManual: true,
       oraInizio: '07:30',
       oraFine: '16:30',
@@ -46,6 +49,8 @@ describe('OreLavoroSingoloTecnico', () => {
   it('dovrebbe cambiare tra modalità orario e manuale al click dello switch', () => {
     const mockOnUpdate = vi.fn();
     const initialData: DettaglioOreData = {
+      tecnicoId: 'test-id',
+      nome: 'Test Nome',
       isManual: false,
       oraInizio: '07:30',
       oraFine: '16:30',
