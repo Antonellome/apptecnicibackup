@@ -1,40 +1,43 @@
 
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { app } from "@/firebase"; // Importo l'istanza dell'app Firebase
+import { addSyncEvent } from './dataSync';
+import { auth } from '@/firebase';
 
 /**
- * Chiama la Cloud Function 'markNotificationAsRead' per marcare 
- * una notifica come letta sul server.
+ * Accoda un evento 'NOTIFICATION_READ' nella coda di sincronizzazione locale
+ * per marcare una notifica come letta in modo asincrono.
  *
- * @param {string} notificationId L'ID del documento della notifica in Firestore.
- * @returns {Promise<boolean>} Ritorna true in caso di successo, false altrimenti.
+ * @param {string} notificationId L'ID della notifica da marcare come letta.
+ * @returns {Promise<boolean>} Ritorna true se l'evento è stato accodato con successo, false altrimenti.
  */
-export const markNotificationAsReadOnServer = async (notificationId: string): Promise<boolean> => {
+export const markNotificationAsRead = async (notificationId: string): Promise<boolean> => {
+  const user = auth.currentUser;
+
+  if (!user) {
+    console.error("Utente non autenticato. Impossibile marcare la notifica come letta.");
+    return false;
+  }
+
   if (!notificationId) {
     console.error("ID notifica non fornito. Impossibile procedere.");
     return false;
   }
 
   try {
-    const functions = getFunctions(app, 'europe-west1');
-    const markAsRead = httpsCallable(functions, 'markNotificationAsRead');
-    
-    console.log(`[CLIENT] Chiamata a markNotificationAsRead per la notifica: ${notificationId}`);
-    
-    const result = await markAsRead({ notificationId: notificationId });
-    
-    const data = result.data as { status: string; message?: string };
+    const event = {
+      type: 'NOTIFICATION_READ',
+      payload: {
+        notificationId,
+        readByUserId: user.uid,
+      },
+      timestamp: new Date().toISOString(),
+    };
 
-    if (data.status === 'success') {
-      console.log(`[SERVER] Successo: ${data.message}`);
-      return true;
-    } else {
-      console.error("[SERVER] La funzione ha risposto con un errore:", data.message);
-      return false;
-    }
+    await addSyncEvent(event);
+    console.log(`[SYNC] Evento NOTIFICATION_READ accodato per la notifica: ${notificationId}`);
+    return true;
 
-  } catch (error: any) {
-    console.error("[CLIENT] Errore di rete o di permessi durante la chiamata alla funzione:", error.message);
+  } catch (error) {
+    console.error("[SYNC] Errore durante l'accodamento dell'evento di lettura notifica:", error);
     return false;
   }
 };

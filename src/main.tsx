@@ -6,9 +6,9 @@ import { router } from './routes/index.tsx';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SnackbarProvider } from './contexts/SnackbarContext';
-import { NotificationProvider } from './contexts/NotificationContext';
 import { MasterDataProvider } from './contexts/MasterDataProvider';
-import { syncMasterData } from './services/dataSync';
+import { GlobalDataProvider } from './contexts/GlobalDataProvider'; // Importa il nuovo provider
+import { syncMasterData, startSyncProcess, stopSyncProcess } from './services/dataSync';
 import { sincronizzaConFirebase, sincronizzaCondivisioni } from './services/offlineSync.ts';
 import './index.css';
 import { CircularProgress, Box, Typography } from '@mui/material';
@@ -28,6 +28,8 @@ const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) =
         const initialize = async () => {
             try {
                 await syncMasterData();
+                startSyncProcess();
+
                 window.addEventListener('online', handleOnlineSync);
                 if (navigator.onLine) {
                     await handleOnlineSync();
@@ -43,6 +45,7 @@ const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
         return () => {
             window.removeEventListener('online', handleOnlineSync);
+            stopSyncProcess();
         };
     }, []);
 
@@ -76,13 +79,13 @@ root.render(
     <ThemeProvider>
       <AuthProvider>
         <SnackbarProvider>
-          <NotificationProvider>
-            <MasterDataProvider>
+          <MasterDataProvider>
+            <GlobalDataProvider> {/* Inserito il nuovo provider */} 
               <AppInitializer>
                   <RouterProvider router={router} future={{ v7_startTransition: true }} />
               </AppInitializer>
-            </MasterDataProvider>
-          </NotificationProvider>
+            </GlobalDataProvider>
+          </MasterDataProvider>
         </SnackbarProvider>
       </AuthProvider>
     </ThemeProvider>

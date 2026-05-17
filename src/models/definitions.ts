@@ -1,3 +1,4 @@
+
 import { Timestamp } from 'firebase/firestore';
 
 // =========================================================================
@@ -186,4 +187,20 @@ export interface Notifica extends BaseEntity {
     createdAt: Timestamp;
     readBy: { [key: string]: boolean };
     hiddenFor?: { [key: string]: boolean };
+}
+
+// =========================================================================
+// --- SINCRONIZZAZIONE ASINCRONA (NUOVA LOGICA) -- -
+// =========================================================================
+
+export interface SyncEvent {
+  id?: number; // ++ CORRETTO: Chiave primaria numerica auto-incrementante per Dexie.
+  type: 'NOTIFICATION_READ'; // Tipo di evento, per ora solo uno
+  payload: {
+    notificationId: string;
+    readByUserId: string;
+  };
+  timestamp: string; // ISO 8601 timestamp
+  syncStatus?: 'pending' | 'syncing' | 'synced' | 'failed';
+  attempts?: number;
 }

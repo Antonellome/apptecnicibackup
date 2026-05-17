@@ -10,7 +10,8 @@ import {
     Luogo, 
     Nave, 
     Ditta, 
-    Categoria 
+    Categoria,
+    SyncEvent
 } from '@/models/definitions';
 
 /**
@@ -19,7 +20,7 @@ import {
  */
 export class LocalDatabase extends Dexie {
     // Dichiarazione delle tabelle (Object Stores)
-    public rapportini!: Table<Rapportino, string>; // La chiave primaria è `id` di tipo stringa
+    public rapportini!: Table<Rapportino, string>;
     public tecnici!: Table<Tecnico, string>;
     public clienti!: Table<Cliente, string>;
     public sedi!: Table<Sede, string>;
@@ -29,12 +30,13 @@ export class LocalDatabase extends Dexie {
     public navi!: Table<Nave, string>;
     public ditte!: Table<Ditta, string>;
     public categorie!: Table<Categoria, string>;
+    public syncQueue!: Table<SyncEvent, number>; // Tabella per la coda di sincronizzazione
 
     constructor() {
         super('RisoTecniciDB'); // Nome del database
 
+        // L'ultima versione DEVE essere dichiarata per ultima.
         this.version(1).stores({
-            // Sintassi Dexie: 'primaryKey,++autoIncrementKey,indexedProperty'
             rapportini: 'id, data, tecnicoId, tipoGiornataId',
             tecnici: 'id, cognome, nome',
             clienti: 'id, nome',
@@ -46,12 +48,20 @@ export class LocalDatabase extends Dexie {
             ditte: 'id, nome',
             categorie: 'id, nome',
         });
+
+        this.version(2).stores({
+            // Manteniamo le tabelle esistenti
+            ...this.verno.stores, // Mantiene le definizioni delle versioni precedenti
+            // Aggiungiamo la nuova tabella
+            syncQueue: '++id, type, syncStatus' // Chiave primaria auto-incrementante e indici
+        });
+
+        // Imposta la tabella per l'uso
+        this.syncQueue = this.table('syncQueue');
     }
 
     /**
      * Popola le tabelle delle anagrafiche con i dati master provenienti da Firestore.
-     * Questa funzione viene chiamata dal sistema di sincronizzazione.
-     * Utilizza `bulkPut` per un inserimento/aggiornamento efficiente.
      */
     public async populateMasterData(masterData: {
         tecnici: Tecnico[];

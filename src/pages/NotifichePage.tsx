@@ -1,74 +1,43 @@
+
 import React from 'react';
 import {
     Container,
     Typography,
     Box,
-    Alert,
     CircularProgress,
 } from '@mui/material';
-import { useNotifications } from '@/contexts/NotificationContext';
+import { useGlobalData } from '@/contexts/GlobalDataProvider';
 import { useAuth } from '@/hooks/useAuth';
-import { useSnackbar } from '@/contexts/SnackbarContext';
 import NotificationItem from '@/components/notifiche/NotificationItem';
-import { markNotificationAsReadOnServer } from '@/services/notificationService'; // <-- 1. IMPORTAZIONE
+import { Timestamp } from 'firebase/firestore';
 
 const NotifichePage: React.FC = () => {
-    const { user, userProfile } = useAuth();
-    const { notifications, loading, error, hideNotification, markAsRead } = useNotifications();
-    const { showSnackbar } = useSnackbar();
+    const { userProfile } = useAuth();
+    // 1. Recupero le funzioni aggiornate, inclusa deleteNotification
+    const { notifications, loading, markNotificationAsRead, deleteNotification } = useGlobalData();
 
-    const handleHide = async (id: string) => {
-        try {
-            await hideNotification(id);
-            showSnackbar("Notifica nascosta con successo.", "success");
-        } catch (error) {
-            console.error("Errore durante il mascheramento della notifica:", error);
-            showSnackbar("Errore durante il mascheramento della notifica.", "error");
-        }
-    };
-
-    // 2. FUNZIONE POTENZIATA
     const handleMarkAsRead = async (id: string) => {
-        // Aggiornamento ottimistico dell'UI per reattività immediata
-        markAsRead(id);
-
-        // Chiamata sicura al backend per rendere la modifica persistente
-        const success = await markNotificationAsReadOnServer(id);
-
-        if (!success) {
-            // Se il server fallisce, potremmo voler implementare una logica di rollback,
-            // ma per ora logghiamo l'errore e l'UI rimarrà (erroneamente) letta.
-            // In una versione futura, potremmo ri-marcare la notifica come non letta nello stato locale.
-            console.error(`[UI] Fallimento nel segnare la notifica ${id} come letta sul server.`);
-            showSnackbar("Errore di sincronizzazione con il server.", "warning");
-        }
-    }
-
-    const formattaData = (timestamp: any): string => {
-        if (!timestamp || typeof timestamp.toDate !== 'function') {
-            return 'Data non disponibile';
-        }
         try {
-            const date = timestamp.toDate();
-            return date.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        } catch (e) {
-            console.error("Errore formattazione data:", e);
-            return 'Data invalida';
+            await markNotificationAsRead(id);
+        } catch (error) {
+            console.error("Errore durante l'aggiornamento della notifica:", error);
         }
     };
 
-    if (error) {
-        return (
-             <Container maxWidth="md" sx={{ py: 4 }}>
-                <Alert severity="error" sx={{ mt: 2, p: 3 }}>
-                    <Typography fontWeight="bold">Errore nel Caricamento</Typography>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                        {error}
-                    </Typography>
-                </Alert>
-            </Container>
-        )
-    }
+    // 2. Aggiungo la funzione per gestire l'eliminazione
+    const handleDelete = async (id: string) => {
+        try {
+            await deleteNotification(id);
+        } catch (error) {
+            console.error("Errore durante l'eliminazione della notifica:", error);
+        }
+    };
+
+    const formattaData = (timestamp: Timestamp | Date): string => {
+        if (!timestamp) return 'Data non disponibile';
+        const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+        return date.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
 
     if (loading) {
         return (
@@ -78,30 +47,38 @@ const NotifichePage: React.FC = () => {
         );
     }
 
+    const safeNotifications = Array.isArray(notifications) ? notifications : [];
+    const sortedNotifications = [...safeNotifications].sort((a, b) => {
+        const timeA = a.createdAt?.toMillis() || 0;
+        const timeB = b.createdAt?.toMillis() || 0;
+        return timeB - timeA;
+    });
+
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
             <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
                 Centro Notifiche
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                Ciao {userProfile?.nome}, qui trovi le comunicazioni più recenti.
+                Ciao {userProfile?.nome}, qui trovi tutte le tue comunicazioni.
             </Typography>
 
-            {notifications.length === 0 ? (
+            {sortedNotifications.length === 0 ? (
                 <Box sx={{ py: 4, textAlign: 'center' }}>
-                    <Typography color="text.secondary">Non ci sono nuove notifiche per te.</Typography>
+                    <Typography color="text.secondary">Non ci sono notifiche per te.</Typography>
                 </Box>
             ) : (
                 <Box>
-                    {notifications.map((notifica) => {
-                        const isUnread = user ? (!notifica.readBy || !notifica.readBy[user.uid]) : false;
+                    {sortedNotifications.map((notifica) => {
+                        const isUnread = notifica.status === 'unread';
                         return (
                             <NotificationItem 
                                 key={notifica.id}
                                 notification={notifica}
                                 isUnread={isUnread}
-                                onMarkAsRead={handleMarkAsRead}
-                                onHide={handleHide}
+                                onMarkAsRead={() => handleMarkAsRead(notifica.id)}
+                                // 3. Passo la funzione di eliminazione al componente figlio
+                                onDelete={() => handleDelete(notifica.id)}
                                 formattaData={formattaData}
                             />
                         );

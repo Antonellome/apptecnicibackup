@@ -1,25 +1,31 @@
+
 import React, { useEffect, useCallback, useRef } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Box, AppBar, Toolbar, Typography, IconButton, Chip } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, IconButton, Chip, Badge } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-// Servizi e DB
+// Servizi, DB e Context
 import { db } from '@/db/db';
 import { sincronizzaConFirebase } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
+import { useGlobalData } from '@/contexts/GlobalDataProvider'; // 1. Importato GlobalData
 
 // Icone
 import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SyncIcon from '@mui/icons-material/Sync';
+import NotificationsIcon from '@mui/icons-material/Notifications'; // 2. Importata icona Notifiche
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
     const { logout } = useAuth();
     const { showSnackbar } = useSnackbar();
-    const isSyncing = useRef(false); // Ref per evitare sincronizzazioni multiple
+    const isSyncing = useRef(false);
+
+    // 3. Recupero del contatore notifiche dal contesto globale
+    const { unreadNotificationsCount } = useGlobalData();
 
     const rapportiniInSospeso = useLiveQuery(() => db.rapportiniInSospeso.count(), []);
 
@@ -53,21 +59,14 @@ const MainLayout: React.FC = () => {
         }
     }, [showSnackbar]);
 
-
     useEffect(() => {
-        const onOnline = () => handleSync(false); // Non è un trigger manuale
-
-        // Esegui la sincronizzazione al primo caricamento se si è online
+        const onOnline = () => handleSync(false);
         onOnline();
-
-        // Aggiungi listener per l'evento 'online'
         window.addEventListener('online', onOnline);
-
-        // Cleanup: rimuovi il listener quando il componente viene smontato
         return () => {
             window.removeEventListener('online', onOnline);
         };
-    }, [handleSync]); // La dipendenza è stabile grazie a useCallback
+    }, [handleSync]);
 
     const handleLogout = () => {
         logout();
@@ -92,10 +91,10 @@ const MainLayout: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {rapportiniInSospeso !== undefined && rapportiniInSospeso > 0 && (
                             <Chip 
-                                icon={<SyncIcon />} // Icona più appropriata
+                                icon={<SyncIcon />} 
                                 label={`${rapportiniInSospeso} in coda`}
                                 color="warning"
-                                onClick={() => handleSync(true)} // È un trigger manuale
+                                onClick={() => handleSync(true)} 
                                 clickable
                                 size="small"
                                 title="Ci sono rapportini salvati localmente. Clicca per forzare la sincronizzazione."
@@ -105,6 +104,14 @@ const MainLayout: React.FC = () => {
                         <IconButton title="Home" color="inherit" onClick={() => navigate('/')}>
                             <HomeIcon />
                         </IconButton>
+
+                        {/* 4 & 5. Aggiunto IconButton con Badge per le notifiche */}
+                        <IconButton title="Notifiche" color="inherit" onClick={() => navigate('/notifiche')}>
+                            <Badge badgeContent={unreadNotificationsCount} color="error">
+                                <NotificationsIcon />
+                            </Badge>
+                        </IconButton>
+
                         <IconButton title="Impostazioni" color="inherit" onClick={() => navigate('/impostazioni')}>
                             <SettingsIcon />
                         </IconButton>
