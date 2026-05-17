@@ -6,7 +6,6 @@ import {
   onSnapshot,
   doc,
   updateDoc,
-  arrayUnion, // ++ MANTENUTO PER POTENZIALE USO FUTURO, MA LA LOGICA SOTTO E' CAMBIATA
   or
 } from 'firebase/firestore';
 import { db } from '@/firebase';
@@ -35,7 +34,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const refetch = useCallback(() => setFetchTrigger(prev => prev + 1), []);
 
   useEffect(() => {
-    // L'errore su `categoria` si risolve da solo grazie alla modifica su `definitions.ts`
     if (authLoading || !user || !userProfile?.categoria?.id) {
       setLoading(false);
       setNotifications([]);
@@ -80,7 +78,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const visibleNotifications = useMemo(() => {
     if (!user) return [];
-    // ++ CORREZIONE: `hiddenFor` è una mappa {uid: true}. La logica ora controlla la chiave.
     return notifications.filter(n => !n.hiddenFor || !n.hiddenFor[user.uid]);
   }, [notifications, user]);
 
@@ -103,7 +100,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (!user) return;
     try {
       const notificationRef = doc(db, 'notificheRichieste', notificationId);
-      // ++ CORREZIONE: Allineo la logica a quella di `readBy`, usando una mappa e non un array.
       await updateDoc(notificationRef, { [`hiddenFor.${user.uid}`]: true });
     } catch (err) {
       console.error("Errore durante il mascheramento della notifica:", err);

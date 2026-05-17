@@ -1,6 +1,6 @@
 
 import Dexie, { Table } from 'dexie';
-import { Tecnico, TipoGiornata, Veicolo, Nave, Luogo, Cliente, Impostazioni, Rapportino } from '@/models/definitions';
+import { Impostazioni, Rapportino } from '@/models/definitions';
 
 export interface AnagraficaCache {
   id: string; // 'tecnici', 'tipiGiornata', etc.

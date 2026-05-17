@@ -21,11 +21,15 @@ Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono e
 
 ## Log Errori di Build
 
-**Errori Rilevati:** 82 (Build Fallita)
+**Errori Rilevati:** 65 (Build Fallita)
 
 ---
 
 ## Log Modifiche
+
+- **2024-07-29 (Sessione di Debug Build - Fase 2):
+    - **`src/contexts/NotificationContext.tsx`:** Rimosso l'import `arrayUnion` da `firebase/firestore`. L'import non era più utilizzato dopo la modifica della logica per la proprietà `hiddenFor`, risolvendo un errore `TS6133` (variabile dichiarata ma mai letta).
+    - **`src/db/local-db.ts`:** Rimossi 6 import di tipi (`Tecnico`, `TipoGiornata`, `Veicolo`, `Nave`, `Luogo`, `Cliente`) da `@/models/definitions`. Questi tipi erano dichiarati ma non venivano utilizzati all'interno del file, causando 6 errori `TS6133`.
 
 - **2024-07-29 (Sessione di Debug Build - Fase 1):** Iniziata la risoluzione sistematica di 82 errori di tipo TypeScript emersi durante il comando `npm run build`.
     - **`src/components/Rapportini/PdfPreviewDialog.tsx`:** Rimosso import `Box` non utilizzato.
