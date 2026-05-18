@@ -27,7 +27,6 @@ const headerCellStyle: SxProps<Theme> = {
     borderBottom: '2px solid #ddd',
 };
 
-// ++ FIX: Restituisce uno stile solo se è un weekend, altrimenti undefined
 const weekendCellStyle = (isWeekendDay: boolean): SxProps<Theme> | undefined => (
     isWeekendDay ? { backgroundColor: '#fafafa' } : undefined
 );
@@ -102,10 +101,11 @@ const PresenzePage: React.FC = () => {
     const { data: masterData, loading: masterDataLoading } = useLocalData();
     const [riepiloghi, setRiepiloghi] = useState<Map<string, RiepilogoMensile>>(new Map());
 
-    const { tecnici } = masterData;
+    // ++ FIX: Gestione sicura di masterData potenzialmente null
+    const tecnici = masterData?.tecnici ?? [];
 
     const sortedTecnici = useMemo(() => {
-        if (!tecnici) return [];
+        // La dipendenza 'tecnici' ora è sempre un array
         return [...tecnici].sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''));
     }, [tecnici]);
 
@@ -116,6 +116,7 @@ const PresenzePage: React.FC = () => {
     }, [currentDate]);
 
     const fetchRiepiloghi = useCallback(async (tecniciToFetch: Tecnico[], date: Date) => {
+        // ++ FIX: Accesso sicuro alla proprietà isAdmin
         if (!user?.isAdmin) {
              setLoading(false);
              return;
@@ -149,7 +150,7 @@ const PresenzePage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [user?.isAdmin]);
+    }, [user]); // Rimosso user.isAdmin dalla dipendenze, basta user
 
     useEffect(() => {
         if (tecnici.length > 0) {
@@ -161,6 +162,7 @@ const PresenzePage: React.FC = () => {
     const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
     const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
+    // ++ FIX: Accesso sicuro alla proprietà isAdmin
     if (!user?.isAdmin) {
         return (
             <Alert severity="error" sx={{m: 3}}>

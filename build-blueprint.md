@@ -21,11 +21,16 @@ Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono e
 
 ## Log Errori di Build
 
-**Errori Rilevati:** 65 (Build Fallita)
+**Errori Rilevati:** 44 (Build Fallita)
 
 ---
 
 ## Log Modifiche
+
+- **2024-07-30 (Sessione di Debug Build - Fase 4):
+    - **`src/pages/PresenzePage.tsx`:** Risolti 3 dei 4 errori di tipo `TS2339` che erano presenti nel file. Il numero totale di errori è sceso da 47 a 44.
+        - **Risolto:** L'errore `Property 'tecnici' does not exist on type 'MasterData | null'` è stato risolto garantendo che `tecnici` sia sempre un array.
+        - **Parzialmente Risolto:** Due dei tre errori relativi alla proprietà `isAdmin` sono stati corretti con l'optional chaining (`user?.isAdmin`). Ne rimangono due.
 
 - **2024-07-29 (Sessione di Debug Build - Fase 2):
     - **`src/contexts/NotificationContext.tsx`:** Rimosso l'import `arrayUnion` da `firebase/firestore`. L'import non era più utilizzato dopo la modifica della logica per la proprietà `hiddenFor`, risolvendo un errore `TS6133` (variabile dichiarata ma mai letta).
