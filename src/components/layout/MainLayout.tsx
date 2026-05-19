@@ -1,7 +1,7 @@
 
 import React, { useEffect, useCallback, useRef } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Box, AppBar, Toolbar, Typography, IconButton, Chip, Badge } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, IconButton, Chip } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 import { useLiveQuery } from 'dexie-react-hooks';
 
@@ -9,23 +9,18 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/db';
 import { sincronizzaConFirebase } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
-import { useGlobalData } from '@/contexts/GlobalDataProvider'; // 1. Importato GlobalData
 
 // Icone
 import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SyncIcon from '@mui/icons-material/Sync';
-import NotificationsIcon from '@mui/icons-material/Notifications'; // 2. Importata icona Notifiche
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
     const { logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const isSyncing = useRef(false);
-
-    // 3. Recupero del contatore notifiche dal contesto globale
-    const { unreadNotificationsCount } = useGlobalData();
 
     const rapportiniInSospeso = useLiveQuery(() => db.rapportiniInSospeso.count(), []);
 
@@ -105,12 +100,7 @@ const MainLayout: React.FC = () => {
                             <HomeIcon />
                         </IconButton>
 
-                        {/* 4 & 5. Aggiunto IconButton con Badge per le notifiche */}
-                        <IconButton title="Notifiche" color="inherit" onClick={() => navigate('/notifiche')}>
-                            <Badge badgeContent={unreadNotificationsCount} color="error">
-                                <NotificationsIcon />
-                            </Badge>
-                        </IconButton>
+                        {/* Blocco Notifiche Rimosso */}
 
                         <IconButton title="Impostazioni" color="inherit" onClick={() => navigate('/impostazioni')}>
                             <SettingsIcon />

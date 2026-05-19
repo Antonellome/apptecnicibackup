@@ -1,18 +1,17 @@
-import { AppBar, Toolbar, Typography, IconButton, Box, Badge } from '@mui/material';
+
+import { AppBar, Toolbar, Typography, IconButton, Box } from '@mui/material';
 import {
-  Home as HomeIcon, // CIAO. OBBEDISCO. Aggiungo l'icona Home.
+  Home as HomeIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
-  Notifications as NotificationsIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
-interface CustomAppBarProps {
-  unreadCount: number;
-}
+// Rimosse le props non più necessarie
+interface CustomAppBarProps {}
 
-const CustomAppBar = ({ unreadCount }: CustomAppBarProps) => {
+const CustomAppBar = ({}: CustomAppBarProps) => {
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -20,7 +19,6 @@ const CustomAppBar = ({ unreadCount }: CustomAppBarProps) => {
     logout();
   };
   
-  // CIAO. OBBEDISCO. Aggiungo la funzione per navigare alla Home.
   const goToHome = () => {
     navigate('/');
   };
@@ -29,9 +27,7 @@ const CustomAppBar = ({ unreadCount }: CustomAppBarProps) => {
     navigate('/settings');
   };
 
-  const goToNotifiche = () => {
-    navigate('/notifiche');
-  }
+  // Funzione goToNotifiche rimossa
 
   return (
     <AppBar position="static" color="primary" enableColorOnDark>
@@ -42,16 +38,11 @@ const CustomAppBar = ({ unreadCount }: CustomAppBarProps) => {
 
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
 
-          {/* CIAO. OBBEDISCO. Aggiungo l'IconButton per la Home. */}
           <IconButton onClick={goToHome} color="inherit">
             <HomeIcon />
           </IconButton>
 
-          <IconButton onClick={goToNotifiche} color="inherit">
-            <Badge badgeContent={unreadCount} color="error"> 
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
+          {/* Blocco campanella completamente rimosso */}
           
           <IconButton onClick={goToSettings} color="inherit">
             <SettingsIcon />
