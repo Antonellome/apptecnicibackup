@@ -6,10 +6,10 @@ import { router } from './routes/index.tsx';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SnackbarProvider } from './contexts/SnackbarContext';
-import { NotificationProvider } from './contexts/NotificationContext'; // <-- IMPORTATO
+import { NotificationProvider } from './contexts/NotificationContext';
 import { MasterDataProvider } from './contexts/MasterDataProvider';
 import { GlobalDataProvider } from './contexts/GlobalDataProvider';
-import { syncMasterData, startSyncProcess, stopSyncProcess } from './services/dataSync';
+import { syncMasterData } from './services/dataSync';
 import { sincronizzaConFirebase, sincronizzaCondivisioni } from './services/offlineSync.ts';
 import './index.css';
 import { CircularProgress, Box, Typography } from '@mui/material';
@@ -19,17 +19,16 @@ const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) =
     const [error, setError] = useState<string | null>(null);
 
     const handleOnlineSync = async () => {
-        console.log("Rilevata connessione online. Avvio sincronizzazione completa...");
+        // console.log("Rilevata connessione online. Avvio sincronizzazione completa...");
         await sincronizzaConFirebase();
         await sincronizzaCondivisioni();
-        console.log("Sincronizzazione completata.");
+        // console.log("Sincronizzazione completata.");
     };
 
     useEffect(() => {
         const initialize = async () => {
             try {
                 await syncMasterData();
-                startSyncProcess();
 
                 window.addEventListener('online', handleOnlineSync);
                 if (navigator.onLine) {
@@ -46,7 +45,6 @@ const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
         return () => {
             window.removeEventListener('online', handleOnlineSync);
-            stopSyncProcess();
         };
     }, []);
 
@@ -82,7 +80,7 @@ root.render(
         <SnackbarProvider>
           <MasterDataProvider>
             <GlobalDataProvider>
-              <NotificationProvider> {/* <-- AGGIUNTO */} 
+              <NotificationProvider>
                 <AppInitializer>
                     <RouterProvider router={router} future={{ v7_startTransition: true }} />
                 </AppInitializer>

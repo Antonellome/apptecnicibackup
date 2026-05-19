@@ -4,18 +4,18 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ReportFormPage from './ReportFormPage';
 import { BrowserRouter } from 'react-router-dom';
-import { addDoc } from 'firebase/firestore';
+import { addDoc, collection } from 'firebase/firestore'; // Import collection
 
 // ============== PROVIDERS & THEME SETUP (CORRECTED) ============== 
-import { ThemeProvider } from '@/contexts/ThemeContext'; // <-- THE CORRECT ONE
-import { SnackbarProvider } from '@/contexts/SnackbarContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { SnackbarProvider, useSnackbar } from '@/contexts/SnackbarContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 
 // Helper to render components with all necessary providers
-const AllTheProviders = ({ children }) => {
+const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <BrowserRouter>
-      <ThemeProvider> {/** Correct Provider for useTheme hook */}
+      <ThemeProvider>
         <SnackbarProvider>
           <NotificationProvider>
             {children}
@@ -27,7 +27,7 @@ const AllTheProviders = ({ children }) => {
 };
 
 // Custom render function that uses the wrapper
-const customRender = (ui, options) =>
+const customRender = (ui: React.ReactElement, options?: any) =>
   render(ui, { wrapper: AllTheProviders, ...options });
 
 
@@ -35,7 +35,7 @@ const customRender = (ui, options) =>
 
 // 1. react-router-dom
 vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as any;
   return {
     ...actual,
     useNavigate: () => vi.fn(),
@@ -58,6 +58,8 @@ const mockLocalData = {
     tecnici: [{ id: 'test-uid', nome: 'Test', cognome: 'User' }],
     veicoli: [{ id: 'vei1', marca: 'Fiat', modello: 'Doblò', targa: 'AB123CD' }],
     tipiGiornata: [{ id: 'tg1', nome: 'Ordinaria'}],
+    clienti: [], // Add clienti to avoid potential issues
+    categorie: [], // Add categorie to avoid potential issues
 };
 vi.mock('@/hooks/useLocalData', () => ({
   useLocalData: () => ({ data: mockLocalData, loading: false, error: null }),
@@ -65,44 +67,42 @@ vi.mock('@/hooks/useLocalData', () => ({
 
 // 4. Snackbar Context - Mock is kept, but provider is now correctly wrapping
 vi.mock('@/contexts/SnackbarContext', async (importOriginal) => {
-    const actual = await importOriginal()
+    const actual = await importOriginal() as any;
     return {
         ...actual,
         useSnackbar: () => ({ showSnackbar: vi.fn() }),
     }
 });
 
-
 // 5. Firebase / Offline Sync
 vi.mock('@/firebase', () => ({ db: {} }));
-vi.mock('firebase/firestore', () => ({
-  doc: vi.fn(), 
-  getDoc: vi.fn(), 
-  addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })),
-  updateDoc: vi.fn(), 
-  collection: vi.fn(),
-  writeBatch: vi.fn(() => ({ commit: vi.fn(), set: vi.fn() })),
-  Timestamp: { fromDate: (date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 }), now: () => ({ seconds: Date.now() / 1000, nanoseconds: 0 })},
-}));
+vi.mock('firebase/firestore', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        doc: vi.fn(), 
+        getDoc: vi.fn(), 
+        addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })),
+        updateDoc: vi.fn(), 
+        collection: vi.fn(),
+        writeBatch: vi.fn(() => ({ commit: vi.fn(), set: vi.fn() })),
+        Timestamp: { fromDate: (date: Date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 }), now: () => ({ seconds: Date.now() / 1000, nanoseconds: 0 })},
+    }
+});
 
 // 6. Signature Canvas
 vi.mock('react-signature-canvas', () => {
     const signaturePadMock = {
         clear: vi.fn(),
         isEmpty: vi.fn().mockReturnValue(false),
-        getTrimmedCanvas: () => ({ toDataURL: (type) => 'data:image/png;base64,fakesignature' }),
+        getTrimmedCanvas: () => ({ toDataURL: (type: string) => 'data:image/png;base64,fakesignature' }),
     };
-    const MockSignatureCanvas = React.forwardRef((props, ref) => {
+    const MockSignatureCanvas = React.forwardRef((props: any, ref: any) => {
         React.useImperativeHandle(ref, () => signaturePadMock);
         return <canvas data-testid="signature-canvas" />;
     });
     return { default: MockSignatureCanvas };
 });
-
-// 7. MUI Grid
-vi.mock('@mui/material/Grid', () => ({
-  default: ({ children, ...props }) => <div data-testid="grid" {...props}>{children}</div>,
-}));
 
 // ============== TEST SUITE ============== 
 

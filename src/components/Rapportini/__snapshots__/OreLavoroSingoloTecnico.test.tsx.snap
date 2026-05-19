@@ -3,15 +3,13 @@
 exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modalità MANUALE 1`] = `
 <div>
   <div
-    class="MuiBox-root css-1bormhx"
+    class="MuiBox-root css-hg112w"
   >
     <div
       alignitems="center"
       spacing="2"
     >
-      <div
-        size="12"
-      >
+      <div>
         <label
           class="MuiFormControlLabel-root MuiFormControlLabel-labelPlacementEnd css-19opgx6-MuiFormControlLabel-root"
         >
@@ -38,54 +36,33 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
           <span
             class="MuiTypography-root MuiTypography-body1 MuiFormControlLabel-label css-rizt0-MuiTypography-root"
           >
-            Inserimento Manuale
+            Inserimento Ore Manuale
           </span>
         </label>
       </div>
-      <div
-        size="12"
-      >
+      <div>
         <div
-          class="MuiFormControl-root MuiFormControl-fullWidth css-ytlejw-MuiFormControl-root"
+          class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
         >
           <label
             class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined MuiFormLabel-colorPrimary MuiFormLabel-filled MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined css-113d811-MuiFormLabel-root-MuiInputLabel-root"
             data-shrink="true"
-            id="ore-manuali-label"
+            for="_r_3_"
+            id="_r_3_-label"
           >
             Ore Lavorate
           </label>
           <div
-            class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-formControl MuiSelect-root css-sc8y68-MuiInputBase-root-MuiOutlinedInput-root-MuiSelect-root"
+            class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
           >
-            <div
-              aria-expanded="false"
-              aria-haspopup="listbox"
-              aria-labelledby="ore-manuali-label"
-              class="MuiSelect-select MuiSelect-outlined MuiInputBase-input MuiOutlinedInput-input css-18jp67o-MuiNativeSelect-root-MuiSelect-select-MuiInputBase-input-MuiOutlinedInput-input"
-              role="combobox"
-              tabindex="0"
-            >
-              8 ore + 1.5 ore
-            </div>
             <input
-              aria-hidden="true"
               aria-invalid="false"
-              class="MuiSelect-nativeInput css-j0riat-MuiSelect-nativeInput"
-              tabindex="-1"
+              class="MuiInputBase-input MuiOutlinedInput-input css-16wblaj-MuiInputBase-input-MuiOutlinedInput-input"
+              id="_r_3_"
+              step="0.5"
+              type="number"
               value="9.5"
             />
-            <svg
-              aria-hidden="true"
-              class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium MuiSelect-icon MuiSelect-iconOutlined css-1rfqz7c-MuiSvgIcon-root-MuiNativeSelect-root-MuiSelect-icon"
-              data-testid="ArrowDropDownIcon"
-              focusable="false"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M7 10l5 5 5-5z"
-              />
-            </svg>
             <fieldset
               aria-hidden="true"
               class="MuiOutlinedInput-notchedOutline css-18p5xg2-MuiNotchedOutlined-root-MuiOutlinedInput-notchedOutline"
@@ -109,24 +86,18 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
 exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modalità ORARIO 1`] = `
 <div>
   <div
-    class="MuiBox-root css-1bormhx"
+    class="MuiBox-root css-hg112w"
   >
+    <h6
+      class="MuiTypography-root MuiTypography-h6 MuiTypography-gutterBottom css-1wmifpn-MuiTypography-root"
+    >
+      Dettaglio Orario Scrivente
+    </h6>
     <div
       alignitems="center"
       spacing="2"
     >
-      <div
-        size="12"
-      >
-        <h6
-          class="MuiTypography-root MuiTypography-subtitle1 css-or3kzz-MuiTypography-root"
-        >
-          Orario Tecnico Responsabile
-        </h6>
-      </div>
-      <div
-        size="12"
-      >
+      <div>
         <label
           class="MuiFormControlLabel-root MuiFormControlLabel-labelPlacementEnd css-19opgx6-MuiFormControlLabel-root"
         >
@@ -152,7 +123,7 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
           <span
             class="MuiTypography-root MuiTypography-body1 MuiFormControlLabel-label css-rizt0-MuiTypography-root"
           >
-            Inserimento Manuale (per tutti)
+            Inserimento Ore Manuale
           </span>
         </label>
       </div>
@@ -163,9 +134,8 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
           <label
             class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined MuiFormLabel-colorPrimary MuiFormLabel-filled MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined css-113d811-MuiFormLabel-root-MuiInputLabel-root"
             data-shrink="true"
-            id="inizio-label"
           >
-            Inizio
+            Ora Inizio
           </label>
           <div
             class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-formControl MuiSelect-root css-sc8y68-MuiInputBase-root-MuiOutlinedInput-root-MuiSelect-root"
@@ -173,7 +143,6 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
             <div
               aria-expanded="false"
               aria-haspopup="listbox"
-              aria-labelledby="inizio-label"
               class="MuiSelect-select MuiSelect-outlined MuiInputBase-input MuiOutlinedInput-input css-18jp67o-MuiNativeSelect-root-MuiSelect-select-MuiInputBase-input-MuiOutlinedInput-input"
               role="combobox"
               tabindex="0"
@@ -206,7 +175,7 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
                 class="css-ex8a5f-MuiNotchedOutlined-root"
               >
                 <span>
-                  Inizio
+                  Ora Inizio
                 </span>
               </legend>
             </fieldset>
@@ -220,9 +189,8 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
           <label
             class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined MuiFormLabel-colorPrimary MuiFormLabel-filled MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined css-113d811-MuiFormLabel-root-MuiInputLabel-root"
             data-shrink="true"
-            id="fine-label"
           >
-            Fine
+            Ora Fine
           </label>
           <div
             class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-formControl MuiSelect-root css-sc8y68-MuiInputBase-root-MuiOutlinedInput-root-MuiSelect-root"
@@ -230,7 +198,6 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
             <div
               aria-expanded="false"
               aria-haspopup="listbox"
-              aria-labelledby="fine-label"
               class="MuiSelect-select MuiSelect-outlined MuiInputBase-input MuiOutlinedInput-input css-18jp67o-MuiNativeSelect-root-MuiSelect-select-MuiInputBase-input-MuiOutlinedInput-input"
               role="combobox"
               tabindex="0"
@@ -263,7 +230,7 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
                 class="css-ex8a5f-MuiNotchedOutlined-root"
               >
                 <span>
-                  Fine
+                  Ora Fine
                 </span>
               </legend>
             </fieldset>
@@ -277,7 +244,6 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
           <label
             class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined MuiFormLabel-colorPrimary MuiFormLabel-filled MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-outlined css-113d811-MuiFormLabel-root-MuiInputLabel-root"
             data-shrink="true"
-            id="pausa-label"
           >
             Pausa (min)
           </label>
@@ -287,7 +253,6 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
             <div
               aria-expanded="false"
               aria-haspopup="listbox"
-              aria-labelledby="pausa-label"
               class="MuiSelect-select MuiSelect-outlined MuiInputBase-input MuiOutlinedInput-input css-18jp67o-MuiNativeSelect-root-MuiSelect-select-MuiInputBase-input-MuiOutlinedInput-input"
               role="combobox"
               tabindex="0"
@@ -324,34 +289,6 @@ exports[`OreLavoroSingoloTecnico > dovrebbe corrispondere allo snapshot in modal
                 </span>
               </legend>
             </fieldset>
-          </div>
-        </div>
-      </div>
-      <div
-        size="12"
-      >
-        <div
-          class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
-        >
-          <label
-            class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-filled MuiFormLabel-colorPrimary MuiFormLabel-filled MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-filled css-eok8s2-MuiFormLabel-root-MuiInputLabel-root"
-            data-shrink="true"
-            for="_r_3_"
-            id="_r_3_-label"
-          >
-            Totale Ore Calcolato
-          </label>
-          <div
-            class="MuiInputBase-root MuiFilledInput-root MuiFilledInput-underline MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl Mui-readOnly MuiInputBase-readOnly css-wa591i-MuiInputBase-root-MuiFilledInput-root"
-          >
-            <input
-              aria-invalid="false"
-              class="MuiInputBase-input MuiFilledInput-input Mui-readOnly MuiInputBase-readOnly css-voecp4-MuiInputBase-input-MuiFilledInput-input"
-              id="_r_3_"
-              readonly=""
-              type="text"
-              value="8.00"
-            />
           </div>
         </div>
       </div>

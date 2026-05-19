@@ -1,8 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { useAuth } from '@/hooks/useAuth';
 import type { 
     Rapportino, 
     Tecnico, 
@@ -18,18 +17,7 @@ import type {
     Documento
 } from '@/models/definitions';
 
-// Definizione del tipo Notification per coerenza
-export interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  recipientId: string;
-  status: 'read' | 'unread';
-  createdAt: Timestamp;
-  readAt?: Timestamp;
-}
-
-// Interfaccia del contesto unificata
+// --- INTERFACCIA CONTESTO EPURATA ---
 export interface IGlobalDataContext {
   // Dati Master
   rapportini: Rapportino[];
@@ -52,14 +40,6 @@ export interface IGlobalDataContext {
   
   // Stato di caricamento
   loading: boolean;
-  
-  // Dati Notifiche
-  notifications: Notification[];
-  unreadNotificationsCount: number;
-
-  // Funzioni
-  markNotificationAsRead: (id: string) => Promise<void>;
-  deleteNotification: (id: string) => Promise<void>;
 }
 
 const GlobalDataContext = createContext<IGlobalDataContext | undefined>(undefined);
@@ -73,7 +53,7 @@ export const useGlobalData = () => {
 };
 
 export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Stato per i dati master
+  // Stato per i dati master (nessuna notifica qui)
   const [rapportini, setRapportini] = useState<Rapportino[]>([]);
   const [tecnici, setTecnici] = useState<Tecnico[]>([]);
   const [ditte, setDitte] = useState<Ditta[]>([]);
@@ -88,12 +68,7 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [documenti, setDocumenti] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Stato per le notifiche
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-
-  const { user } = useAuth();
-
-  // Effetto per il caricamento dei dati master
+  // Effetto per il caricamento dei dati master (nessuna notifica qui)
   useEffect(() => {
     const collections = [
       { name: 'rapportini', setter: setRapportini },
@@ -130,63 +105,16 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return () => unsubscribes.forEach(unsub => unsub());
   }, []);
 
-  // Effetto per le notifiche, dipende dall'utente loggato
-  useEffect(() => {
-    if (!user?.uid) {
-      setNotifications([]);
-      return;
-    }
-
-    // *** NUOVA LOGICA: Carica TUTTE le notifiche per l'utente ***
-    const q = query(collection(db, 'notifications'), where('recipientId', '==', user.uid));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const userNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Notification[];
-      setNotifications(userNotifications);
-    }, (error) => {
-      console.error("Errore nel fetch delle notifiche:", error);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
   // Mappe memoizzate per performance
   const ditteMap = useMemo(() => new Map(ditte.map(d => [d.id, d])), [ditte]);
   const categorieMap = useMemo(() => new Map(categorie.map(c => [c.id, c])), [categorie]);
   const tecniciMap = useMemo(() => new Map(tecnici.map(t => [t.id, t])), [tecnici]);
 
-  // Calcolo memoizzato delle notifiche non lette
-  const unreadNotificationsCount = useMemo(() => {
-    return notifications.filter(n => n.status === 'unread').length;
-  }, [notifications]);
-
-  // Funzione per segnare come letta
-  const markNotificationAsRead = useCallback(async (id: string) => {
-    const notificationRef = doc(db, 'notifications', id);
-    await updateDoc(notificationRef, {
-      status: 'read',
-      readAt: Timestamp.now(),
-    });
-  }, []);
-
-  // *** NUOVA LOGICA: Funzione per eliminare una notifica ***
-  const deleteNotification = useCallback(async (id: string) => {
-    const notificationRef = doc(db, 'notifications', id);
-    await deleteDoc(notificationRef);
-  }, []);
-
-  // Valore completo del contesto
+  // Valore del contesto EPURATO
   const value: IGlobalDataContext = {
     rapportini, tecnici, ditte, categorie, veicoli, clienti, tipiGiornata, navi, luoghi, webAppUsers, qualifiche, documenti,
     ditteMap, categorieMap, tecniciMap,
     loading,
-    notifications,
-    unreadNotificationsCount,
-    markNotificationAsRead,
-    deleteNotification, // Esponiamo la nuova funzione
   };
 
   return <GlobalDataContext.Provider value={value}>{children}</GlobalDataContext.Provider>;

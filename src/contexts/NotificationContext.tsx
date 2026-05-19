@@ -1,112 +1,155 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import {
   collection,
   query,
-  where,
   onSnapshot,
   doc,
   updateDoc,
-  or
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { Notifica } from '@/models/definitions';
 
+interface Target {
+  type: 'user' | 'category' | 'all';
+  id?: string;
+  name?: string;
+}
+
+interface FirebaseNotification {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: Timestamp;
+  target?: Target;
+  status: 'read' | 'unread';
+  readAt?: Timestamp | null;
+  readBy?: { uid: string; name: string } | null;
+}
+
 interface NotificationContextType {
   notifications: Notifica[];
   unreadCount: number;
   markAsRead: (notificationId: string) => Promise<void>;
-  hideNotification: (notificationId: string) => Promise<void>;
+  hideNotification: (notificationId: string) => void;
   loading: boolean;
   error: string | null;
-  refetch: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+const getHiddenIdsFromStorage = (userId: string): string[] => {
+  const stored = localStorage.getItem(`hidden_notifications_${userId}`);
+  return stored ? JSON.parse(stored) : [];
+};
+
+const setHiddenIdsInStorage = (userId: string, ids: string[]) => {
+  localStorage.setItem(`hidden_notifications_${userId}`, JSON.stringify(ids));
+};
+
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
-  const [notifications, setNotifications] = useState<Notifica[]>([]);
+  const [allNotifications, setAllNotifications] = useState<FirebaseNotification[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [fetchTrigger, setFetchTrigger] = useState(0);
 
-  const refetch = useCallback(() => setFetchTrigger(prev => prev + 1), []);
+  // --- DIPENDENZE PRIMITIVE E STABILI PER EVITARE LOOP ---
+  const userUid = user?.uid;
+  const userCategoryId = userProfile?.categoria?.id;
 
   useEffect(() => {
-    if (authLoading || !user || !userProfile?.categoria?.id) {
+    if (userUid) {
+      setHiddenIds(getHiddenIdsFromStorage(userUid));
+    }
+  }, [userUid]);
+
+  useEffect(() => {
+    // L'effetto si attiva solo se l'utente è caricato e autenticato.
+    if (authLoading || !userUid) {
       setLoading(false);
-      setNotifications([]);
+      setAllNotifications([]);
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const collectionRef = collection(db, 'notificheRichieste');
+    const collectionRef = collection(db, 'notifications');
+    const q = query(collectionRef);
 
-    const notificheQuery = query(collectionRef, 
-      or(
-        where('to_ids', 'array-contains', user.uid),
-        where('to_category_ids', 'array-contains', userProfile.categoria.id),
-        where('target', '==', 'all')
-      )
-    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      try {
+        const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FirebaseNotification));
 
-    const unsubscribe = onSnapshot(notificheQuery, (snapshot) => {
-      const fetchedNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as Notifica));
-      
-      fetchedNotifications.sort((a, b) => {
-          const timeA = a.createdAt?.toMillis() ?? 0;
-          const timeB = b.createdAt?.toMillis() ?? 0;
-          return timeB - timeA; 
-      });
+        const relevantNotifications = allDocs.filter(n => {
+            if (!n.target) return false;
+            if (n.target.type === 'all') return true;
+            if (n.target.type === 'user' && n.target.id === userUid) return true;
+            if (n.target.type === 'category' && n.target.id === userCategoryId) return true;
+            return false;
+        });
 
-      setNotifications(fetchedNotifications);
-      setLoading(false);
+        relevantNotifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+        setAllNotifications(relevantNotifications);
+
+      } catch (err: any) {
+        console.error("Errore durante l'elaborazione delle notifiche:", err);
+        setError(`Errore interno nell'elaborazione notifiche: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
     }, (err) => {
       console.error("Errore nel listener delle notifiche:", err);
-      setError("Impossibile caricare il centro notifiche.");
+      setError("Errore di connessione al centro notifiche.");
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [user, userProfile, authLoading, fetchTrigger]);
-
-  const visibleNotifications = useMemo(() => {
-    if (!user) return [];
-    return notifications.filter(n => !n.hiddenFor || !n.hiddenFor[user.uid]);
-  }, [notifications, user]);
-
-  const unreadCount = useMemo(() => {
-    if (!user) return 0;
-    return visibleNotifications.filter(n => !n.readBy || !n.readBy[user.uid]).length;
-  }, [visibleNotifications, user]);
+  // --- FIX DEFINITIVO 429: L'effetto ora dipende solo da stringhe stabili. ---
+  }, [userUid, userCategoryId, authLoading]);
 
   const markAsRead = async (notificationId: string) => {
-    if (!user) return;
-    const notificationRef = doc(db, 'notificheRichieste', notificationId);
+    if (!user || !userProfile) return;
+    const notificationRef = doc(db, "notifications", notificationId);
     try {
-      await updateDoc(notificationRef, { [`readBy.${user.uid}`]: true });
+      await updateDoc(notificationRef, {
+        status: "read",
+        readAt: serverTimestamp(),
+        readBy: { uid: user.uid, name: userProfile.nome || "Nome non disponibile" }
+      });
     } catch (err) {
-      console.error("Errore durante l'aggiornamento della notifica:", err);
+      console.error("Errore nell'invio della conferma di lettura:", err);
     }
   };
 
-  const hideNotification = async (notificationId: string) => {
-    if (!user) return;
-    try {
-      const notificationRef = doc(db, 'notificheRichieste', notificationId);
-      await updateDoc(notificationRef, { [`hiddenFor.${user.uid}`]: true });
-    } catch (err) {
-      console.error("Errore durante il mascheramento della notifica:", err);
-    }
+  const hideNotification = (notificationId: string) => {
+    if (!userUid) return;
+    const newHiddenIds = [...hiddenIds, notificationId];
+    setHiddenIds(newHiddenIds);
+    setHiddenIdsInStorage(userUid, newHiddenIds);
   };
 
-  const value = { notifications: visibleNotifications, unreadCount, markAsRead, hideNotification, loading, error, refetch };
+  const visibleNotifications = useMemo(() => {
+    return allNotifications
+      .filter(n => !hiddenIds.includes(n.id))
+      .map(n => ({ 
+        id: n.id,
+        title: n.title,
+        body: n.message, 
+        createdAt: n.createdAt,
+        readBy: n.readBy ? { [n.readBy.uid]: true } : {},
+      } as Notifica));
+  }, [allNotifications, hiddenIds]);
+
+  const unreadCount = useMemo(() => {
+    return allNotifications.filter(n => n.status === 'unread' && !hiddenIds.includes(n.id)).length;
+  }, [allNotifications, hiddenIds]);
+
+  const value = { notifications: visibleNotifications, unreadCount, markAsRead, hideNotification, loading, error };
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 };

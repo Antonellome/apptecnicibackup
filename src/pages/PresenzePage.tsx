@@ -94,18 +94,16 @@ const DayCell: React.FC<{ dayInfo?: DayInfo; isWeekendDay: boolean }> = ({ dayIn
 
 
 const PresenzePage: React.FC = () => {
-    const { user } = useAuth();
+    const { userProfile } = useAuth(); // ++ FIX: Usare userProfile per i dati arricchiti
     const [currentDate, setCurrentDate] = useState(new Date());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { data: masterData, loading: masterDataLoading } = useLocalData();
     const [riepiloghi, setRiepiloghi] = useState<Map<string, RiepilogoMensile>>(new Map());
 
-    // ++ FIX: Gestione sicura di masterData potenzialmente null
     const tecnici = masterData?.tecnici ?? [];
 
     const sortedTecnici = useMemo(() => {
-        // La dipendenza 'tecnici' ora è sempre un array
         return [...tecnici].sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''));
     }, [tecnici]);
 
@@ -116,8 +114,7 @@ const PresenzePage: React.FC = () => {
     }, [currentDate]);
 
     const fetchRiepiloghi = useCallback(async (tecniciToFetch: Tecnico[], date: Date) => {
-        // ++ FIX: Accesso sicuro alla proprietà isAdmin
-        if (!user?.isAdmin) {
+        if (!userProfile?.isAdmin) { // ++ FIX: Controllo su userProfile
              setLoading(false);
              return;
         }
@@ -150,7 +147,7 @@ const PresenzePage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [user]); // Rimosso user.isAdmin dalla dipendenze, basta user
+    }, [userProfile]); // ++ FIX: Dipendenza corretta
 
     useEffect(() => {
         if (tecnici.length > 0) {
@@ -162,8 +159,7 @@ const PresenzePage: React.FC = () => {
     const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
     const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
-    // ++ FIX: Accesso sicuro alla proprietà isAdmin
-    if (!user?.isAdmin) {
+    if (!userProfile?.isAdmin) { // ++ FIX: Controllo su userProfile
         return (
             <Alert severity="error" sx={{m: 3}}>
                 Accesso non autorizzato. Questa pagina è riservata agli amministratori.

@@ -1,90 +1,89 @@
 
-import React, { useState } from 'react';
-import { Box, Typography, IconButton, Collapse, Paper, Tooltip } from '@mui/material';
-import { ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Delete as DeleteIcon } from '@mui/icons-material';
-// Manteniamo la dipendenza originale se Notifica è definito lì
+import React, { useState, useMemo, useCallback } from 'react';
+import { Accordion, AccordionSummary, AccordionDetails, Typography, IconButton, Box, Chip } from '@mui/material';
+import { ExpandMore as ExpandMoreIcon, Delete as DeleteIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material';
 import { Notifica } from '@/models/definitions';
+import { useNotifications } from '@/contexts/NotificationContext';
+import { useAuth } from '@/hooks/useAuth';
+import { format, isToday, isYesterday } from 'date-fns';
+import it from 'date-fns/locale/it';
+import { useTheme } from '@mui/material/styles';
 
-// L'interfaccia props che rispecchia la struttura che ti aspetti
 interface NotificationItemProps {
-    notification: Notifica;
-    isUnread: boolean;
-    onMarkAsRead: (id: string) => void;
-    onDelete: (id: string) => void; // La nuova funzione per l'eliminazione corretta
-    formattaData: (timestamp: any) => string;
+  notification: Notifica;
 }
 
-const NotificationItem: React.FC<NotificationItemProps> = ({ notification, isUnread, onMarkAsRead, onDelete, formattaData }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-
-    // Questa logica, che ti piaceva, resta INVARIATA
-    const handleToggleExpand = () => {
-        if (isUnread) {
-            onMarkAsRead(notification.id);
-        }
-        setIsExpanded(!isExpanded);
-    };
-
-    // CORREZIONE: Ora handleDelete chiama la funzione corretta passata dal genitore
-    const handleDelete = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Preveniamo l'espansione, come prima
-        onDelete(notification.id); // Usiamo onDelete invece del vecchio onHide
-    };
-
-    const formattedDate = formattaData(notification.createdAt);
-
-    // Il JSX, lo stile, il layout e il comportamento rimangono ESATTAMENTE come li hai progettati
-    return (
-        <Paper 
-            elevation={2} 
-            sx={{
-                p: 2,
-                mb: 2,
-                borderRadius: 2,
-                borderLeft: 5,
-                borderColor: isUnread ? 'primary.main' : 'transparent',
-                bgcolor: isExpanded ? 'action.hover' : 'background.paper',
-                transition: 'background-color 0.3s, border-color 0.3s',
-                // Aggiungiamo solo una leggera opacità per distinguere i messaggi letti, come richiesto implicitamente
-                opacity: isUnread ? 1 : 0.85 
-            }}
-        >
-            <Box display="flex" alignItems="center" onClick={handleToggleExpand} sx={{ cursor: 'pointer' }}>
-                <Box flexGrow={1}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: isUnread ? 700 : 500 }}>
-                        {notification.title}
-                    </Typography>
-                    {!isExpanded && (
-                        <Typography variant="caption" color="text.secondary">
-                            {formattedDate}
-                        </Typography>
-                    )}
-                </Box>
-
-                <IconButton size="small">
-                    {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                </IconButton>
-            </Box>
-
-            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <Box sx={{ pt: 2, mt: 1, borderTop: 1, borderColor: 'divider' }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                        {notification.body}
-                    </Typography>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
-                        <Typography variant="caption" color="text.secondary">
-                            {formattedDate}
-                        </Typography>
-                        <Tooltip title="Elimina notifica">
-                            <IconButton size="small" onClick={handleDelete}>
-                                <DeleteIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                </Box>
-            </Collapse>
-        </Paper>
-    );
+const formatDate = (timestamp: any) => {
+  if (!timestamp || !timestamp.toDate) return '';
+  const date = timestamp.toDate();
+  if (isToday(date)) return `Oggi alle ${format(date, 'HH:mm', { locale: it })}`;
+  if (isYesterday(date)) return `Ieri alle ${format(date, 'HH:mm', { locale: it })}`;
+  return format(date, 'd MMMM yyyy HH:mm', { locale: it });
 };
 
-export default NotificationItem;
+export const NotificationItem: React.FC<NotificationItemProps> = ({ notification }) => {
+  const { markAsRead, hideNotification } = useNotifications();
+  const { user } = useAuth();
+  const [expanded, setExpanded] = useState(false);
+  const theme = useTheme();
+
+  const isUnread = useMemo(() => {
+    if (!user) return false;
+    return !notification.readBy || !notification.readBy[user.uid];
+  }, [notification, user]);
+
+  const handleAccordionChange = useCallback((event: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpanded(isExpanded);
+    if (isExpanded && isUnread) {
+      markAsRead(notification.id);
+    }
+  }, [isUnread, notification.id, markAsRead]);
+
+  const handleHide = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    hideNotification(notification.id);
+  };
+
+  const notificationDate = formatDate(notification.createdAt);
+
+  return (
+    <Accordion 
+      expanded={expanded} 
+      onChange={handleAccordionChange}
+      sx={{
+        borderLeft: `4px solid ${isUnread ? theme.palette.primary.main : 'white'}`,
+        backgroundColor: isUnread ? 'rgba(0, 123, 255, 0.05)' : 'transparent',
+        boxShadow: 'none',
+        '&:before': {
+          display: 'none',
+        },
+        mb: 1,
+      }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: isUnread ? 'bold' : 'normal' }}>
+            {notification.title}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {notificationDate}
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', ml: 2 }}>
+          {notification.priority === 'high' && <Chip label="Urgente" color="error" size="small" />}
+          {notification.priority === 'medium' && <Chip label="Importante" color="warning" size="small" />}
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+          {notification.body}
+        </Typography>
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <IconButton onClick={handleHide} size="small" title="Nascondi notifica">
+            <VisibilityOffIcon />
+          </IconButton>
+        </Box>
+      </AccordionDetails>
+    </Accordion>
+  );
+};

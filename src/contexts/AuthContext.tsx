@@ -1,12 +1,12 @@
 import { useState, useEffect, createContext, ReactNode, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, db } from '@/firebase'; // CORREZIONE: Puntato all'istanza DB e Auth corretta
+import { auth, db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/models/definitions';
 
 export interface AuthContextType {
-  user: User | null;
-  userProfile: UserProfile | null;
+  user: User | null; // Firebase Auth User
+  userProfile: UserProfile | null; // Firestore User Profile
   loading: boolean;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -31,42 +31,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
               if (tecnicoDocSnap.exists()) {
                   const tecnicoData = tecnicoDocSnap.data();
-                  const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
+                  
+                  // ++ FIX: Legge correttamente isAdmin dal documento
+                  const isAdmin = tecnicoData.isAdmin || false;
 
+                  const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
                   let categoriaObj: { id: string; nome: string; } | undefined = undefined;
 
                   if (id_categoria) {
-                      let nomeCategoriaStr = '';
                       try {
                           const catDocRef = doc(db, 'categorie', id_categoria);
                           const catDoc = await getDoc(catDocRef);
                           if (catDoc.exists()) {
-                              nomeCategoriaStr = catDoc.data().nome || '';
+                              categoriaObj = { id: id_categoria, nome: catDoc.data().nome || '' };
                           }
                       } catch (err) {
                           console.error("[Auth] Errore nel risolvere la categoria:", err);
                       }
-                      categoriaObj = { id: id_categoria, nome: nomeCategoriaStr };
                   }
 
                   const profile: UserProfile = {
-                      id: currentUser.uid, // Aggiunto per conformità con BaseEntity
+                      id: currentUser.uid,
                       uid: currentUser.uid,
                       email: currentUser.email || '',
                       tecnicoId: tecnicoDocSnap.id,
                       nome: tecnicoData.nome || '',
                       cognome: tecnicoData.cognome || '',
                       attivo: tecnicoData.attivo || false,
+                      isAdmin: isAdmin, // ++ FIX: Imposta isAdmin nel profilo
                       categoria: categoriaObj,
                   };
                   setUserProfile(profile);
 
               } else {
-                  console.error(`[Auth] Documento non trovato per UID: ${currentUser.uid}.`);
-                  setUserProfile(null);
+                  console.warn(`[Auth] Profilo tecnico non trovato per UID: ${currentUser.uid}. L'utente non avrà autorizzazioni complete.`);
+                  setUserProfile(null); // No profile found
               }
           } catch (error) {
-              console.error("[Auth] Errore critico caricamento profilo:", error);
+              console.error("[Auth] Errore critico nel caricamento del profilo utente:", error);
               setUserProfile(null);
           }
       } else {
@@ -88,8 +90,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const value = useMemo(() => ({
-    user,
-    userProfile,
+    user, // Raw firebase user
+    userProfile, // Enriched firestore profile
     loading,
     logout,
     resetPassword,

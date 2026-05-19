@@ -97,7 +97,7 @@ export class LocalDatabase extends Dexie {
                     await this.impostazioni.put({ ...masterData.impostazioni, id: 'default' });
                 }
             });
-            console.log("Local database populated successfully with master data.");
+            // console.log("Local database populated successfully with master data.");
         } catch (error) {
             console.error("Failed to populate local database:", error);
         }

@@ -21,13 +21,12 @@ import { it } from 'date-fns/locale';
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { useLocalData } from '@/hooks/useLocalData'; // CORREZIONE DEFINITIVA
+import { useLocalData } from '@/hooks/useLocalData';
 import { Rapportino, EnrichedRapportino } from '@/models/definitions';
 
 const ReportListPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  // CORREZIONE: Sostituisco il vecchio hook `useMasterData` con `useLocalData`
+  const { userProfile } = useAuth(); // ++ FIX: Usare userProfile
   const { data: masterData, loading: masterDataLoading } = useLocalData();
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -36,8 +35,7 @@ const ReportListPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user || masterDataLoading) {
-        // Se i dati master non sono ancora caricati, attendiamo.
+    if (!userProfile || masterDataLoading) { // ++ FIX: Controllo su userProfile
         if(!masterDataLoading) setLoading(false);
         return;
     }
@@ -53,10 +51,9 @@ const ReportListPage = () => {
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
 
-    // CORREZIONE: La query ora filtra per `tecnicoId` (l'autore del report) e non più per `presenze`
     const q = query(
       collection(db, "rapportini"), 
-      where("tecnicoId", "==", user.uid),
+      where("tecnicoId", "==", userProfile.uid), // ++ FIX: Usare userProfile.uid
       where("data", ">=", Timestamp.fromDate(start)),
       where("data", "<=", Timestamp.fromDate(end)),
       orderBy("data", "desc")
@@ -81,13 +78,13 @@ const ReportListPage = () => {
             const previousMonth = startOfMonth(subMonths(new Date(), 1));
 
             let isEditable = false;
-            if (user.isAdmin) {
-                isEditable = true; // Gli admin possono modificare tutto, sempre.
+            if (userProfile.isAdmin) { // ++ FIX: Usare userProfile.isAdmin
+                isEditable = true;
             } else {
                 if (isSameMonth(reportMonth, currentActiveMonth)) {
                     isEditable = true;
                 } else if (isSameMonth(reportMonth, previousMonth) && today.getDate() <= 10) {
-                    isEditable = true; // Periodo di grazia
+                    isEditable = true;
                 }
             }
 
@@ -115,7 +112,7 @@ const ReportListPage = () => {
     });
 
     return () => unsubscribe();
-  }, [user, masterDataLoading, masterData, currentMonth]);
+  }, [userProfile, masterDataLoading, masterData, currentMonth]); // ++ FIX: Dipendenza corretta
   
   const handleMonthChange = (increment: number) => {
       setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + increment, 1));
@@ -184,7 +181,7 @@ const ReportListPage = () => {
                             </Typography>
                         }
                         secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })} - Ore: ${(() => {
-                            const userOreDetail = (report.dettaglioOreTecnici || []).find(d => d.tecnicoId === user.uid);
+                            const userOreDetail = (report.dettaglioOreTecnici || []).find(d => d.tecnicoId === userProfile.uid); // ++ FIX: Usare userProfile.uid
                             return userOreDetail ? (userOreDetail.ore || 0).toFixed(2) : 'N/A';
                         })()}`}
                       />

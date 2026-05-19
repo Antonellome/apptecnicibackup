@@ -27,12 +27,15 @@ Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono e
 
 ## Log Modifiche
 
-- **2024-07-30 (Sessione di Debug Build - Fase 4):
+- **2024-07-31 (Pulizia Codice):**
+    - **`src/main.tsx` e `src/services/dataSync.ts`:** Rimosso il processo di sincronizzazione periodica (`startSyncProcess`) che veniva avviato all'apertura dell'app. Questa logica, introdotta per test, generava log continui sulla console ed è stata eliminata per pulire l'output e rimuovere codice obsoleto.
+
+- **2024-07-30 (Sessione di Debug Build - Fase 4):**
     - **`src/pages/PresenzePage.tsx`:** Risolti 3 dei 4 errori di tipo `TS2339` che erano presenti nel file. Il numero totale di errori è sceso da 47 a 44.
         - **Risolto:** L'errore `Property 'tecnici' does not exist on type 'MasterData | null'` è stato risolto garantendo che `tecnici` sia sempre un array.
         - **Parzialmente Risolto:** Due dei tre errori relativi alla proprietà `isAdmin` sono stati corretti con l'optional chaining (`user?.isAdmin`). Ne rimangono due.
 
-- **2024-07-29 (Sessione di Debug Build - Fase 2):
+- **2024-07-29 (Sessione di Debug Build - Fase 2):**
     - **`src/contexts/NotificationContext.tsx`:** Rimosso l'import `arrayUnion` da `firebase/firestore`. L'import non era più utilizzato dopo la modifica della logica per la proprietà `hiddenFor`, risolvendo un errore `TS6133` (variabile dichiarata ma mai letta).
     - **`src/db/local-db.ts`:** Rimossi 6 import di tipi (`Tecnico`, `TipoGiornata`, `Veicolo`, `Nave`, `Luogo`, `Cliente`) da `@/models/definitions`. Questi tipi erano dichiarati ma non venivano utilizzati all'interno del file, causando 6 errori `TS6133`.
 
