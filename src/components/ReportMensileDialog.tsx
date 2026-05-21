@@ -17,7 +17,7 @@ import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
 import type { EnrichedRapportino, Tecnico, TariffaLocale } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
-import { useMasterData } from '@/contexts/MasterDataProvider';
+import { useMasterData } from '@/hooks/useMasterData';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';

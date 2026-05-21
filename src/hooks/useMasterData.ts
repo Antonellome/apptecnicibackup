@@ -1,6 +1,5 @@
 import { useContext } from 'react';
-import { MasterDataContext } from '@/contexts/MasterDataProvider';
-import { MasterDataContextType } from '@/contexts/MasterDataProvider'; // Assumendo che il tipo sia esportato
+import { MasterDataContext, MasterDataContextType } from '@/contexts/MasterDataContext';
 
 export const useMasterData = (): MasterDataContextType => {
     const context = useContext(MasterDataContext);

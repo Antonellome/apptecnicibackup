@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, CircularProgress } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
@@ -20,25 +20,13 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
 
-    const isGiornataLavorativa = (tipoId: string): boolean => {
+    const isGiornataLavorativa = useCallback((tipoId: string): boolean => {
         const tipo = tipiGiornata.find(t => t.id === tipoId);
         if (!tipo || !tipo.nome) return true;
         return !['ferie', 'malattia', 'permesso', 'legge 104'].some(keyword => tipo.nome.toLowerCase().includes(keyword));
-    };
+    }, [tipiGiornata]);
 
-    useEffect(() => {
-        if (reportData) {
-            generatePdf(reportData);
-        }
-
-        return () => {
-            if (pdfUrl) {
-                URL.revokeObjectURL(pdfUrl);
-            }
-        };
-    }, [reportData]);
-
-    const generatePdf = async (data: Rapportino) => {
+    const generatePdf = useCallback(async (data: Rapportino) => {
         if (!masterData) return;
         setIsGenerating(true);
 
@@ -205,7 +193,22 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
         } finally {
             setIsGenerating(false);
         }
-    };
+    }, [masterData, tecnici, tipiGiornata, navi, luoghi, veicoli, isGiornataLavorativa]);
+
+    useEffect(() => {
+        if (reportData) {
+            const timer = setTimeout(() => {
+                generatePdf(reportData);
+            }, 0);
+            return () => clearTimeout(timer);
+        }
+
+        return () => {
+            if (pdfUrl) {
+                URL.revokeObjectURL(pdfUrl);
+            }
+        };
+    }, [reportData, generatePdf, pdfUrl]);
 
     const handleShare = async () => {
         if (!pdfFile) return;

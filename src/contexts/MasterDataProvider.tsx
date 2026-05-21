@@ -1,27 +1,11 @@
-import React, { createContext, useState, useEffect, ReactNode, useCallback, useContext } from 'react';
+import React, { useState, useEffect, ReactNode, useCallback } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 import type { TipoGiornata, Impostazioni, TariffaLocale, MasterData, Tecnico, Cliente, Veicolo, Luogo, Nave, Sede, Ditta, Categoria } from '@/models/definitions';
 import { localDB } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box } from '@mui/material';
-
-export interface MasterDataContextType {
-    masterData: MasterData | null;
-    loading: boolean;
-    error: string | null;
-    refetchData: () => Promise<void>;
-}
-
-export const MasterDataContext = createContext<MasterDataContextType | undefined>(undefined);
-
-export const useMasterData = () => {
-    const context = useContext(MasterDataContext);
-    if (context === undefined) {
-        throw new Error('useMasterData must be used within a MasterDataProvider');
-    }
-    return context;
-};
+import { MasterDataContext, MasterDataContextType } from '@/contexts/MasterDataContext';
 
 const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni'>)[] = [
     'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti', 'sedi', 'ditte', 'categorie'
@@ -123,7 +107,10 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     }, []);
 
     useEffect(() => {
-        fetchAndCacheData();
+        const timer = setTimeout(() => {
+            fetchAndCacheData();
+        }, 0);
+        return () => clearTimeout(timer);
     }, [fetchAndCacheData]);
 
     const contextValue: MasterDataContextType = { masterData, loading, error, refetchData: fetchAndCacheData };

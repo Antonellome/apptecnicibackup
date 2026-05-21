@@ -18,7 +18,7 @@ import html2canvas from 'html2canvas';
 import type { Tecnico, Nave, Luogo, EnrichedRapportino } from '@/models/definitions'; 
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
-import { useMasterData } from '@/contexts/MasterDataProvider';
+import { useMasterData } from '@/hooks/useMasterData';
 
 interface RapportinoConCalcoli extends EnrichedRapportino {
   guadagno?: number;

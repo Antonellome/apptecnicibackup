@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
@@ -7,10 +7,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { localDB, TariffaLocaleCache } from '@/db/local-db'; // ++ FIX: Import corretto
+import { localDB, TariffaLocaleCache } from '@/db/local-db';
 import { TariffaLocale } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { MasterDataContext } from '@/contexts/MasterDataProvider';
+import { useMasterData } from '@/hooks/useMasterData'; // CORREZIONE: Importa l'hook corretto
 
 const ForceUpdateButton = () => {
     const [updating, setUpdating] = useState(false);
@@ -30,7 +30,7 @@ const ForceUpdateButton = () => {
                 const keys = await caches.keys();
                 await Promise.all(keys.map(key => caches.delete(key)));
             }
-            await localDB.delete(); // Pulisce completamente il database Dexie
+            await localDB.delete();
             setTimeout(() => { window.location.reload(); }, 2000);
         } catch (error) {
             console.error("Errore durante l'aggiornamento forzato:", error);
@@ -50,9 +50,8 @@ const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
-    const masterDataContext = useContext(MasterDataContext);
+    const { loading: masterDataLoading } = useMasterData(); // CORREZIONE: Usa l'hook
 
-    // ++ FIX: Query e tabella corrette
     const impostazioniLive = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
 
     const [tariffe, setTariffe] = useState<TariffaLocale[]>([]);
@@ -60,7 +59,6 @@ const SettingsPage: React.FC = () => {
     const [isDirty, setIsDirty] = useState(false);
 
     useEffect(() => {
-        // ++ FIX: Accesso corretto ai dati
         if (impostazioniLive?.data?.tariffe) {
             const tariffeOrdinate = [...impostazioniLive.data.tariffe].sort((a,b) => a.nome.localeCompare(b.nome));
             setTariffe(tariffeOrdinate);
@@ -73,7 +71,7 @@ const SettingsPage: React.FC = () => {
         if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
             setTariffe(prev =>
                 prev.map(t =>
-                    t.id === id ? { ...t, costo: Number(valueWithDot) } : t // FIX: t.id invece di t.tipoGiornataId
+                    t.id === id ? { ...t, costo: Number(valueWithDot) } : t
                 )
             );
             setIsDirty(true);
@@ -87,7 +85,6 @@ const SettingsPage: React.FC = () => {
         }
         setIsSaving(true);
 
-        // ++ FIX: Struttura dell'oggetto corretta per il salvataggio
         const dataToSave: TariffaLocaleCache = {
             id: 'main',
             timestamp: new Date(),
@@ -130,7 +127,7 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    if (masterDataContext?.loading) { // FIX: Check sul loading del master data context
+    if (masterDataLoading) { // CORREZIONE: Usa il loading dell'hook
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
     }
 
@@ -154,7 +151,7 @@ const SettingsPage: React.FC = () => {
                                         type="text"
                                         size="small"
                                         value={tariffa.costo.toFixed(2)}
-                                        onChange={(e) => handleTariffaChange(tariffa.id, e.target.value)} // FIX: t.id invece di t.tipoGiornataId
+                                        onChange={(e) => handleTariffaChange(tariffa.id, e.target.value)}
                                         sx={{ width: '100px' }}
                                         inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
                                         disabled={isSaving}
