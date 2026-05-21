@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ReportFormPage from './ReportFormPage';
 import { BrowserRouter } from 'react-router-dom';
-import { addDoc, collection } from 'firebase/firestore'; // Import collection
+import { addDoc } from 'firebase/firestore'; // Import collection
 
 // ============== PROVIDERS & THEME SETUP (CORRECTED) ============== 
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { SnackbarProvider, useSnackbar } from '@/contexts/SnackbarContext';
+import { SnackbarProvider } from '@/contexts/SnackbarContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 
 // Helper to render components with all necessary providers
@@ -95,9 +95,9 @@ vi.mock('react-signature-canvas', () => {
     const signaturePadMock = {
         clear: vi.fn(),
         isEmpty: vi.fn().mockReturnValue(false),
-        getTrimmedCanvas: () => ({ toDataURL: (type: string) => 'data:image/png;base64,fakesignature' }),
+        getTrimmedCanvas: () => ({ toDataURL: () => 'data:image/png;base64,fakesignature' }),
     };
-    const MockSignatureCanvas = React.forwardRef((props: any, ref: any) => {
+    const MockSignatureCanvas = React.forwardRef(( ref: any) => {
         React.useImperativeHandle(ref, () => signaturePadMock);
         return <canvas data-testid="signature-canvas" />;
     });

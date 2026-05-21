@@ -23,8 +23,9 @@ export const markNotificationAsRead = async (notificationId: string): Promise<bo
   }
 
   try {
+    // Aggiunta l'asserzione 'as const' per garantire il tipo letterale corretto
     const event = {
-      type: 'NOTIFICATION_READ',
+      type: 'NOTIFICATION_READ' as const,
       payload: {
         notificationId,
         readByUserId: user.uid,

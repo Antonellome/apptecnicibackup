@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
@@ -6,8 +7,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { localDB } from '@/db/local-db';
-import { Tariffa, TariffaLocale } from '@/models/definitions';
+import { localDB, TariffaLocaleCache } from '@/db/local-db'; // ++ FIX: Import corretto
+import { TariffaLocale } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { MasterDataContext } from '@/contexts/MasterDataProvider';
 
@@ -51,15 +52,15 @@ const SettingsPage: React.FC = () => {
     const navigate = useNavigate();
     const masterDataContext = useContext(MasterDataContext);
 
+    // ++ FIX: Query e tabella corrette
     const impostazioniLive = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
 
-    const [tariffe, setTariffe] = useState<Tariffa[]>([]);
+    const [tariffe, setTariffe] = useState<TariffaLocale[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
     useEffect(() => {
-        // La fonte di verità ora sono le impostazioni caricate dal MasterDataProvider,
-        // che a sua volta legge da Dexie. Questa pagina non deve più contenere logica di fallback.
+        // ++ FIX: Accesso corretto ai dati
         if (impostazioniLive?.data?.tariffe) {
             const tariffeOrdinate = [...impostazioniLive.data.tariffe].sort((a,b) => a.nome.localeCompare(b.nome));
             setTariffe(tariffeOrdinate);
@@ -72,7 +73,7 @@ const SettingsPage: React.FC = () => {
         if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
             setTariffe(prev =>
                 prev.map(t =>
-                    t.tipoGiornataId === id ? { ...t, costo: Number(valueWithDot) } : t
+                    t.id === id ? { ...t, costo: Number(valueWithDot) } : t // FIX: t.id invece di t.tipoGiornataId
                 )
             );
             setIsDirty(true);
@@ -86,13 +87,18 @@ const SettingsPage: React.FC = () => {
         }
         setIsSaving(true);
 
-        const dataToSave = {
-            ...impostazioniLive.data,
-            tariffe: tariffe,
+        // ++ FIX: Struttura dell'oggetto corretta per il salvataggio
+        const dataToSave: TariffaLocaleCache = {
+            id: 'main',
+            timestamp: new Date(),
+            data: {
+                ...(impostazioniLive.data || {}),
+                tariffe: tariffe,
+            }
         };
 
         try {
-            await localDB.tariffe_locali.put({ id: 'main', data: dataToSave, timestamp: new Date() });
+            await localDB.tariffe_locali.put(dataToSave);
             showSnackbar('Tariffe salvate con successo in locale!', 'success');
             setIsDirty(false);
         } catch (error) {
@@ -124,7 +130,7 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    if (!masterDataContext?.masterData) {
+    if (masterDataContext?.loading) { // FIX: Check sul loading del master data context
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
     }
 
@@ -139,7 +145,7 @@ const SettingsPage: React.FC = () => {
                 </Typography>
                 <List>
                     {tariffe.map((tariffa, index) => (
-                        <React.Fragment key={tariffa.tipoGiornataId}>
+                        <React.Fragment key={tariffa.id}>
                             {index > 0 && <Divider component="li" />}
                             <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                                 <ListItemText primary={tariffa.nome} />
@@ -148,7 +154,7 @@ const SettingsPage: React.FC = () => {
                                         type="text"
                                         size="small"
                                         value={tariffa.costo.toFixed(2)}
-                                        onChange={(e) => handleTariffaChange(tariffa.tipoGiornataId, e.target.value)}
+                                        onChange={(e) => handleTariffaChange(tariffa.id, e.target.value)} // FIX: t.id invece di t.tipoGiornataId
                                         sx={{ width: '100px' }}
                                         inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
                                         disabled={isSaving}

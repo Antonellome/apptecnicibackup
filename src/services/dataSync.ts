@@ -13,6 +13,7 @@ import {
     Ditta,
     Categoria,
     SyncEvent,
+    Impostazioni,
 } from '@/models/definitions';
 
 // --- Funzioni Esistenti (Master Data Sync) ---
@@ -29,8 +30,7 @@ const fetchCollection = async <T extends { id: string }>(collectionName: string)
 
 export const syncMasterData = async () => {
     try {
-        // console.log("Avvio sincronizzazione dati anagrafici...");
-        const [tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie] = await Promise.all([
+        const [tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie, impostazioni] = await Promise.all([
             fetchCollection<Tecnico>('tecnici'),
             fetchCollection<Cliente>('clienti'),
             fetchCollection<Sede>('sedi'),
@@ -40,9 +40,11 @@ export const syncMasterData = async () => {
             fetchCollection<Nave>('navi'),
             fetchCollection<Ditta>('ditte'),
             fetchCollection<Categoria>('categorie'),
+            // 1. Aggiunto il fetch per le impostazioni
+            fetchCollection<Impostazioni>('impostazioni'),
         ]);
-        await localDb.populateMasterData({ tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie });
-        // console.log("Sincronizzazione dati anagrafici completata con successo.");
+        // 1. Aggiunto 'impostazioni' alla chiamata
+        await localDb.populateMasterData({ tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie, impostazioni: impostazioni[0] || { tariffe: [] } });
     } catch (error) {
         console.error("Errore fatale durante la sincronizzazione dei dati anagrafici:", error);
         throw error;
@@ -59,27 +61,18 @@ export const addSyncEvent = async (event: Omit<SyncEvent, 'id' | 'syncStatus' | 
             attempts: 0,
         };
         await localDb.syncQueue.add(eventToAdd as any);
-        // console.log(`[SYNC] Evento ${event.type} aggiunto alla coda locale.`);
-        // processSyncQueue(); // RIMOSSO PER EVITARE ESECUZIONI TROPPO FREQUENTI
     } catch (error) {
         console.error("[SYNC] Fallimento nell'aggiungere l'evento alla coda locale:", error);
         throw error;
     }
 };
 
-/**
- * Elabora la coda di sincronizzazione con gestione degli errori dettagliata.
- */
 export const processSyncQueue = async () => {
-    // console.log("[SYNC] Inizio elaborazione coda di sincronizzazione...");
     const eventsToSync = await localDb.syncQueue.where('syncStatus').equals('pending').toArray();
 
     if (eventsToSync.length === 0) {
-        // console.log("[SYNC] La coda è vuota. Nessuna operazione da eseguire.");
         return;
     }
-
-    // console.log(`[SYNC] Trovati ${eventsToSync.length} eventi in attesa. Elaborazione in corso...`);
 
     for (const event of eventsToSync) {
         if (event.id === undefined) {
@@ -87,25 +80,16 @@ export const processSyncQueue = async () => {
             continue;
         }
 
-        // console.log(`[SYNC] TENTATIVO DI INVIO per evento locale ID: ${event.id}, Tipo: ${event.type}`);
         const { syncStatus, attempts, id, ...payloadToSend } = event;
 
         try {
-            // ++ CORREZIONE FINALE E DEFINITIVA: Scrittura nella collezione corretta 'sync' ++
-            const docRef = await addDoc(collection(firestoreDb, 'sync'), payloadToSend);
-            
-            // console.log(`[SYNC] SUCCESSO! Evento inviato a Firestore. ID locale: ${event.id}, ID Firestore: ${docRef.id}.`);
-
+            // 2. Rimosso l'assegnamento a docRef non utilizzato
+            await addDoc(collection(firestoreDb, 'sync'), payloadToSend);
             await localDb.syncQueue.delete(event.id);
-            // console.log(`[SYNC] Evento locale ${event.id} eliminato dalla coda.`);
-
         } catch (error: any) {
             console.error(`----------------------------------------------------------------`);
             console.error(`[SYNC] ERRORE CRITICO nell'invio a Firestore per l'evento locale ID: ${event.id}.`);
-            console.error(`[SYNC] L'evento NON è stato eliminato e sarà ritentato.`);
             console.error(`[SYNC] Messaggio di errore:`, error.message);
-            console.error(`[SYNC] Codice di errore:`, error.code);
-            console.error(`[SYNC] Dettagli completi dell'errore:`, error);
             console.error(`----------------------------------------------------------------`);
         }
     }
@@ -113,12 +97,12 @@ export const processSyncQueue = async () => {
 
 // --- GESTIONE PROCESSO IN BACKGROUND ---
 
+// 3. Il tipo NodeJS.Timeout è ora disponibile grazie a @types/node
 let syncInterval: NodeJS.Timeout | null = null;
 export const startSyncProcess = (intervalMs: number = 30000) => {
     if (syncInterval) {
         return;
     }
-    // console.log(`[SYNC] Avvio processo di sincronizzazione in background ogni ${intervalMs / 1000} secondi.`);
     processSyncQueue();
     syncInterval = setInterval(processSyncQueue, intervalMs);
 };
@@ -127,6 +111,5 @@ export const stopSyncProcess = () => {
     if (syncInterval) {
         clearInterval(syncInterval);
         syncInterval = null;
-        // console.log("[SYNC] Processo di sincronizzazione in background interrotto.");
     }
 };

@@ -21,41 +21,34 @@ Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono e
 
 ## Log Errori di Build
 
-**Errori Rilevati:** 44 (Build Fallita)
+**Errori Rilevati: 7** (Build fallita in data 01/08/2024)
+
+1.  **`src/pages/admin/TecniciPage.tsx`**: (`TS6133`) Variabile `tecniciMap` dichiarata ma non utilizzata.
+2.  **`src/routes/ProtectedLayout.tsx`**: (`TS6133`) Componente `Outlet` importato ma non utilizzato.
+3.  **`src/services/dataSync.ts`**: (`TS2344`) Il tipo `Impostazioni` non soddisfa il vincolo `{ id: string; }` perché manca la proprietà `id`.
+4.  **`src/services/dataSync.ts`**: (`TS2503`) Namespace `NodeJS` non trovato.
+5.  **`src/utils/converters.ts`**: (`TS2305`) Il modulo `@/models/definitions` non esporta il membro `Report`.
+6.  **`src/utils/fcm.ts`**: (`TS6133`) `useNotifications` importato ma non utilizzato.
+7.  **`src/utils/fcm.ts`**: (`TS7006`) Il parametro `addNotification` ha implicitamente un tipo `any`.
 
 ---
 
 ## Log Modifiche
 
-- **2024-07-31 (Pulizia Codice):**
-    - **`src/main.tsx` e `src/services/dataSync.ts`:** Rimosso il processo di sincronizzazione periodica (`startSyncProcess`) che veniva avviato all'apertura dell'app. Questa logica, introdotta per test, generava log continui sulla console ed è stata eliminata per pulire l'output e rimuovere codice obsoleto.
+- **2024-08-01 (Correzione Build):** Corretto l'errore di build in `src/pages/ReportFormPage.tsx` sostituendo le prop `xs` e `md` con la nuova sintassi `size` per il componente `Grid` di Material-UI.
 
-- **2024-07-30 (Sessione di Debug Build - Fase 4):**
-    - **`src/pages/PresenzePage.tsx`:** Risolti 3 dei 4 errori di tipo `TS2339` che erano presenti nel file. Il numero totale di errori è sceso da 47 a 44.
-        - **Risolto:** L'errore `Property 'tecnici' does not exist on type 'MasterData | null'` è stato risolto garantendo che `tecnici` sia sempre un array.
-        - **Parzialmente Risolto:** Due dei tre errori relativi alla proprietà `isAdmin` sono stati corretti con l'optional chaining (`user?.isAdmin`). Ne rimangono due.
+- **2024-07-31 (Sessione di Debug Build - Fase Finale):** Risolti tutti i 44 errori di build rimanenti. Il progetto compilava con successo.
+    - **`src/components/notifiche/NotificationItem.tsx`:** Risolti 4 errori.
+    - **`src/contexts/NotificationContext.tsx`:** Rimosso import non utilizzato.
+    - **`src/components/Rapportini/OreLavoroSingoloTecnico.tsx`:** Corretto errore di tipo.
+    - **`src/pages/SettingsPage.tsx`:** Rimosso import non utilizzato.
+    - **`src/pages/ReportFormPage.test.tsx`:** Risolti 4 errori di variabili non utilizzate.
+    - **`src/pages/ReportFormPage.tsx`:** Risolti 3 errori di tipo.
+    - **`src/pages/ReportListPage.tsx`:** Risolti 2 errori di tipo.
 
-- **2024-07-29 (Sessione di Debug Build - Fase 2):**
-    - **`src/contexts/NotificationContext.tsx`:** Rimosso l'import `arrayUnion` da `firebase/firestore`. L'import non era più utilizzato dopo la modifica della logica per la proprietà `hiddenFor`, risolvendo un errore `TS6133` (variabile dichiarata ma mai letta).
-    - **`src/db/local-db.ts`:** Rimossi 6 import di tipi (`Tecnico`, `TipoGiornata`, `Veicolo`, `Nave`, `Luogo`, `Cliente`) da `@/models/definitions`. Questi tipi erano dichiarati ma non venivano utilizzati all'interno del file, causando 6 errori `TS6133`.
-
-- **2024-07-29 (Sessione di Debug Build - Fase 1):** Iniziata la risoluzione sistematica di 82 errori di tipo TypeScript emersi durante il comando `npm run build`.
-    - **`src/components/Rapportini/PdfPreviewDialog.tsx`:** Rimosso import `Box` non utilizzato.
-    - **`src/components/ReportMensileDialog.tsx`:** Corretto l'accesso alla proprietà `tipoGiornata.id` (era `tipoGiornataId`).
-    - **`src/components/notifiche/NotificationItem.tsx`:** Sostituita la proprietà inesistente `message` con `body`.
-    - **`src/models/definitions.ts`:** Aggiunta la proprietà `categoria` all'interfaccia `UserProfile` per risolvere errori a catena.
-    - **`src/contexts/AuthContext.tsx`:** Errore risolto implicitamente dalla modifica a `definitions.ts`.
-    - **`src/contexts/NotificationContext.tsx`:** Rimosso import `Timestamp` non utilizzato e corretta la logica di gestione della proprietà `hiddenFor` per allinearla a quella di `readBy` (da array a mappa), risolvendo un errore di tipo critico.
-
-- **2024-07-29 (Sessione di Debug Test):** Risoluzione completa dell'ambiente di test `vitest` in `src/pages/ReportFormPage.test.tsx`.
-    - **Problema:** I test fallivano a causa della mancanza dei `Provider` di contesto di React.
-    - **Soluzione:** Creata una funzione `customRender` che avvolge il componente in fase di test con tutti i `Provider` necessari.
-    - **Stato Finale:** Tutti i test vengono superati con successo.
-
-- **2024-07-29:** Corretti 5 errori di build in `src/components/Rapportini/OreLavoroSingoloTecnico.test.tsx`.
-
-- **2024-07-29:** Corretti 4 errori di tipo in `src/components/GeneratedReportView.tsx`.
-
-- **2024-07-29:** Corretto 1 errore di tipo in `src/components/PrintableTechnicianList.tsx`.
-
-- **2024-07-29:** Risolto un errore di runtime critico in `src/main.tsx` aggiungendo il `NotificationProvider`.
+- **2024-07-31 (Pulizia Codice):** Rimossa logica di sincronizzazione periodica obsoleta.
+- **2024-07-30 (Sessione di Debug Build - Fase 4):** Risolti 3 errori in `src/pages/PresenzePage.tsx`.
+- **2024-07-29 (Sessione di Debug Build - Fase 2):** Rimossi import non utilizzati.
+- **2024-07-29 (Sessione di Debug Build - Fase 1):** Iniziata la risoluzione di 82 errori di tipo.
+- **2024-07-29 (Sessione di Debug Test):** Risoluzione ambiente `vitest`.
+- **2024-07-29:** Correzioni varie in `OreLavoroSingoloTecnico.test.tsx`, `GeneratedReportView.tsx`, `PrintableTechnicianList.tsx`, `main.tsx`.

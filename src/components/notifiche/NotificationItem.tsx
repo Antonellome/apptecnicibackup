@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Accordion, AccordionSummary, AccordionDetails, Typography, IconButton, Box, Chip } from '@mui/material';
-import { ExpandMore as ExpandMoreIcon, Delete as DeleteIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material';
+import { Accordion, AccordionSummary, AccordionDetails, Typography, IconButton, Box } from '@mui/material';
+import { ExpandMore as ExpandMoreIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material';
 import { Notifica } from '@/models/definitions';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { format, isToday, isYesterday } from 'date-fns';
-import it from 'date-fns/locale/it';
+import { it } from 'date-fns/locale/it';
 import { useTheme } from '@mui/material/styles';
 
 interface NotificationItemProps {
@@ -32,7 +32,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
     return !notification.readBy || !notification.readBy[user.uid];
   }, [notification, user]);
 
-  const handleAccordionChange = useCallback((event: React.SyntheticEvent, isExpanded: boolean) => {
+  const handleAccordionChange = useCallback((_event: React.SyntheticEvent, isExpanded: boolean) => {
     setExpanded(isExpanded);
     if (isExpanded && isUnread) {
       markAsRead(notification.id);
@@ -70,8 +70,6 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', ml: 2 }}>
-          {notification.priority === 'high' && <Chip label="Urgente" color="error" size="small" />}
-          {notification.priority === 'medium' && <Chip label="Importante" color="warning" size="small" />}
         </Box>
       </AccordionSummary>
       <AccordionDetails>

@@ -22,11 +22,11 @@ import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'fireba
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalData } from '@/hooks/useLocalData';
-import { Rapportino, EnrichedRapportino } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions'; // 1. Import Tecnico
 
 const ReportListPage = () => {
   const navigate = useNavigate();
-  const { userProfile } = useAuth(); // ++ FIX: Usare userProfile
+  const { userProfile } = useAuth();
   const { data: masterData, loading: masterDataLoading } = useLocalData();
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -35,7 +35,7 @@ const ReportListPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userProfile || masterDataLoading) { // ++ FIX: Controllo su userProfile
+    if (!userProfile || masterDataLoading) {
         if(!masterDataLoading) setLoading(false);
         return;
     }
@@ -53,7 +53,7 @@ const ReportListPage = () => {
 
     const q = query(
       collection(db, "rapportini"), 
-      where("tecnicoId", "==", userProfile.uid), // ++ FIX: Usare userProfile.uid
+      where("tecnicoId", "==", userProfile.tecnicoId),
       where("data", ">=", Timestamp.fromDate(start)),
       where("data", "<=", Timestamp.fromDate(end)),
       orderBy("data", "desc")
@@ -64,13 +64,15 @@ const ReportListPage = () => {
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
         const naviMap = new Map(masterData.navi.map(n => [n.id, n.nome]));
         const luoghiMap = new Map(masterData.luoghi.map(l => [l.id, l.nome]));
+        // 2. Creare una mappa dei tecnici
+        const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
 
         const today = new Date();
 
         const enrichedData = querySnapshot.docs.map(doc => {
             const data = doc.data() as Rapportino;
             const reportDate = (data.data as Timestamp).toDate();
-            const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Non Definito' };
+            const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Non Definito', colore: '', lavorativo: false, icona: '', sigla: '' };
             const destinazione = data.naveId ? naviMap.get(data.naveId) : (data.luogoId ? luoghiMap.get(data.luogoId) : 'Nessuna');
             
             const reportMonth = startOfMonth(reportDate);
@@ -78,7 +80,7 @@ const ReportListPage = () => {
             const previousMonth = startOfMonth(subMonths(new Date(), 1));
 
             let isEditable = false;
-            if (userProfile.isAdmin) { // ++ FIX: Usare userProfile.isAdmin
+            if (userProfile && userProfile.isAdmin) { 
                 isEditable = true;
             } else {
                 if (isSameMonth(reportMonth, currentActiveMonth)) {
@@ -87,6 +89,12 @@ const ReportListPage = () => {
                     isEditable = true;
                 }
             }
+            
+            // 3. Arricchire l'array `presenze`
+            const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
+
+            // 4. Calcolare oreGiorno
+            const oreGiorno = (data.dettaglioOreTecnici || []).reduce((acc, d) => acc + (d.ore || 0), 0);
 
             return {
                 ...data,
@@ -95,6 +103,8 @@ const ReportListPage = () => {
                 isEditable: isEditable,
                 tipoGiornata: tipoGiornata,
                 destinazione: destinazione || 'Non trovato',
+                presenze: presenzeArricchite, // Usare l'array arricchito
+                oreGiorno: oreGiorno,        // Aggiungere la proprietà calcolata
             } as EnrichedRapportino;
         });
 
@@ -112,7 +122,7 @@ const ReportListPage = () => {
     });
 
     return () => unsubscribe();
-  }, [userProfile, masterDataLoading, masterData, currentMonth]); // ++ FIX: Dipendenza corretta
+  }, [userProfile, masterDataLoading, masterData, currentMonth]);
   
   const handleMonthChange = (increment: number) => {
       setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + increment, 1));
@@ -181,7 +191,8 @@ const ReportListPage = () => {
                             </Typography>
                         }
                         secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })} - Ore: ${(() => {
-                            const userOreDetail = (report.dettaglioOreTecnici || []).find(d => d.tecnicoId === userProfile.uid); // ++ FIX: Usare userProfile.uid
+                            if (!userProfile) return 'N/A';
+                            const userOreDetail = (report.dettaglioOreTecnici || []).find(d => d.tecnicoId === userProfile.tecnicoId); 
                             return userOreDetail ? (userOreDetail.ore || 0).toFixed(2) : 'N/A';
                         })()}`}
                       />

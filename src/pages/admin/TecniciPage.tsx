@@ -17,14 +17,22 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { EnrichedRapportino, Rapportino, Tecnico } from '@/models/definitions';
 import ReportMensileDialog from '@/components/ReportMensileDialog';
 import { useSnackbar } from '@/contexts/SnackbarContext';
-import { useMasterData } from '@/hooks/useMasterData'; // SOSTITUITO
+import { useMasterData } from '@/hooks/useMasterData';
 import DownloadIcon from '@mui/icons-material/Download';
-import { useAuth } from '@/hooks/useAuth';
+
+// ++ FIX: Funzione helper per calcolare le ore
+const calculateOreLavoro = (report: Rapportino): number => {
+    if (report.dettaglioOreTecnici && report.dettaglioOreTecnici.length > 0) {
+        // Somma le ore di tutti i tecnici, se disponibili
+        return report.dettaglioOreTecnici.reduce((total, d) => total + (d.ore || 0), 0);
+    }
+    // Fallback per vecchi rapportini o in caso di dati incompleti
+    return report.oreLavoro || 8; 
+};
 
 const TecniciPage: React.FC = () => {
     const { showSnackbar } = useSnackbar();
-    const { user } = useAuth(); // Aggiunto per recuperare le tariffe
-    const { masterData, loading: masterLoading, error: masterError } = useMasterData(); // NUOVA FONTE DATI
+    const { masterData, loading: masterLoading, error: masterError } = useMasterData();
 
     const [rapportini, setRapportini] = useState<EnrichedRapportino[]>([]);
     const [loading, setLoading] = useState(false);
@@ -57,16 +65,19 @@ const TecniciPage: React.FC = () => {
                 const tipiGiornataMap = new Map(masterData.tipiGiornata.map(doc => [doc.id, doc]));
                 const tecniciMap = new Map(masterData.tecnici.map(doc => [doc.id, doc]));
 
+                // ++ FIX: Aggiunto oreGiorno e corretto il casting
                 const rapportiniData = querySnapshot.docs.map(doc => {
                     const report = { ...doc.data() as Rapportino, id: doc.id };
+                    const oreGiorno = calculateOreLavoro(report);
                     return {
                         ...report,
                         data: (report.data as Timestamp).toDate(),
-                        tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId) || { id: 'non-definito', nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help_outline' },
+                        tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId) || { id: 'non-definito', nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help_outline', sigla: 'ND' },
                         presenze: report.presenze?.map(id => tecniciMap.get(id)).filter(Boolean) as Tecnico[],
                         tecnicoScrivente: tecniciMap.get(report.tecnicoId),
-                    };
-                }) as EnrichedRapportino[];
+                        oreGiorno: oreGiorno, // Aggiunto campo mancante
+                    } as EnrichedRapportino;
+                });
 
                 setRapportini(rapportiniData);
             } catch (error) {
@@ -98,7 +109,8 @@ const TecniciPage: React.FC = () => {
         return rapportini.map(r => ({
             ...r,
             id: r.id!,
-            tecnicoNome: tecniciMap.get(r.tecnicoId)?.nomeCompleto || 'N/A',
+            // ++ FIX: Calcolo dinamico del nome completo
+            tecnicoNome: r.tecnicoScrivente ? `${r.tecnicoScrivente.cognome} ${r.tecnicoScrivente.nome}` : 'N/A',
             tipoGiornataNome: r.tipoGiornata.nome,
             dataFormatted: format(r.data, 'dd/MM/yyyy'),
         }));
@@ -108,17 +120,13 @@ const TecniciPage: React.FC = () => {
         { field: 'dataFormatted', headerName: 'Data', width: 120 },
         { field: 'tecnicoNome', headerName: 'Tecnico Scrivente', flex: 1, minWidth: 150 },
         { field: 'tipoGiornataNome', headerName: 'Tipo Giornata', flex: 1, minWidth: 150 },
-        { field: 'oreLavoro', headerName: 'Ore', width: 80, type: 'number' },
+        { field: 'oreGiorno', headerName: 'Ore', width: 80, type: 'number' }, // ++ FIX: Usare oreGiorno
         { field: 'descrizioneBreve', headerName: 'Descrizione', flex: 2, minWidth: 250 },
     ];
     
-    const tariffe = useMemo(() => {
-        const savedTariffeJSON = user ? localStorage.getItem(`tariffe_${user.uid}`) : null;
-        return savedTariffeJSON ? JSON.parse(savedTariffeJSON) : {};
-    }, [user]);
-
     if (masterLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
-    if (masterError) return <Alert severity="error">{masterError.message || "Errore caricamento dati master"}</Alert>;
+    // ++ FIX: Accesso corretto all'errore
+    if (masterError) return <Alert severity="error">{masterError}</Alert>;
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
@@ -130,7 +138,8 @@ const TecniciPage: React.FC = () => {
                             <InputLabel>Tecnico</InputLabel>
                             <Select value={selectedTecnicoId} label="Tecnico" onChange={handleTecnicoChange}>
                                 <MenuItem value="all">Tutti i Tecnici</MenuItem>
-                                {masterData?.tecnici.map(t => <MenuItem key={t.id} value={t.id}>{t.nomeCompleto}</MenuItem>)}
+                                {/* ++ FIX: Calcolo dinamico del nome completo */}
+                                {masterData?.tecnici.sort((a, b) => a.cognome.localeCompare(b.cognome)).map(t => <MenuItem key={t.id} value={t.id}>{`${t.cognome} ${t.nome}`}</MenuItem>)}
                             </Select>
                         </FormControl>
                         <DatePicker label="Mese" value={mese} onChange={(date) => setMese(date || new Date())} views={['month', 'year']} />
@@ -162,7 +171,7 @@ const TecniciPage: React.FC = () => {
                         onClose={() => setDialogOpen(false)}
                         reports={rapportini.filter(r => r.presenze.some(p => p.id === selectedTecnicoId))}
                         currentMonth={mese}
-                        tariffe={tariffe}
+                        // ++ FIX: rimossa la prop non necessaria
                     />
                 )}
             </Box>

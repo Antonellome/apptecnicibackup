@@ -98,7 +98,8 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
             content: 'Orari',
             styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' }
         }]],
-        body: rapportino.dettaglioOreTecnici.map(dett => {
+        // 1. Aggiunto fallback a array vuoto per evitare errori
+        body: (rapportino.dettaglioOreTecnici || []).map(dett => {
             const tecnico = masterData.tecnici.find(t => t.id === dett.tecnicoId);
             const nomeTecnico = tecnico ? `${tecnico.cognome} ${tecnico.nome}` : 'Sconosciuto';
             const orario = (dett.isManual || !dett.oraInizio || !dett.oraFine) 
@@ -108,7 +109,10 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         }),
         theme: 'grid',
         didDrawPage: (data) => {
-            cursorY = data.cursor.y;
+            // 2. Aggiunto controllo per data.cursor
+            if (data.cursor) {
+                cursorY = data.cursor.y;
+            }
         }
     });
     cursorY = (doc as any).lastAutoTable.finalY + 5;
@@ -116,7 +120,8 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     // --- 5. TERZO SEPARATORE E DETTAGLI LAVORO ---
     cursorY = addSeparatorLine(cursorY) + 5;
 
-    const addWorkDetail = (label: string, content: string) => {
+    // 3. Modificato addWorkDetail per accettare string | undefined
+    const addWorkDetail = (label: string, content: string | undefined) => {
         if (cursorY > 250) { doc.addPage(); cursorY = margin; }
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
@@ -127,6 +132,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(COLOR_BLACK);
+        // Fornisce 'N/D' come fallback se il contenuto è undefined
         const lines = doc.splitTextToSize(content || 'N/D', contentWidth);
         doc.text(lines, margin, cursorY);
         cursorY += (lines.length * 4) + 5;

@@ -88,11 +88,11 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                              <FormControl fullWidth disabled={isReadOnly}>
                                 <InputLabel>Pausa (min)</InputLabel>
                                 <Select
-                                    value={datiOre.pausa ?? ''}
+                                    value={(datiOre.pausa ?? '').toString()}
                                     onChange={e => handleGenericChange('pausa', parseInt(e.target.value as string, 10))}
                                     label="Pausa (min)"
                                 >
-                                    {PAUSA_OPTIONS.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+                                    {PAUSA_OPTIONS.map(p => <MenuItem key={p} value={p.toString()}>{p}</MenuItem>)}
                                 </Select>
                             </FormControl>
                         </Grid>

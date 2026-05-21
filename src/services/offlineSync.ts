@@ -1,5 +1,5 @@
 import { db, RapportinoInSospeso } from '@/db/db';
-import { collection, doc, addDoc, updateDoc, Timestamp, runTransaction } from 'firebase/firestore';
+import { collection, doc, addDoc, Timestamp, runTransaction } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
 import { shareOrDownload } from './shareService';
 

@@ -20,8 +20,8 @@ import { useLocalData } from '@/hooks/useLocalData';
 import { db as firestoreDb } from '@/firebase';
 import { db } from '@/db/db';
 import { aggiungiAllaCoda } from '@/services/offlineSync';
-import { doc, getDoc, addDoc, updateDoc, collection, Timestamp, runTransaction } from 'firebase/firestore';
-import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData } from '@/models/definitions'; // ++ FIX: Import MasterData
+import { doc, getDoc, addDoc, collection, Timestamp, runTransaction } from 'firebase/firestore';
+import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData } from '@/models/definitions'; 
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
 import SignatureDialog from '@/components/form/SignatureDialog';
@@ -92,13 +92,13 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 const ReportFormPage: React.FC = () => {
     const { mode } = useTheme();
     const navigate = useNavigate();
-    const { userProfile } = useAuth(); // ++ FIX: Usare userProfile
+    const { userProfile } = useAuth();
     const { reportId } = useParams<{ reportId: string }>();
     const { data: masterData, loading: collectionsLoading } = useLocalData();
     const { tipiGiornata = [], tecnici = [], veicoli = [], navi = [], luoghi = [] } = masterData || {};
     const { showSnackbar } = useSnackbar();
     const isEditMode = Boolean(reportId);
-    const loggedInTecnicoId = userProfile?.uid; // ++ FIX: Usare userProfile
+    const loggedInTecnicoId = userProfile?.tecnicoId;
 
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
 
@@ -233,7 +233,7 @@ const ReportFormPage: React.FC = () => {
                         setDettaglioOre(allTecnicoDetails);
 
                         const reportDate = report.data.toDate();
-                        if (!isSameMonth(reportDate, new Date()) && !userProfile?.isAdmin) { // ++ FIX: Controllo su userProfile
+                        if (!isSameMonth(reportDate, new Date()) && !userProfile?.isAdmin) {
                             setIsReadOnly(true);
                             setLockReason("Questo rapportino è bloccato perché appartiene a un mese precedente e non può più essere modificato.");
                         }
@@ -258,7 +258,7 @@ const ReportFormPage: React.FC = () => {
         if (!collectionsLoading) {
             loadData();
         }
-    }, [reportId, isEditMode, collectionsLoading, userProfile, memoizedShowSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]); // ++ FIX: Dipendenza corretta
+    }, [reportId, isEditMode, collectionsLoading, userProfile, memoizedShowSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]);
 
     useEffect(() => {
         return () => { if (pdfUrl) { URL.revokeObjectURL(pdfUrl); } };
@@ -337,17 +337,24 @@ const ReportFormPage: React.FC = () => {
 
     const getFullReportData = (): Omit<Rapportino, 'id'> => {
         const mainTecnicoDetail = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId)!;
+        // 1. Aggiunta la generazione del nome
+        const nomeDestinazione = navi.find(n => n.id === naveId)?.nome || luoghi.find(l => l.id === luogoId)?.nome || 'Generico';
+        const nomeReport = `Rapportino del ${format(dataInizio || new Date(), 'dd/MM/yyyy')} - ${nomeDestinazione}`;
+
         return {
+            nome: nomeReport,
             data: Timestamp.fromDate(dataInizio || new Date()),
             tecnicoId: loggedInTecnicoId!,
             tipoGiornataId, isTrasferta: mainTecnicoDetail.isManual, oraInizio: mainTecnicoDetail.oraInizio,
             oraFine: mainTecnicoDetail.oraFine, pausa: mainTecnicoDetail.pausa,
             dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => rest),
-            presenze: dettaglioOre.map(d => d.tecnicoId), veicoloId: veicoloId,
-            naveId: naveId,
-            luogoId: luogoId,
+            presenze: dettaglioOre.map(d => d.tecnicoId), 
+            veicoloId: veicoloId ?? undefined,
+            naveId: naveId ?? undefined,
+            luogoId: luogoId ?? undefined,
             descrizioneBreve: descrizioneBreve || '', lavoroEseguito: lavoroEseguito || '', materialiImpiegati: materialiImpiegati || '',
-            firmaFirmatarioNome: firmaFirmatarioNome || '', firmaFirmatarioSocieta: firmaFirmatarioSocieta || '', firmaVettoriale: firmaVettoriale,
+            firmaFirmatarioNome: firmaFirmatarioNome || '', firmaFirmatarioSocieta: firmaFirmatarioSocieta || '', 
+            firmaVettoriale: firmaVettoriale ?? undefined,
             createdAt: isEditMode && reportId ? Timestamp.now() : Timestamp.now(),
             updatedAt: Timestamp.now(),
         };
@@ -383,7 +390,7 @@ const ReportFormPage: React.FC = () => {
                     finalId = docRef.id;
                 }
                 memoizedShowSnackbar(isEditMode ? "Rapportino aggiornato con successo!" : "Rapportino creato con successo!", "success");
-                return finalId;
+                return finalId ?? null;
             } else {
                 const queuedId = await aggiungiAllaCoda(reportData, reportId);
                 memoizedShowSnackbar("Sei offline. Il rapportino è stato salvato localmente e sarà sincronizzato appena torni online.", "info");
@@ -392,7 +399,6 @@ const ReportFormPage: React.FC = () => {
         } catch (error) {
             console.error("Errore durante il salvataggio o l'accodamento: ", error);
             memoizedShowSnackbar("Si è verificato un errore durante il salvataggio. Le modifiche sono state salvate localmente.", "error");
-            // Se fallisce online, accoda per sicurezza
             if (navigator.onLine) {
                 try {
                     const reportData = getFullReportData();
@@ -423,7 +429,7 @@ const ReportFormPage: React.FC = () => {
         try {
             const savedOrQueuedId = await salvaOAccodaRapportino();
             if (!savedOrQueuedId) {
-                console.log("Salvataggio online fallito, si procede con la generazione PDF dai dati correnti.")
+                // Non bloccare la generazione del PDF se il salvataggio fallisce
             }
             
             const reportDataForPdf = getFullReportData();
@@ -432,7 +438,6 @@ const ReportFormPage: React.FC = () => {
                  ...reportDataForPdf 
             } as Rapportino;
 
-            // ++ FIX: Passa masterData che ora è correttamente definito
             if (!masterData) throw new Error("Dati anagrafici non disponibili per la generazione del PDF.");
             const pdfBlob = await generateRapportinoPDF(finalReportData, masterData as MasterData);
             const newPdfUrl = URL.createObjectURL(pdfBlob);
@@ -504,7 +509,7 @@ const ReportFormPage: React.FC = () => {
                     
                     <Section title="Dati Principali">
                         {!isEditMode && (
-                             <Grid size={{ xs: 12 }}>
+                             <Grid size={12}>
                                 <FormControlLabel control={<Switch checked={isMultiDay} onChange={handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={isEditMode} />
                             </Grid>
                         )}
@@ -537,14 +542,14 @@ const ReportFormPage: React.FC = () => {
 
                     <Section title="Tecnici Coinvolti">
                          {scriventeDettaglio && !isLavorativo && (
-                             <Grid size={{ xs: 12 }}><Typography variant="body2" color="text.secondary">Per giornate non lavorative, le ore sono impostate a 8 di default.</Typography></Grid>
+                             <Grid size={12}><Typography variant="body2" color="text.secondary">Per giornate non lavorative, le ore sono impostate a 8 di default.</Typography></Grid>
                          )}
                          {scriventeDettaglio && isLavorativo && (
-                            <Grid size={{ xs: 12 }}>
+                            <Grid size={12}>
                                 <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleScriventeOreUpdate} isReadOnly={disableActions} isScrivente={true} />
                             </Grid>
                         )}
-                        <Grid size={{ xs: 12 }}>
+                        <Grid size={12}>
                                 <Autocomplete
                                 multiple
                                 options={otherTecnicos}
@@ -557,7 +562,7 @@ const ReportFormPage: React.FC = () => {
                         </Grid>
 
                         {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
-                            <Grid key={dett.tecnicoId} size={{ xs: 12 }}>
+                            <Grid key={dett.tecnicoId} size={12}>
                                 <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                                     <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography>
                                         {isLavorativo ? <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${(dett.ore || 0).toFixed(2)}h)`} size="small" /> : <Chip label={`8 ore di default`} size="small" />}
@@ -592,7 +597,7 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12 }}>
+                                <Grid size={12}>
                                     <FormControl fullWidth disabled={disableActions}>
                                         <InputLabel id="veicolo-label">Veicolo</InputLabel>
                                         <Select
@@ -607,9 +612,9 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12 }}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
-                                <Grid size={{ xs: 12 }}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
-                                <Grid size={{ xs: 12 }}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={disableActions} /></Grid>
+                                <Grid size={12}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
+                                <Grid size={12}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
+                                <Grid size={12}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={disableActions} /></Grid>
                             </Section>
 
                             <Section title="Firma Cliente">
@@ -619,7 +624,7 @@ const ReportFormPage: React.FC = () => {
                                 <Grid size={{ xs: 12, md: 6 }}>
                                     <TextField label="Società" value={firmaFirmatarioSocieta} onChange={(e) => setFirmaFirmatarioSocieta(e.target.value)} fullWidth disabled={disableActions}/>
                                 </Grid>
-                                <Grid size={{ xs: 12 }}>
+                                <Grid size={12}>
                                     {firmaVettoriale ? (
                                         <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center'}}>
                                             <Typography variant="body2" gutterBottom>Firma salvata:</Typography>
