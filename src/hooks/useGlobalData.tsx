@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase'; // CORREZIONE: Puntato all'istanza DB corretta
+import { db } from '@/firebase';
 import { Rapportino, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '@/models/definitions';
-import { rapportoConverter, tecnicoConverter, dittaConverter, categoriaConverter, veicoloConverter } from '@/utils/converters';
+// MODIFICA: Import corretto da rapportoConverter a rapportinoConverter
+import { rapportinoConverter, tecnicoConverter, dittaConverter, categoriaConverter, veicoloConverter } from '@/utils/converters';
 import { useAuth } from '@/hooks/useAuth';
 
 const sortByName = <T extends { nome?: string }>(data: T[]): T[] => {
@@ -16,7 +17,7 @@ const sortByName = <T extends { nome?: string }>(data: T[]): T[] => {
 const subscribeToCollection = <T,>(
   collectionName: string,
   setData: (data: T[]) => void,
-  onDataLoaded: () => void, // Callback to signal data has been loaded
+  onDataLoaded: () => void,
   converter?: any,
   sortData: boolean = false
 ) => {
@@ -42,7 +43,7 @@ const subscribeToCollection = <T,>(
     }
   }, error => {
     console.error(`Errore nel caricamento della collezione ${collectionName}:`, error);
-    onDataLoaded(); // Also signal load on error to not block loading forever
+    onDataLoaded();
   });
 };
 
@@ -61,12 +62,10 @@ export const useGlobalData = () => {
   const [loadedCollectionsCount, setLoadedCollectionsCount] = useState(0);
   const TOTAL_COLLECTIONS = 8;
 
-  // Loading is true if user is logged in but not all collections have been loaded yet.
   const loading = !!user && loadedCollectionsCount < TOTAL_COLLECTIONS;
 
   useEffect(() => {
     if (!user) {
-        // Reset states when user logs out
         setRapportini([]);
         setTecnici([]);
         setDitte([]);
@@ -79,7 +78,6 @@ export const useGlobalData = () => {
         return;
     }
 
-    // Reset count for new user session
     setLoadedCollectionsCount(0);
 
     const onDataLoaded = () => {
@@ -88,7 +86,8 @@ export const useGlobalData = () => {
 
     try {
       const unsubscribers = [
-        subscribeToCollection<Rapportino>('rapportini', setRapportini, onDataLoaded, rapportoConverter),
+        // MODIFICA: Utilizzo corretto di rapportinoConverter
+        subscribeToCollection<Rapportino>('rapportini', setRapportini, onDataLoaded, rapportinoConverter),
         subscribeToCollection<Tecnico>('tecnici', setTecnici, onDataLoaded, tecnicoConverter),
         subscribeToCollection<Ditta>('ditte', setDitte, onDataLoaded, dittaConverter, true),
         subscribeToCollection<Categoria>('categorie', setCategorie, onDataLoaded, categoriaConverter, true),

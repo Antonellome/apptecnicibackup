@@ -16,21 +16,41 @@ import {
     Impostazioni,
 } from '@/models/definitions';
 
-// --- Funzioni Esistenti (Master Data Sync) ---
-
+// Funzione generica per collezioni standard con ID
 const fetchCollection = async <T extends { id: string }>(collectionName: string): Promise<T[]> => {
     try {
         const querySnapshot = await getDocs(collection(firestoreDb, collectionName));
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
     } catch (error) {
-        console.error(`Errore durante il fetch della collezione ${collectionName}:`, error);
+        console.error(`Errore during fetch della collezione ${collectionName}:`, error);
         return [];
+    }
+};
+
+// --- NUOVA FUNZIONE SPECIFICA PER IMPOSTAZIONI ---
+// Funzione dedicata per recuperare il documento singleton 'impostazioni'
+const fetchImpostazioni = async (): Promise<Impostazioni> => {
+    try {
+        const impostazioniSnapshot = await getDocs(collection(firestoreDb, 'impostazioni'));
+        // C'è un solo documento 'impostazioni', quindi prendiamo il primo.
+        const impostazioniData = impostazioniSnapshot.docs.map(doc => doc.data() as Impostazioni);
+        // Se non esiste, restituisce un oggetto di default vuoto.
+        return impostazioniData[0] || { tariffe: [] };
+    } catch (error) {
+        console.error("Errore durante il fetch delle impostazioni:", error);
+        // In caso di errore, restituisce un oggetto di default per non bloccare l'app.
+        return { tariffe: [] };
     }
 };
 
 export const syncMasterData = async () => {
     try {
-        const [tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie, impostazioni] = await Promise.all([
+        // Fetch di tutte le collezioni standard in parallelo
+        const [
+            tecnici, clienti, sedi, tipiGiornata, 
+            veicoli, luoghi, navi, ditte, categorie,
+            settings // Aggiunta della nuova funzione
+        ] = await Promise.all([
             fetchCollection<Tecnico>('tecnici'),
             fetchCollection<Cliente>('clienti'),
             fetchCollection<Sede>('sedi'),
@@ -40,18 +60,20 @@ export const syncMasterData = async () => {
             fetchCollection<Nave>('navi'),
             fetchCollection<Ditta>('ditte'),
             fetchCollection<Categoria>('categorie'),
-            // 1. Aggiunto il fetch per le impostazioni
-            fetchCollection<Impostazioni>('impostazioni'),
+            fetchImpostazioni() // Usa la nuova funzione dedicata
         ]);
-        // 1. Aggiunto 'impostazioni' alla chiamata
-        await localDb.populateMasterData({ tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie, impostazioni: impostazioni[0] || { tariffe: [] } });
+
+        // Popola il DB locale con tutti i dati recuperati
+        await localDb.populateMasterData({ 
+            tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie, 
+            impostazioni: settings 
+        });
+
     } catch (error) {
         console.error("Errore fatale durante la sincronizzazione dei dati anagrafici:", error);
         throw error;
     }
 };
-
-// --- NUOVA LOGICA DI SINCRONIZZAZIONE EVENTI ---
 
 export const addSyncEvent = async (event: Omit<SyncEvent, 'id' | 'syncStatus' | 'attempts'>): Promise<void> => {
     try {
@@ -83,7 +105,7 @@ export const processSyncQueue = async () => {
         const { syncStatus, attempts, id, ...payloadToSend } = event;
 
         try {
-            // 2. Rimosso l'assegnamento a docRef non utilizzato
+            // Qui 'sync' è il nome della collezione su Firestore dove vengono inviati gli eventi
             await addDoc(collection(firestoreDb, 'sync'), payloadToSend);
             await localDb.syncQueue.delete(event.id);
         } catch (error: any) {
@@ -95,10 +117,10 @@ export const processSyncQueue = async () => {
     }
 };
 
-// --- GESTIONE PROCESSO IN BACKGROUND ---
+// Usa 'NodeJS.Timeout' per compatibilità con l'ambiente di test (Vitest/Node)
+// e 'number' per il browser. TypeScript sceglierà quello corretto.
+let syncInterval: NodeJS.Timeout | number | null = null;
 
-// 3. Il tipo NodeJS.Timeout è ora disponibile grazie a @types/node
-let syncInterval: NodeJS.Timeout | null = null;
 export const startSyncProcess = (intervalMs: number = 30000) => {
     if (syncInterval) {
         return;
@@ -109,7 +131,7 @@ export const startSyncProcess = (intervalMs: number = 30000) => {
 
 export const stopSyncProcess = () => {
     if (syncInterval) {
-        clearInterval(syncInterval);
+        clearInterval(syncInterval as any);
         syncInterval = null;
     }
 };

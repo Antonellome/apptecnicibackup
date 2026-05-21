@@ -20,13 +20,10 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useMasterData } from '@/hooks/useMasterData';
 import DownloadIcon from '@mui/icons-material/Download';
 
-// ++ FIX: Funzione helper per calcolare le ore
 const calculateOreLavoro = (report: Rapportino): number => {
     if (report.dettaglioOreTecnici && report.dettaglioOreTecnici.length > 0) {
-        // Somma le ore di tutti i tecnici, se disponibili
         return report.dettaglioOreTecnici.reduce((total, d) => total + (d.ore || 0), 0);
     }
-    // Fallback per vecchi rapportini o in caso di dati incompleti
     return report.oreLavoro || 8; 
 };
 
@@ -65,7 +62,6 @@ const TecniciPage: React.FC = () => {
                 const tipiGiornataMap = new Map(masterData.tipiGiornata.map(doc => [doc.id, doc]));
                 const tecniciMap = new Map(masterData.tecnici.map(doc => [doc.id, doc]));
 
-                // ++ FIX: Aggiunto oreGiorno e corretto il casting
                 const rapportiniData = querySnapshot.docs.map(doc => {
                     const report = { ...doc.data() as Rapportino, id: doc.id };
                     const oreGiorno = calculateOreLavoro(report);
@@ -75,7 +71,7 @@ const TecniciPage: React.FC = () => {
                         tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId) || { id: 'non-definito', nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help_outline', sigla: 'ND' },
                         presenze: report.presenze?.map(id => tecniciMap.get(id)).filter(Boolean) as Tecnico[],
                         tecnicoScrivente: tecniciMap.get(report.tecnicoId),
-                        oreGiorno: oreGiorno, // Aggiunto campo mancante
+                        oreGiorno: oreGiorno, 
                     } as EnrichedRapportino;
                 });
 
@@ -104,28 +100,24 @@ const TecniciPage: React.FC = () => {
     };
 
     const rows = useMemo(() => {
-        if (!masterData) return [];
-        const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
         return rapportini.map(r => ({
             ...r,
             id: r.id!,
-            // ++ FIX: Calcolo dinamico del nome completo
             tecnicoNome: r.tecnicoScrivente ? `${r.tecnicoScrivente.cognome} ${r.tecnicoScrivente.nome}` : 'N/A',
             tipoGiornataNome: r.tipoGiornata.nome,
             dataFormatted: format(r.data, 'dd/MM/yyyy'),
         }));
-    }, [rapportini, masterData]);
+    }, [rapportini]);
 
     const columns: GridColDef<(typeof rows)[0]>[] = [
         { field: 'dataFormatted', headerName: 'Data', width: 120 },
         { field: 'tecnicoNome', headerName: 'Tecnico Scrivente', flex: 1, minWidth: 150 },
         { field: 'tipoGiornataNome', headerName: 'Tipo Giornata', flex: 1, minWidth: 150 },
-        { field: 'oreGiorno', headerName: 'Ore', width: 80, type: 'number' }, // ++ FIX: Usare oreGiorno
+        { field: 'oreGiorno', headerName: 'Ore', width: 80, type: 'number' },
         { field: 'descrizioneBreve', headerName: 'Descrizione', flex: 2, minWidth: 250 },
     ];
     
     if (masterLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
-    // ++ FIX: Accesso corretto all'errore
     if (masterError) return <Alert severity="error">{masterError}</Alert>;
 
     return (
@@ -138,7 +130,6 @@ const TecniciPage: React.FC = () => {
                             <InputLabel>Tecnico</InputLabel>
                             <Select value={selectedTecnicoId} label="Tecnico" onChange={handleTecnicoChange}>
                                 <MenuItem value="all">Tutti i Tecnici</MenuItem>
-                                {/* ++ FIX: Calcolo dinamico del nome completo */}
                                 {masterData?.tecnici.sort((a, b) => a.cognome.localeCompare(b.cognome)).map(t => <MenuItem key={t.id} value={t.id}>{`${t.cognome} ${t.nome}`}</MenuItem>)}
                             </Select>
                         </FormControl>
@@ -171,7 +162,6 @@ const TecniciPage: React.FC = () => {
                         onClose={() => setDialogOpen(false)}
                         reports={rapportini.filter(r => r.presenze.some(p => p.id === selectedTecnicoId))}
                         currentMonth={mese}
-                        // ++ FIX: rimossa la prop non necessaria
                     />
                 )}
             </Box>

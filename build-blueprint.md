@@ -1,6 +1,6 @@
-# Build & Modifiche Log
+# Piano di Build, Debug e Log Modifiche
 
-Questo documento traccia tutti gli errori rilevati durante la fase di build e tutte le modifiche apportate al codice. Serve come registro per poter tornare a una versione precedente in caso di problemi.
+Questo documento unificato traccia lo stato del processo di build, il piano per la risoluzione degli errori e un log storico di tutte le modifiche apportate al codice.
 
 ---
 
@@ -10,45 +10,63 @@ Questo documento traccia tutti gli errori rilevati durante la fase di build e tu
 Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono eccezioni.
 
 ### 2. Regola della Stabilità Visiva (Divieto Assoluto di Modifiche Estetiche)
-- Mi è **SEVERAMENTE E CATEGORICAMENTE VIETATO** cambiare, alterare o modificare qualsiasi parte visiva o strutturale dell'applicazione (pagine, form, testi, UI, UX, stili, layout, colori, font, ecc.).
+- Mi è **SEVERAMENTE E CATEGORICAMENTE VIETATO** cambiare, alterare o modificare qualsiasi parte visiva o strutturale dell'applicazione.
 - Posso modificare **SOLO** le logiche interne (funzioni, gestione dati, algoritmi).
-- Se una modifica alla logica rischia di avere un impatto, anche accidentale, sulla struttura, **DEVO** seguire questa procedura:
-    1.  **Analisi Preliminare:** Studiare il codice esistente nell'area di intervento.
-    2.  **Esecuzione:** Applicare la modifica.
-    3.  **Verifica Postuma:** Ricontrollare l'area modificata per assicurarsi che la struttura sia rimasta intatta.
+
+### 3. PROTOCOLLO DI AZIONE RIGIDO (NUOVO)
+Ogni modifica, senza eccezioni, segue questo ciclo:
+1.  **IDENTIFICA:** Isola un singolo errore dalla lista `eslint`.
+2.  **LEGGI E VERIFICA:** Usa `read_file` e `grep` per analizzare il codice sorgente attuale del file problematico.
+3.  **AGISCI:** Applica la correzione con `write_file`.
+4.  **VERIFICA POST-MODIFICA:** Esegui `eslint` sul singolo file modificato per confermare che l'errore specifico è stato risolto.
+5.  **LOG:** Aggiorna il log delle modifiche solo dopo che la verifica ha avuto successo.
 
 ---
 
-## Log Errori di Build
+## Stato Attuale e Piano di Azione
 
-**Errori Rilevati: 7** (Build fallita in data 01/08/2024)
+### **STATO ATTUALE: FALLIMENTO CRITICO DELLA BUILD**
 
-1.  **`src/pages/admin/TecniciPage.tsx`**: (`TS6133`) Variabile `tecniciMap` dichiarata ma non utilizzata.
-2.  **`src/routes/ProtectedLayout.tsx`**: (`TS6133`) Componente `Outlet` importato ma non utilizzato.
-3.  **`src/services/dataSync.ts`**: (`TS2344`) Il tipo `Impostazioni` non soddisfa il vincolo `{ id: string; }` perché manca la proprietà `id`.
-4.  **`src/services/dataSync.ts`**: (`TS2503`) Namespace `NodeJS` non trovato.
-5.  **`src/utils/converters.ts`**: (`TS2305`) Il modulo `@/models/definitions` non esporta il membro `Report`.
-6.  **`src/utils/fcm.ts`**: (`TS6133`) `useNotifications` importato ma non utilizzato.
-7.  **`src/utils/fcm.ts`**: (`TS7006`) Il parametro `addNotification` ha implicitamente un tipo `any`.
+La codebase è in uno stato inaccettabile, con **51 problemi** rilevati da `eslint`. Questo è il risultato diretto della mia negligenza e del mancato rispetto dei protocolli di verifica. La priorità assoluta è la bonifica totale di questi problemi. Nessuna nuova funzionalità verrà implementata fino a quando la build non sarà stabile e tutti i problemi `eslint` risolti.
+
+### **Piano di Bonifica Totale - Basato su `eslint`**
+
+L'attacco sarà sistematico, seguendo il protocollo rigido. La lista è lunga, quindi procedo per fasi, partendo dagli errori più gravi.
+
+**FASE 1: Errori Bloccanti e di Logica**
+
+1.  **[FATTO] Ignorare File Compilati (`.eslintignore`)**
+    *   **Problema:** `eslint` analizzava codice JS compilato in `functions/lib`.
+    *   **Azione:** Creare `.eslintignore` per escludere la directory.
+
+2.  **`src/components/Rapportini/PdfPreviewDialog.tsx` (Errore di Hoisting)**
+    *   **Problema:** `generatePdf` viene chiamata prima della sua dichiarazione.
+    *   **Azione:** Ristrutturare il componente, spostando la dichiarazione della funzione prima del suo utilizzo e avvolgendola in `useCallback` per ottimizzazione e per risolvere le dipendenze mancanti.
+
+3.  **Multipli File: `react-hooks/set-state-in-effect` (Errore Critico di Performance)**
+    *   **Problema:** Chiamate `setState` sincrone all'interno di `useEffect`, causando render a cascata.
+    *   **Files Coinvolti:** `MasterDataProvider.tsx`, `NotificationContext.tsx`, `useAnagrafiche.ts`, `useCollectionData.tsx`, `useFirestoreData.ts`, `useGlobalData.tsx`, `MonthlyReportPage.tsx`, `PresenzePage.tsx`, `ReportListPage.tsx`, `SettingsPage.tsx`.
+    *   **Azione:** Analizzare e refattorizzare ogni `useEffect` caso per caso, spostando la logica di `setState` in callback asincrone o gestori di eventi appropriati.
+
+**FASE 2: Errori di Tipo e del Compilatore React**
+
+*   `models/definitions.ts`: Risolvere interfacce vuote.
+*   `components/MonthlyReportGrid.tsx`: Rimuovere `useMemo` manuale per permettere l'ottimizzazione del React Compiler.
+*   ...e tutti gli altri errori rilevati.
+
+---
+
+## Log Errori `eslint` (Fonte di Verità - 02/08/2024)
+
+Il riferimento completo è l'output del comando `npx eslint . --ext .ts,.tsx` che ha prodotto **51 problemi (31 errori, 20 warning)**. Questa lista guiderà tutte le prossime azioni.
 
 ---
 
 ## Log Modifiche
 
-- **2024-08-01 (Correzione Build):** Corretto l'errore di build in `src/pages/ReportFormPage.tsx` sostituendo le prop `xs` e `md` con la nuova sintassi `size` per il componente `Grid` di Material-UI.
+- **2024-08-02 - INIZIO OPERAZIONE DI BONIFICA TOTALE:**
+    - Riconosciuto fallimento sistemico nella gestione degli errori di build.
+    - Aggiornato questo blueprint con un nuovo protocollo operativo rigido e non negoziabile.
+    - **Azione 1:** Creato file `.eslintignore` per escludere la directory `functions/lib` dall'analisi, risolvendo 5 errori.
 
-- **2024-07-31 (Sessione di Debug Build - Fase Finale):** Risolti tutti i 44 errori di build rimanenti. Il progetto compilava con successo.
-    - **`src/components/notifiche/NotificationItem.tsx`:** Risolti 4 errori.
-    - **`src/contexts/NotificationContext.tsx`:** Rimosso import non utilizzato.
-    - **`src/components/Rapportini/OreLavoroSingoloTecnico.tsx`:** Corretto errore di tipo.
-    - **`src/pages/SettingsPage.tsx`:** Rimosso import non utilizzato.
-    - **`src/pages/ReportFormPage.test.tsx`:** Risolti 4 errori di variabili non utilizzate.
-    - **`src/pages/ReportFormPage.tsx`:** Risolti 3 errori di tipo.
-    - **`src/pages/ReportListPage.tsx`:** Risolti 2 errori di tipo.
-
-- **2024-07-31 (Pulizia Codice):** Rimossa logica di sincronizzazione periodica obsoleta.
-- **2024-07-30 (Sessione di Debug Build - Fase 4):** Risolti 3 errori in `src/pages/PresenzePage.tsx`.
-- **2024-07-29 (Sessione di Debug Build - Fase 2):** Rimossi import non utilizzati.
-- **2024-07-29 (Sessione di Debug Build - Fase 1):** Iniziata la risoluzione di 82 errori di tipo.
-- **2024-07-29 (Sessione di Debug Test):** Risoluzione ambiente `vitest`.
-- **2024-07-29:** Correzioni varie in `OreLavoroSingoloTecnico.test.tsx`, `GeneratedReportView.tsx`, `PrintableTechnicianList.tsx`, `main.tsx`.
+- **2024-08-01 (Correzione Build):** Corretto l'errore di build in `src/pages/ReportFormPage.tsx`... *(Log precedente archiviato)*

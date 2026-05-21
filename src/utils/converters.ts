@@ -1,6 +1,7 @@
 
 import { Timestamp } from 'firebase/firestore';
-import { GenericItem, Tecnico, Veicolo, Report, Ditta, Categoria, Documento } from '@/models/definitions';
+// Corretto l'import: Report -> Rapportino
+import { GenericItem, Tecnico, Veicolo, Rapportino, Ditta, Categoria, Documento } from '@/models/definitions';
 
 const createConverter = <T extends GenericItem>(defaultValues: Omit<T, 'id'>) => ({
     toFirestore: (data: Partial<T>): T => {
@@ -19,7 +20,20 @@ const createConverter = <T extends GenericItem>(defaultValues: Omit<T, 'id'>) =>
     },
     fromFirestore: (snapshot: any, options: any): T => {
         const data = snapshot.data(options);
-        return { ...defaultValues, ...data, id: snapshot.id } as T;
+        const result = { ...defaultValues, ...data, id: snapshot.id } as T;
+        
+        // Conversione specifica per campi Timestamp, se necessario
+        if ('data' in result && result.data instanceof Timestamp) {
+            (result as any).data = result.data.toDate();
+        }
+        if ('dataInizio' in result && result.dataInizio instanceof Timestamp) {
+            (result as any).dataInizio = result.dataInizio.toDate();
+        }
+        if ('dataFine' in result && result.dataFine instanceof Timestamp) {
+            (result as any).dataFine = result.dataFine.toDate();
+        }
+        
+        return result;
     }
 });
 
@@ -29,53 +43,25 @@ export const tecnicoConverter = createConverter<Tecnico>({
     email: '',
     attivo: true,
     sincronizzazioneAttiva: false,
-    codiceFiscale: undefined,
-    indirizzo: undefined,
-    citta: undefined,
-    cap: undefined,
-    provincia: undefined,
-    telefono: undefined,
-    numeroCartaIdentita: undefined,
-    scadenzaCartaIdentita: undefined,
-    numeroPassaporto: undefined,
-    scadenzaPassaporto: undefined,
-    numeroPatente: undefined,
-    categoriaPatente: undefined,
-    scadenzaPatente: undefined,
-    numeroCQC: undefined,
-    scadenzaCQC: undefined,
-    dittaId: undefined,
-    categoriaId: undefined,
-    tipoContratto: undefined,
-    dataAssunzione: undefined,
-    scadenzaContratto: undefined,
-    scadenzaUnilav: undefined,
-    scadenzaVisita: undefined,
-    scadenzaCorsoSicurezza: undefined,
-    scadenzaPrimoSoccorso: undefined,
-    scadenzaAntincendio: undefined,
-    note: undefined,
 });
 
 export const veicoloConverter = createConverter<Veicolo>({
     nome: '',
-    targa: undefined,
 });
 
-export const rapportoConverter = createConverter<Report>({
-    nome: '',
+// Rinominato per coerenza e corretto il tipo generico
+export const rapportinoConverter = createConverter<Rapportino>({
+    nome: '', // La prop 'nome' è ereditata da GenericItem, ma non usata. La lascio per compatibilità con createConverter.
     data: Timestamp.now(),
     tecnicoId: '',
     tipoGiornataId: '', 
     oreLavoro: 8,
     isTrasferta: false,
-    descrizioneBreve: undefined,
-    naveId: undefined,
-    luogoId: undefined,
-    oraInizio: undefined,
-    oraFine: undefined,
     presenze: [],
-    createdAt: Timestamp.now(),
+    dettaglioOreTecnici: [],
+    veicoliUtilizzati: [],
+    completed: false,
+    // I campi opzionali possono essere omessi se il loro valore di default è `undefined`
 });
 
 export const dittaConverter = createConverter<Ditta>({

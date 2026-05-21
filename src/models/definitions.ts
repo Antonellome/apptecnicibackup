@@ -1,220 +1,224 @@
 
 import { Timestamp } from 'firebase/firestore';
 
-// =========================================================================
-// --- INTERFACCE DI BASE E GENERICHE -- -
-// =========================================================================
+// --- INTERFACCE COMUNI E TIPI HELPER ---
+export interface GenericItem {
+    id: string;
+    nome: string;
+}
 
+// BaseEntity per form generici
 export interface BaseEntity {
     id: string;
+    [key: string]: any; // Permette altre proprietà
 }
 
-export interface GenericItem extends BaseEntity {
-    nome: string;
-    [key: string]: any;
-}
-
+// FormField per la costruzione di form dinamici
 export interface FormField {
-    id: string; // Aggiunto per risolvere l'errore in AnagraficaForm
-    name: string;
+    id: string;
     label: string;
-    type: 'text' | 'number' | 'select' | 'date'; // Aggiunto 'date' per coerenza
-    options?: string[];
+    type?: 'text' | 'number' | 'date' | 'autocomplete';
+    options?: GenericItem[]; // Per autocomplete
 }
 
-// =========================================================================
-// --- ANAGRAFICHE PRINCIPALI (Collezioni di Root) -- -
-// =========================================================================
+// UserProfile per il contesto di autenticazione
+export interface UserProfile extends Tecnico {
+    // Aggiungi qui eventuali campi specifici del profilo utente
+    // che non sono presenti nel modello Tecnico base.
+}
 
-export interface Tecnico extends BaseEntity {
+// EnrichedRapportino per UI che richiede dati denormalizzati
+export interface EnrichedRapportino extends Rapportino {
+    nomeTecnico?: string;
+    nomeSede?: string;
+    nomeTipoGiornata?: string;
+    // Aggiungi altri campi arricchiti se necessario
+}
+
+// Per la gestione delle tariffe nel frontend
+export interface TariffaLocale {
+    id: string; // Es. ID della categoria
     nome: string;
+    importo: number;
+}
+
+// Per la visualizzazione dei report calcolati
+export interface RapportinoConCalcoli extends Rapportino {
+    oreGiorno: number;
+    tipoGiornata?: TipoGiornata; // Oggetto completo
+    [key: string]: any; // Per altre proprietà calcolate
+}
+
+// Per il form dei dettagli ore
+export interface DettaglioOreData {
+    tecnicoId: string;
+    ore: number;
+    isManual?: boolean;
+    oraInizio?: string;
+    oraFine?: string;
+    pausa?: number;
+}
+
+
+// --- ANAGRAFICHE MASTER ---
+export interface Tecnico extends GenericItem {
     cognome: string;
     email: string;
-    attivo?: boolean;
-    [key: string]: any;
+    attivo: boolean;
+    sincronizzazioneAttiva: boolean;
+    codiceFiscale?: string;
+    indirizzo?: string;
+    citta?: string;
+    cap?: string;
+    provincia?: string;
+    telefono?: string;
+    numeroCartaIdentita?: string;
+    scadenzaCartaIdentita?: Timestamp;
+    numeroPassaporto?: string;
+    scadenzaPassaporto?: Timestamp;
+    numeroPatente?: string;
+    categoriaPatente?: string;
+    scadenzaPatente?: Timestamp;
+    numeroCQC?: string;
+    scadenzaCQC?: Timestamp;
+    dittaId?: string;
+    categoriaId?: string;
+    tipoContratto?: string;
+    dataAssunzione?: Timestamp;
+    scadenzaContratto?: Timestamp;
+    scadenzaUnilav?: Timestamp;
+    scadenzaVisita?: Timestamp;
+    scadenzaCorsoSicurezza?: Timestamp;
+    scadenzaPrimoSoccorso?: Timestamp;
+    scadenzaAntincendio?: Timestamp;
+    note?: string;
+    noteInterne?: string;
 }
 
-export interface Veicolo extends BaseEntity {
-    nome: string; // Modificato da opzionale a richiesto
+export interface Cliente extends GenericItem {}
+export interface Sede extends GenericItem {}
+export interface TipoGiornata extends GenericItem {
+    colore?: string;
+    sigla?: string;
+}
+export interface Veicolo extends GenericItem {
+    targa?: string;
     marca?: string;
     modello?: string;
-    targa?: string;
 }
+export interface Luogo extends GenericItem {}
+export interface Nave extends GenericItem {}
+export interface Ditta extends GenericItem {}
+export interface Categoria extends GenericItem {}
 
-export interface TipoGiornata extends BaseEntity {
-    nome: string;
-    colore: string;
-    lavorativo: boolean;
-    icona: string;
-    sigla: string; // Mantenuto per compatibilità ma la logica si basa su NOME
-}
-
-export interface UserProfile extends BaseEntity {
-    uid: string;
-    email: string;
+export interface Documento extends GenericItem {
+    url: string;
     tecnicoId: string;
-    nome: string;
-    cognome: string;
-    attivo: boolean;
-    isAdmin?: boolean; // Mantenuto per risolvere gli errori
-    categoria?: Categoria; // ++ AGGIUNTO PER RISOLVERE ERRORI DI BUILD
-}
-export type WebAppUser = UserProfile; // Alias per retrocompatibilità
-
-// ANAGRAFICHE GENERICHE
-export type Anagrafica = GenericItem; // ++ AGGIUNTO PER RISOLVERE ERRORE IN useAnagrafiche
-export type Cliente = GenericItem;
-export type Sede = GenericItem;
-export type Ditta = GenericItem;
-export type Categoria = GenericItem;
-export type Qualifica = GenericItem;
-export type Luogo = GenericItem;
-export type Nave = GenericItem;
-export type Documento = GenericItem;
-
-
-// =========================================================================
-// --- IMPOSTAZIONI E TARIFFE (Logica Locale) -- -
-// =========================================================================
-
-export interface TariffaLocale extends BaseEntity {
-    tipoGiornataId: string;
-    nome: string;
-    costo: number;
-    unita: 'g' | 'h';
 }
 
 export interface Impostazioni {
-    tariffe: TariffaLocale[];
-    [key: string]: any;
+    tariffe: { categoriaId: string; importo: number; }[];
+}
+
+// --- DATI OPERATIVI ---
+export interface Rapportino extends GenericItem {
+    data: Timestamp;
+    tecnicoId: string;
+    tipoGiornataId: string;
+    oreLavoro: number;
+    isTrasferta: boolean;
+    completed: boolean;
+    
+    // Campi opzionali
+    dataInizio?: Timestamp;
+    dataFine?: Timestamp;
+    sedeId?: string;
+    descrizioneBreve?: string;
+    naveId?: string;
+    luogoId?: string;
+    oraInizio?: string;
+    oraFine?: string;
+    presenze?: string[]; // Array di ID tecnici
+    dettaglioOreTecnici?: { tecnicoId: string; ore: number; }[];
+    veicoliUtilizzati?: { veicoloId: string; km?: number; }[];
+    kmPercorsi?: number;
+    pedaggi?: number;
+    parcheggi?: number;
+    speseExtra?: number;
+    firmaTecnico?: string; 
+    firmaCliente?: string; 
+    lavoroEseguito?: string;
+    materialiImpiegati?: string;
+    firmaFirmatarioNome?: string;
+    firmaFirmatarioSocieta?: string;
+    firmaVettoriale?: string; // JSON della firma vettoriale
+
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
+}
+
+export interface Checkin {
+    id?: string; // YYYY-MM-DD_UID
+    tecnicoId: string;
+    timestamp: Timestamp;
+    isOnline: boolean;
+    sedeId?: string;
+}
+
+export interface RiepilogoMensile {
+    id: string; // YYYY-MM_TECNICO_ID
+    tecnicoId: string;
+    anno: number;
+    mese: number;
+    totaleOreLavorate: number;
+    totaleFerie: number;
+    totaleMalattia: number;
+    totalePermessi: number;
+    giorniLavorati: number;
+    rapportini: DayInfo[];
+}
+
+export interface DayInfo {
+    giorno: number;
+    tipo: string; // es. L, F, M, P
+    ore: number;
 }
 
 
-// =========================================================================
-// --- OGGETTO DATI MASTER (per il fetching iniziale) -- -
-// =========================================================================
+// --- DATI DI SINCRONIZZAZIONE ---
+export interface SyncEvent {
+    id?: number;
+    type: 'rapportino' | 'checkin' | 'notification_read';
+    payload: any; // Rapportino | Checkin | { notificationId: string; ... }
+    syncStatus: 'pending' | 'success' | 'failed';
+    attempts: number;
+    lastAttempt?: Date;
+}
 
+// --- NOTIFICHE ---
+export interface AppNotification {
+    id: string;
+    title: string;
+    message: string;
+    createdAt: Date;
+    isRead: boolean;
+    recipientId?: string; 
+    readAt?: Date;
+    readBy?: string; 
+}
+// Alias per retrocompatibilità temporanea
+export type Notifica = AppNotification;
+
+// --- RACCOLTA DI TUTTI I TIPI PER DB LOCALE ---
 export interface MasterData {
     tecnici: Tecnico[];
     clienti: Cliente[];
+    sedi: Sede[];
     tipiGiornata: TipoGiornata[];
     veicoli: Veicolo[];
     luoghi: Luogo[];
     navi: Nave[];
-    // Aggiunte per completezza sebbene non in tutti i fetch
-    sedi: Sede[];
     ditte: Ditta[];
     categorie: Categoria[];
     impostazioni: Impostazioni;
-}
-
-
-// =========================================================================
-// --- RAPPORTINO E SUB-OGGETTI -- -
-// =========================================================================
-
-export interface DettaglioOreTecnico {
-    tecnicoId: string;
-    ore: number; // Modificato: il calcolo finale non dovrebbe essere null
-    isManual: boolean;
-    oraInizio: string | null;
-    oraFine: string | null;
-    pausa: number | null;
-}
-
-export interface Rapportino extends BaseEntity {
-    nome: string;
-    data: Timestamp;
-    tecnicoId: string;
-    tipoGiornataId: string;
-
-    // Campi opzionali
-    dataInizio?: Timestamp;
-    dataFine?: Timestamp;
-    dettaglioOreTecnici?: DettaglioOreTecnico[];
-    isTrasferta?: boolean;
-    oraInizio?: string | null;
-    oraFine?: string | null;
-    pausa?: number | null;
-    oreLavoro?: number; // Coerenza con DettaglioOreTecnico
-    presenze?: string[]; // Array di ID Tecnici
-    altriTecniciIds?: string[];
-    descrizioneBreve?: string;
-    lavoroEseguito?: string;
-    materialiImpiegati?: string;
-    veicoloId?: string | null;
-    naveId?: string | null;
-    luogoId?: string | null;
-    firmaFirmatarioNome?: string;
-    firmaFirmatarioSocieta?: string;
-    firmaVettoriale?: string;
-    createdAt: Timestamp;
-    updatedAt?: Timestamp;
-}
-
-
-// =========================================================================
-// --- INTERFACCE LOCALI E "ARRICCHITE" PER L'UI -- -
-// =========================================================================
-
-// Usato nei componenti UI per i dettagli ore, include il nome per la visualizzazione
-export interface DettaglioOreData {
-    tecnicoId: string;
-    nome: string; // Nome del tecnico
-    isManual: boolean;
-    oraInizio: string | null;
-    oraFine: string | null;
-    pausa: number | null;
-    ore: number; // Anche qui, il valore finale visualizzato non è null
-}
-
-export interface EnrichedRapportino extends Omit<Rapportino, 'data' | 'tipoGiornataId' | 'presenze' | 'oreLavoro'> {
-    data: Date;
-    tipoGiornata: TipoGiornata;
-    tecnicoScrivente?: Tecnico;
-    presenze: Tecnico[]; // Convertito da string[] a Tecnico[]
-    destinazione?: string;
-    veicolo?: Veicolo;
-    nave?: Nave;
-    luogo?: Luogo;
-    isEditable?: boolean;
-    oreGiorno: number; // Aggiunto per calcoli in MonthlyReportPage
-}
-
-export interface Notifica extends BaseEntity {
-    title: string;
-    body: string;
-    recipientId: string;
-    senderId: string;
-    createdAt: Timestamp;
-    readBy: { [key: string]: boolean };
-    hiddenFor?: { [key: string]: boolean };
-}
-
-// ++ FIX: Definizioni aggiunte per la pagina Presenze
-export interface DayInfo {
-    tipo: 'LAVORO' | 'FERIE' | 'MALATTIA' | 'PERMESSO' | 'RIPOSO';
-    ore?: number;
-    tooltip?: string;
-}
-
-export interface RiepilogoMensile {
-    id: string; // E.g., "tecnicoId_yyyy-MM"
-    giorni: { [day: string]: DayInfo };
-}
-
-// =========================================================================
-// --- SINCRONIZZAZIONE ASINCRONA (NUOVA LOGICA) -- -
-// =========================================================================
-
-export interface SyncEvent {
-  id?: number; // ++ CORRETTO: Chiave primaria numerica auto-incrementante per Dexie.
-  type: 'NOTIFICATION_READ'; // Tipo di evento, per ora solo uno
-  payload: {
-    notificationId: string;
-    readByUserId: string;
-  };
-  timestamp: string; // ISO 8601 timestamp
-  syncStatus?: 'pending' | 'syncing' | 'synced' | 'failed';
-  attempts?: number;
 }

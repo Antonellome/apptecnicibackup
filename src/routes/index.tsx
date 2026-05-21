@@ -1,8 +1,9 @@
+
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 // Layout
 import AuthLayout from '@/components/layout/AuthLayout';
-import { ProtectedLayout } from './ProtectedLayout'; // Importa il nuovo layout
+import ProtectedLayout from './ProtectedLayout'; // Corretto: import default
 
 // Pagine
 import LoginPage from '@/pages/LoginPage';
