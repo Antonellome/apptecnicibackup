@@ -6,13 +6,13 @@ import { rapportinoConverter, tecnicoConverter, dittaConverter, categoriaConvert
 import { useAuth } from '@/hooks/useAuth';
 
 // --- HELPERS ---
-const sortByName = <T extends { nome?: string }>(data: T[]): T[] => {
+function sortByName<T extends { nome?: string }>(data: T[]): T[] {
   return [...data].sort((a, b) => {
     const nameA = a.nome || '';
     const nameB = b.nome || '';
     return nameA.localeCompare(nameB, 'it', { sensitivity: 'base' });
   });
-};
+}
 
 // --- STATE, ACTIONS, REDUCER ---
 interface GlobalDataState { /* ... same as before ... */
@@ -67,13 +67,13 @@ function globalDataReducer(state: GlobalDataState, action: Action): GlobalDataSt
   }
 }
 
-// --- SUBSCRIBER FUNCTIONS (OVERLOADED) ---
-const subscribeToCollectionWithConverter = <T>(
+// --- SUBSCRIBER FUNCTIONS (CLASSIC FUNCTION SYNTAX) ---
+function subscribeToCollectionWithConverter<T>(
   dispatch: React.Dispatch<Action>,
   collectionName: CollectionName,
   sortData: boolean,
   converter: QueryConverter<T, DocumentData>
-) => {
+) {
   const collRef = collection(db, collectionName).withConverter(converter);
   return onSnapshot(collRef, snapshot => {
     let data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as T);
@@ -83,13 +83,13 @@ const subscribeToCollectionWithConverter = <T>(
     console.error(`Errore in ${collectionName}:`, error);
     dispatch({ type: 'SET_ERROR', payload: error });
   });
-};
+}
 
-const subscribeToCollection = <T>(
+function subscribeToCollection<T>(
   dispatch: React.Dispatch<Action>,
   collectionName: CollectionName,
   sortData: boolean
-) => {
+) {
   const collRef = collection(db, collectionName);
   return onSnapshot(collRef, snapshot => {
     let data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as T);
@@ -99,7 +99,7 @@ const subscribeToCollection = <T>(
     console.error(`Errore in ${collectionName}:`, error);
     dispatch({ type: 'SET_ERROR', payload: error });
   });
-};
+}
 
 // --- HOOK ---
 export const useGlobalData = () => {
@@ -129,6 +129,7 @@ export const useGlobalData = () => {
     }
   }, [user]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { _loadedCollections, ...publicState } = state;
   return publicState;
 };

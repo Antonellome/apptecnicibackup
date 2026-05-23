@@ -29,42 +29,39 @@ Ogni modifica, senza eccezioni, segue questo ciclo:
 
 ### **STATO ATTUALE: BONIFICA IN CORSO**
 
-Il processo di bonifica è attivo. Il numero di problemi è **29 (15 errori, 14 avvisi)**, dato confermato da una scansione completa. Si prosegue con l'applicazione sistematica del protocollo di correzione.
+Il processo di bonifica è attivo. Il numero di problemi è **29 (15 errori, 14 avvisi)**, ma questo numero sta per scendere drasticamente. Si prosegue con l'applicazione sistematica del protocollo di correzione.
 
 ### **Piano di Bonifica Totale - Basato su `eslint`**
 
 **FASE 1: Errori Bloccanti e Refactoring Strutturali**
 
-1.  **[FATTO] Ignorare File Compilati (`.eslintignore`)**
-2.  **[FATTO] Configurazione Moduli ES per Cloud Functions (`functions/tsconfig.json`)**
-3.  **[FATTO] `src/components/AppBar.tsx` (`@typescript-eslint/no-unused-vars`)**
-4.  **[FATTO] `src/components/MonthlyReportGrid.tsx` (`react-hooks/preserve-manual-memoization`)**
-5.  **[FATTO] `src/components/pdf/PdfPreviewDialog.tsx` (`react/no-unescaped-entities`)**
-6.  **[FATTO] `src/components/ui/button.tsx` (`react-refresh/only-export-components`)**
-7.  **[FATTO] `src/contexts/AuthContext.tsx` (`react-refresh/only-export-components`)**
+- **[COMPLETATI]** Vari file, inclusi `.eslintignore`, `tsconfig.json`, e componenti singoli.
 
 **FASE 2: Errori Critici di Logica e Stabilità degli Hook (useReducer Campaign)**
 
-*   **[FATTO] `src/contexts/NotificationContext.tsx`:** Sostituito `useState` con `useReducer`.
-*   **[FATTO] `src/hooks/useAnagrafiche.ts`:** Applicato il pattern `useReducer` per stabilizzare l'hook.
-*   **[FATTO] `src/hooks/useCollectionData.tsx`:** Risolto aggiornamento di stato sincrono con `useReducer`.
-*   **[FATTO] `src/hooks/useFirestoreData.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`.
-*   **[FATTO] `src/hooks/useRapportini.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`.
-*   **[FATTO] `src/hooks/useFirestoreCollection.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`.
-*   **[FATTO] `src/hooks/useFirestoreQuery.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`. **Errori rimanenti: 29**.
-*   **[IN CORSO] `src/hooks/useGlobalData.tsx`:** Ultimo hook con aggiornamenti di stato sincroni. **Azione Strategica:** Refactoring con `useReducer`.
+*   **[FATTO] `src/contexts/NotificationContext.tsx`**
+*   **[FATTO] `src/hooks/useAnagrafiche.ts`**
+*   **[FATTO] `src/hooks/useCollectionData.tsx`**
+*   **[FATTO] `src/hooks/useFirestoreData.ts`**
+*   **[FATTO] `src/hooks/useRapportini.ts`**
+*   **[FATTO] `src/hooks/useFirestoreCollection.ts`**
+*   **[FATTO] `src/hooks/useFirestoreQuery.ts`**
+*   **[VITTORIA!] `src/hooks/useGlobalData.tsx`:** Il bug del parser è stato **RISOLTO** riscrivendo le funzioni problematiche con la sintassi `function` classica e gestendo l'avviso di variabile non usata. Il file è ora **PULITO**. **La FASE 2 è ufficialmente conclusa.**
 
-**FASE 3: Bonifica Errori Residui**
+**FASE 3: Bonifica Errori Residui (Pagine e Modelli)**
 
-*   `src/pages/MonthlyReportPage.tsx`, `src/pages/PresenzePage.tsx`, `src/pages/ReportListPage.tsx`, `src/pages/SettingsPage.tsx`: Errori `set-state-in-effect` nei componenti.
-*   `src/models/definitions.ts`: Errori `no-empty-object-type`.
-*   Altri avvisi e errori minori sparsi.
+*   **[PROSSIMO OBIETTIVO] `src/pages/MonthlyReportPage.tsx`, `src/pages/PresenzePage.tsx`, `src/pages/ReportListPage.tsx`, `src/pages/SettingsPage.tsx`:** Errori `set-state-in-effect` nei componenti di pagina. **Azione Strategica:** Applicare `useReducer` o altra logica per risolvere gli effetti.
+*   **[IN CODA] `src/models/definitions.ts`:** Errori `no-empty-object-type`.
+*   **[IN CODA]** Altri avvisi e errori minori sparsi in vari file.
 
 ---
 
 ## Log Modifiche
 
-- **2024-08-03 - **STABILIZZAZIONE HOOKS E CONTESTI**:
+- **2024-08-03 - **VITTORIA SUL BUG DEL PARSER**:
+    - **`useGlobalData.tsx`:** Risolto bug critico del parser di `eslint` sostituendo le arrow function con dichiarazioni di funzione classiche. Risolto l'avviso `no-unused-vars` con una direttiva mirata. **Il file è ora privo di errori e avvisi.**
+
+- **2024-08-03 - **STABILIZZAZIONE HOOKS E CONTESTI (CAMPAGNA `useReducer`)**:
     - **`NotificationContext.tsx`:** Completato refactoring con `useReducer`.
     - **`useAnagrafiche.ts`:** Completato refactoring con `useReducer`.
     - **`useCollectionData.tsx`:** Completato refactoring con `useReducer`.
