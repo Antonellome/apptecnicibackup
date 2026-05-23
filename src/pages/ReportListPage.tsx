@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -22,7 +22,41 @@ import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'fireba
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalData } from '@/hooks/useLocalData';
-import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions'; // 1. Import Tecnico
+import { Rapportino, EnrichedRapportino, Tecnico } from '@/models/definitions';
+
+// --- STATE MANAGEMENT CON useReducer ---
+interface ReportListState {
+    rapportini: EnrichedRapportino[];
+    loading: boolean;
+    error: string | null;
+}
+
+type Action = 
+    | { type: 'FETCH_START' }
+    | { type: 'FETCH_SUCCESS'; payload: EnrichedRapportino[] }
+    | { type: 'FETCH_ERROR'; payload: string }
+    | { type: 'SET_LOADING'; payload: boolean };
+
+const initialState: ReportListState = {
+    rapportini: [],
+    loading: true,
+    error: null,
+};
+
+function reportListReducer(state: ReportListState, action: Action): ReportListState {
+    switch (action.type) {
+        case 'FETCH_START':
+            return { ...state, loading: true, error: null };
+        case 'FETCH_SUCCESS':
+            return { ...state, loading: false, rapportini: action.payload, error: null };
+        case 'FETCH_ERROR':
+            return { ...state, loading: false, error: action.payload };
+        case 'SET_LOADING':
+            return { ...state, loading: action.payload };
+        default:
+            return state;
+    }
+}
 
 const ReportListPage = () => {
   const navigate = useNavigate();
@@ -30,23 +64,21 @@ const ReportListPage = () => {
   const { data: masterData, loading: masterDataLoading } = useLocalData();
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [rapportini, setRapportini] = useState<EnrichedRapportino[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(reportListReducer, initialState);
+  const { rapportini, loading, error } = state;
 
   useEffect(() => {
     if (!userProfile || masterDataLoading) {
-        if(!masterDataLoading) setLoading(false);
+        if (!masterDataLoading) dispatch({ type: 'SET_LOADING', payload: false });
         return;
     }
 
     if (!masterData) {
-        setError("Dati anagrafici non disponibili. Sincronizzazione in corso o fallita.");
-        setLoading(false);
+        dispatch({ type: 'FETCH_ERROR', payload: "Dati anagrafici non disponibili. Sincronizzazione in corso o fallita." });
         return;
     }
 
-    setLoading(true);
+    dispatch({ type: 'FETCH_START' });
 
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
@@ -64,7 +96,6 @@ const ReportListPage = () => {
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
         const naviMap = new Map(masterData.navi.map(n => [n.id, n.nome]));
         const luoghiMap = new Map(masterData.luoghi.map(l => [l.id, l.nome]));
-        // 2. Creare una mappa dei tecnici
         const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
 
         const today = new Date();
@@ -90,10 +121,7 @@ const ReportListPage = () => {
                 }
             }
             
-            // 3. Arricchire l'array `presenze`
             const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
-
-            // 4. Calcolare oreGiorno
             const oreGiorno = (data.dettaglioOreTecnici || []).reduce((acc, d) => acc + (d.ore || 0), 0);
 
             return {
@@ -103,22 +131,19 @@ const ReportListPage = () => {
                 isEditable: isEditable,
                 tipoGiornata: tipoGiornata,
                 destinazione: destinazione || 'Non trovato',
-                presenze: presenzeArricchite, // Usare l'array arricchito
-                oreGiorno: oreGiorno,        // Aggiungere la proprietà calcolata
+                presenze: presenzeArricchite,
+                oreGiorno: oreGiorno,
             } as EnrichedRapportino;
         });
 
-        setRapportini(enrichedData);
-        setError(null);
+        dispatch({ type: 'FETCH_SUCCESS', payload: enrichedData });
       } catch(e) {
           console.error("Errore durante l'elaborazione dei rapportini: ", e);
-          setError("Impossibile elaborare i dati dei rapportini.");
+          dispatch({ type: 'FETCH_ERROR', payload: "Impossibile elaborare i dati dei rapportini." });
       }
-      setLoading(false);
     }, (err) => {
       console.error("Errore nel listener di Firestore: ", err);
-      setError("Impossibile caricare i rapportini in tempo reale.");
-      setLoading(false);
+      dispatch({ type: 'FETCH_ERROR', payload: "Impossibile caricare i rapportini in tempo reale." });
     });
 
     return () => unsubscribe();

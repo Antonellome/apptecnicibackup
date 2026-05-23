@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useReducer } from 'react';
 import {
   Box,
   Typography,
@@ -40,68 +40,100 @@ export interface RiepilogoMese {
     }>;
 }
 
+// --- STATE MANAGEMENT CON useReducer ---
+interface MonthlyReportState {
+    rapportini: EnrichedRapportino[];
+    loading: boolean;
+    error: string | null;
+}
+
+type Action = 
+    | { type: 'FETCH_START' }
+    | { type: 'FETCH_SUCCESS'; payload: EnrichedRapportino[] }
+    | { type: 'FETCH_ERROR'; payload: string }
+    | { type: 'RESET_STATE' };
+
+const initialState: MonthlyReportState = {
+    rapportini: [],
+    loading: true,
+    error: null,
+};
+
+function monthlyReportReducer(state: MonthlyReportState, action: Action): MonthlyReportState {
+    switch (action.type) {
+        case 'FETCH_START':
+            return { ...state, loading: true, error: null };
+        case 'FETCH_SUCCESS':
+            return { ...state, loading: false, rapportini: action.payload, error: null };
+        case 'FETCH_ERROR':
+            return { ...state, loading: false, error: action.payload };
+        case 'RESET_STATE':
+            return { ...initialState, loading: false };
+        default:
+            return state;
+    }
+}
+
 const ReportMensilePage = () => {
     const { user } = useAuth();
     const { masterData, loading: masterDataLoading } = useMasterData();
     const impostazioniLocali = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
 
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [rapportini, setRapportini] = useState<EnrichedRapportino[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [state, dispatch] = useReducer(monthlyReportReducer, initialState);
+    const { rapportini, loading, error } = state;
 
-    const fetchRapportini = useCallback(async () => {
+    useEffect(() => {
         if (!user || !masterData) {
-            if(!masterDataLoading) setLoading(false);
+            if (!masterDataLoading) {
+                dispatch({ type: 'RESET_STATE' });
+            }
             return;
         }
 
-        setLoading(true);
-        
-        const start = startOfMonth(currentMonth);
-        const end = endOfMonth(currentMonth);
-        const q = query(
-            collection(db, "rapportini"),
-            where("presenze", "array-contains", user.uid),
-            where("data", ">=", Timestamp.fromDate(start)),
-            where("data", "<=", Timestamp.fromDate(end)),
-            orderBy("data", "asc")
-        );
-
-        try {
-            const querySnapshot = await getDocs(q);
-            const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
-            const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
-            const enrichedData = querySnapshot.docs.map(doc => {
-                const data = doc.data() as Rapportino;
-                const oreLavoro = data.dettaglioOreTecnici?.find(d => d.tecnicoId === user.uid)?.ore ?? data.oreLavoro ?? 0;
-                const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Sconosciuto', colore: '#808080', sigla: '' };
-                const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
-                return {
-                    ...data,
-                    id: doc.id,
-                    data: (data.data as Timestamp).toDate(),
-                    tipoGiornata,
-                    presenze: presenzeArricchite,
-                    oreGiorno: oreLavoro,
-                } as EnrichedRapportino;
-            });
+        const fetchAsync = async () => {
+            dispatch({ type: 'FETCH_START' });
             
-            setRapportini(enrichedData);
-            setError(null);
-        } catch (err) {
-            console.error("Errore nel caricamento da Firestore: ", err);
-            setError("Impossibile caricare i report.");
-        } finally {
-            setLoading(false);
-        }
+            const start = startOfMonth(currentMonth);
+            const end = endOfMonth(currentMonth);
+            const q = query(
+                collection(db, "rapportini"),
+                where("presenze", "array-contains", user.uid),
+                where("data", ">=", Timestamp.fromDate(start)),
+                where("data", "<=", Timestamp.fromDate(end)),
+                orderBy("data", "asc")
+            );
+
+            try {
+                const querySnapshot = await getDocs(q);
+                const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
+                const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
+                const enrichedData = querySnapshot.docs.map(doc => {
+                    const data = doc.data() as Rapportino;
+                    const oreLavoro = data.dettaglioOreTecnici?.find(d => d.tecnicoId === user.uid)?.ore ?? data.oreLavoro ?? 0;
+                    const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Sconosciuto', colore: '#808080', sigla: '' };
+                    const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
+                    return {
+                        ...data,
+                        id: doc.id,
+                        data: (data.data as Timestamp).toDate(),
+                        tipoGiornata,
+                        presenze: presenzeArricchite,
+                        oreGiorno: oreLavoro,
+                    } as EnrichedRapportino;
+                });
+                
+                dispatch({ type: 'FETCH_SUCCESS', payload: enrichedData });
+            } catch (err) {
+                console.error("Errore nel caricamento da Firestore: ", err);
+                dispatch({ type: 'FETCH_ERROR', payload: "Impossibile caricare i report." });
+            }
+        };
+
+        fetchAsync();
     }, [user, masterData, currentMonth, masterDataLoading]);
 
-    useEffect(() => {
-        fetchRapportini();
-    }, [fetchRapportini]);
-
-    // --- LOGICA DI CALCOLO CORRETTA ALLA FONTE ---
+    // --- LOGICA DI CALCOLO (INVARIATA) ---
     const riepilogoMese = useMemo<RiepilogoMese | null>(() => {
         if (!rapportini.length || !impostazioniLocali || !user) return null;
 
@@ -202,8 +234,10 @@ const ReportMensilePage = () => {
 
     const today = new Date();
     const isNextButtonDisabled = isSameMonth(currentMonth, today);
+    // La variabile isLoadingPage ora dipende dallo stato del reducer e da masterDataLoading
     const isLoadingPage = loading || masterDataLoading || !impostazioniLocali;
 
+    // --- JSX (INVARIATO) ---
     return (
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>

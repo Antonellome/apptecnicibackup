@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useReducer } from 'react';
 import { Box, Paper, Typography, CircularProgress, Alert, IconButton, Tooltip, SxProps, Theme } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, addMonths, subMonths } from 'date-fns';
@@ -7,10 +7,10 @@ import { it } from 'date-fns/locale';
 import { useLocalData } from '@/hooks/useLocalData';
 import { db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { Tecnico, RiepilogoMensile, DayInfo } from '@/models/definitions';
+import { RiepilogoMensile, DayInfo } from '@/models/definitions';
 import { useAuth } from '@/hooks/useAuth';
 
-// --- STILI ---
+// --- STILI (INVARIATI) ---
 const cellStyle: SxProps<Theme> = {
     minWidth: 40,
     textAlign: 'center',
@@ -41,7 +41,40 @@ const tecnicoNameStyle: SxProps<Theme> = {
     fontWeight: 'bold',
 };
 
-// --- COMPONENTI ---
+// --- STATE MANAGEMENT CON useReducer ---
+interface PresenzeState {
+    riepiloghi: Map<string, RiepilogoMensile>;
+    loading: boolean;
+    error: string | null;
+}
+type Action = 
+    | { type: 'FETCH_START' }
+    | { type: 'FETCH_SUCCESS'; payload: Map<string, RiepilogoMensile> }
+    | { type: 'FETCH_ERROR'; payload: string }
+    | { type: 'RESET_STATE' };
+
+const initialState: PresenzeState = {
+    riepiloghi: new Map(),
+    loading: true,
+    error: null,
+};
+
+function presenzeReducer(state: PresenzeState, action: Action): PresenzeState {
+    switch (action.type) {
+        case 'FETCH_START':
+            return { ...state, loading: true, error: null };
+        case 'FETCH_SUCCESS':
+            return { ...state, loading: false, riepiloghi: action.payload };
+        case 'FETCH_ERROR':
+            return { ...state, loading: false, error: action.payload };
+        case 'RESET_STATE':
+            return { ...initialState, loading: false };
+        default:
+            return state;
+    }
+}
+
+// --- COMPONENTI (INVARIATI) ---
 
 const CalendarHeader: React.FC<{ days: Date[] }> = ({ days }) => (
     <Box sx={{ display: 'flex' }}>
@@ -94,14 +127,14 @@ const DayCell: React.FC<{ dayInfo?: DayInfo; isWeekendDay: boolean }> = ({ dayIn
 
 
 const PresenzePage: React.FC = () => {
-    const { userProfile } = useAuth(); // ++ FIX: Usare userProfile per i dati arricchiti
+    const { userProfile } = useAuth();
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const { data: masterData, loading: masterDataLoading } = useLocalData();
-    const [riepiloghi, setRiepiloghi] = useState<Map<string, RiepilogoMensile>>(new Map());
+    const [state, dispatch] = useReducer(presenzeReducer, initialState);
+    const { riepiloghi, loading, error } = state;
 
-    const tecnici = masterData?.tecnici ?? [];
+    // La dipendenza ora è stabile grazie a useMemo
+    const tecnici = useMemo(() => masterData?.tecnici ?? [], [masterData]);
 
     const sortedTecnici = useMemo(() => {
         return [...tecnici].sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''));
@@ -113,53 +146,49 @@ const PresenzePage: React.FC = () => {
         return eachDayOfInterval({ start, end });
     }, [currentDate]);
 
-    const fetchRiepiloghi = useCallback(async (tecniciToFetch: Tecnico[], date: Date) => {
-        if (!userProfile?.isAdmin) { // ++ FIX: Controllo su userProfile
-             setLoading(false);
-             return;
+    useEffect(() => {
+        if (!userProfile?.isAdmin || tecnici.length === 0) {
+            dispatch({ type: 'RESET_STATE' });
+            return;
         }
 
-        setLoading(true);
-        setError(null);
-        
-        const monthStr = format(date, 'yyyy-MM');
-        const riepiloghiPromises = tecniciToFetch.map(tecnico => {
-            const docId = `${tecnico.id}_${monthStr}`;
-            return getDoc(doc(db, 'riepiloghiMensili', docId));
-        });
-
-        try {
-            const riepilogoSnapshots = await Promise.all(riepiloghiPromises);
-            const newRiepiloghi = new Map<string, RiepilogoMensile>();
+        const fetchAsync = async () => {
+            dispatch({ type: 'FETCH_START' });
             
-            riepilogoSnapshots.forEach((docSnap, index) => {
-                const tecnicoId = tecniciToFetch[index].id;
-                if (docSnap.exists()) {
-                    newRiepiloghi.set(tecnicoId, docSnap.data() as RiepilogoMensile);
-                }
+            const monthStr = format(currentDate, 'yyyy-MM');
+            const riepiloghiPromises = tecnici.map(tecnico => {
+                const docId = `${tecnico.id}_${monthStr}`;
+                return getDoc(doc(db, 'riepiloghiMensili', docId));
             });
 
-            setRiepiloghi(newRiepiloghi);
+            try {
+                const riepilogoSnapshots = await Promise.all(riepiloghiPromises);
+                const newRiepiloghi = new Map<string, RiepilogoMensile>();
+                
+                riepilogoSnapshots.forEach((docSnap, index) => {
+                    const tecnicoId = tecnici[index].id;
+                    if (docSnap.exists()) {
+                        newRiepiloghi.set(tecnicoId, docSnap.data() as RiepilogoMensile);
+                    }
+                });
 
-        } catch (err) {
-            console.error("Errore nel caricamento dei riepiloghi mensili:", err);
-            setError("Impossibile caricare i dati delle presenze. Riprova più tardi.");
-        } finally {
-            setLoading(false);
-        }
-    }, [userProfile]); // ++ FIX: Dipendenza corretta
+                dispatch({ type: 'FETCH_SUCCESS', payload: newRiepiloghi });
 
-    useEffect(() => {
-        if (tecnici.length > 0) {
-            fetchRiepiloghi(tecnici, currentDate);
-        }
-    }, [currentDate, tecnici, fetchRiepiloghi]);
+            } catch (err) {
+                console.error("Errore nel caricamento dei riepiloghi mensili:", err);
+                dispatch({ type: 'FETCH_ERROR', payload: "Impossibile caricare i dati delle presenze. Riprova più tardi." });
+            }
+        };
+        
+        fetchAsync();
+
+    }, [currentDate, tecnici, userProfile]);
 
 
     const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
     const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
-    if (!userProfile?.isAdmin) { // ++ FIX: Controllo su userProfile
+    if (!userProfile?.isAdmin) {
         return (
             <Alert severity="error" sx={{m: 3}}>
                 Accesso non autorizzato. Questa pagina è riservata agli amministratori.
@@ -171,6 +200,7 @@ const PresenzePage: React.FC = () => {
         return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
     }
 
+    // --- JSX (INVARIATO) ---
     return (
         <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
             <Paper elevation={3} sx={{ p: 2 }}>

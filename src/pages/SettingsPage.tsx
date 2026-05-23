@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useReducer } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
@@ -10,72 +10,78 @@ import { useNavigate } from 'react-router-dom';
 import { localDB, TariffaLocaleCache } from '@/db/local-db';
 import { TariffaLocale } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMasterData } from '@/hooks/useMasterData'; // CORREZIONE: Importa l'hook corretto
+import { useMasterData } from '@/hooks/useMasterData';
+import { ForceUpdateButton } from '@/components/ForceUpdateButton';
 
-const ForceUpdateButton = () => {
-    const [updating, setUpdating] = useState(false);
-    const { showSnackbar } = useSnackbar();
+// --- STATE MANAGEMENT ---
+interface SettingsState {
+    tariffe: TariffaLocale[];
+    isSaving: boolean;
+    isDirty: boolean;
+}
 
-    const handleForceUpdate = async () => {
-        setUpdating(true);
-        showSnackbar("Forzando l'aggiornamento dell'app...", 'info');
-        try {
-            if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                for (const registration of registrations) {
-                    await registration.unregister();
-                }
-            }
-            if ('caches' in window) {
-                const keys = await caches.keys();
-                await Promise.all(keys.map(key => caches.delete(key)));
-            }
-            await localDB.delete();
-            setTimeout(() => { window.location.reload(); }, 2000);
-        } catch (error) {
-            console.error("Errore durante l'aggiornamento forzato:", error);
-            showSnackbar("Errore durante l'aggiornamento forzato. Prova a pulire la cache del browser manualmente.", 'error');
-            setUpdating(false);
-        }
-    };
+type SettingsAction =
+    | { type: 'SYNC_TARIFFE'; payload: TariffaLocale[] }
+    | { type: 'UPDATE_TARIFFA'; payload: { id: string; value: string } }
+    | { type: 'SET_SAVING'; payload: boolean }
+    | { type: 'SAVE_SUCCESS' };
 
-    return (
-        <Button variant="contained" color="warning" onClick={handleForceUpdate} disabled={updating}>
-            {updating ? <CircularProgress size={24} /> : 'Forza Aggiornamento App'}
-        </Button>
-    );
+const initialState: SettingsState = {
+    tariffe: [],
+    isSaving: false,
+    isDirty: false,
 };
+
+function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
+    switch (action.type) {
+        case 'SYNC_TARIFFE':
+            if (state.isDirty) {
+                return state;
+            }
+            return { ...state, tariffe: action.payload, isDirty: false };
+        case 'UPDATE_TARIFFA': {
+            const { id, value } = action.payload;
+            const valueWithDot = value.replace(',', '.');
+            if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
+                return {
+                    ...state,
+                    isDirty: true,
+                    tariffe: state.tariffe.map(t =>
+                        t.id === id ? { ...t, costo: Number(valueWithDot) } : t
+                    ),
+                };
+            }
+            return state;
+        }
+        case 'SET_SAVING':
+            return { ...state, isSaving: action.payload };
+        case 'SAVE_SUCCESS':
+            return { ...state, isDirty: false, isSaving: false };
+        default:
+            return state;
+    }
+}
 
 const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
-    const { loading: masterDataLoading } = useMasterData(); // CORREZIONE: Usa l'hook
+    const { loading: masterDataLoading } = useMasterData();
 
     const impostazioniLive = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
 
-    const [tariffe, setTariffe] = useState<TariffaLocale[]>([]);
-    const [isSaving, setIsSaving] = useState(false);
-    const [isDirty, setIsDirty] = useState(false);
+    const [state, dispatch] = useReducer(settingsReducer, initialState);
+    const { tariffe, isSaving, isDirty } = state;
 
     useEffect(() => {
         if (impostazioniLive?.data?.tariffe) {
             const tariffeOrdinate = [...impostazioniLive.data.tariffe].sort((a,b) => a.nome.localeCompare(b.nome));
-            setTariffe(tariffeOrdinate);
-            setIsDirty(false);
+            dispatch({ type: 'SYNC_TARIFFE', payload: tariffeOrdinate });
         }
-    }, [impostazioniLive]);
+    }, [impostazioniLive, isDirty]);
 
     const handleTariffaChange = (id: string, value: string) => {
-        const valueWithDot = value.replace(',', '.');
-        if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
-            setTariffe(prev =>
-                prev.map(t =>
-                    t.id === id ? { ...t, costo: Number(valueWithDot) } : t
-                )
-            );
-            setIsDirty(true);
-        }
+        dispatch({ type: 'UPDATE_TARIFFA', payload: { id, value } });
     };
     
     const handleSalva = async () => {
@@ -83,7 +89,7 @@ const SettingsPage: React.FC = () => {
             showSnackbar('Dati originali non trovati.', 'error');
             return;
         }
-        setIsSaving(true);
+        dispatch({ type: 'SET_SAVING', payload: true });
 
         const dataToSave: TariffaLocaleCache = {
             id: 'main',
@@ -97,12 +103,11 @@ const SettingsPage: React.FC = () => {
         try {
             await localDB.tariffe_locali.put(dataToSave);
             showSnackbar('Tariffe salvate con successo in locale!', 'success');
-            setIsDirty(false);
+            dispatch({ type: 'SAVE_SUCCESS' });
         } catch (error) {
             console.error("Errore durante il salvataggio in locale:", error);
             showSnackbar('Errore durante il salvataggio delle tariffe.', 'error');
-        } finally {
-            setIsSaving(false);
+            dispatch({ type: 'SET_SAVING', payload: false });
         }
     };
 
@@ -112,6 +117,7 @@ const SettingsPage: React.FC = () => {
                 await resetPassword(user.email);
                 showSnackbar(`Email di reset inviata a ${user.email}`, 'success');
             } catch (error) {
+                console.error("Errore nell'invio della mail di reset:", error);
                 showSnackbar("Errore nell'invio della mail di reset.", 'error');
             }
         }
@@ -127,7 +133,7 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    if (masterDataLoading) { // CORREZIONE: Usa il loading dell'hook
+    if (masterDataLoading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
     }
 
@@ -186,7 +192,7 @@ const SettingsPage: React.FC = () => {
             <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
                 <Typography variant="h6" gutterBottom>Manutenzione App</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Se riscontri problemi o l'app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente.
+                    Se riscontri problemi o l&apos;app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente.
                 </Typography>
                 <ForceUpdateButton />
             </Paper>
