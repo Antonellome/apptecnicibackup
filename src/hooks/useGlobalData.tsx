@@ -1,120 +1,134 @@
-import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { useEffect, useReducer } from 'react';
+import { collection, onSnapshot, DocumentData, QueryConverter } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Rapportino, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '@/models/definitions';
-// MODIFICA: Import corretto da rapportoConverter a rapportinoConverter
 import { rapportinoConverter, tecnicoConverter, dittaConverter, categoriaConverter, veicoloConverter } from '@/utils/converters';
 import { useAuth } from '@/hooks/useAuth';
 
+// --- HELPERS ---
 const sortByName = <T extends { nome?: string }>(data: T[]): T[] => {
-  return data.sort((a, b) => {
+  return [...data].sort((a, b) => {
     const nameA = a.nome || '';
     const nameB = b.nome || '';
     return nameA.localeCompare(nameB, 'it', { sensitivity: 'base' });
   });
 };
 
-const subscribeToCollection = <T,>(
-  collectionName: string,
-  setData: (data: T[]) => void,
-  onDataLoaded: () => void,
-  converter?: any,
-  sortData: boolean = false
+// --- STATE, ACTIONS, REDUCER ---
+interface GlobalDataState { /* ... same as before ... */
+  rapportini: Rapportino[];
+  tecnici: Tecnico[];
+  ditte: Ditta[];
+  categorie: Categoria[];
+  navi: Nave[];
+  luoghi: Luogo[];
+  veicoli: Veicolo[];
+  tipiGiornata: TipoGiornata[];
+  loading: boolean;
+  error: Error | null;
+  _loadedCollections: Set<string>;
+}
+type CollectionName = keyof Omit<GlobalDataState, 'loading' | 'error' | '_loadedCollections'>;
+type Action = | { type: 'RESET_STATE' } | { type: 'FETCH_INIT' } | { type: 'SET_DATA'; payload: { name: CollectionName; data: any[] } } | { type: 'SET_ERROR'; payload: Error };
+const TOTAL_COLLECTIONS = 8;
+const initialState: GlobalDataState = { /* ... same as before ... */
+  rapportini: [],
+  tecnici: [],
+  ditte: [],
+  categorie: [],
+  navi: [],
+  luoghi: [],
+  veicoli: [],
+  tipiGiornata: [],
+  loading: true,
+  error: null,
+  _loadedCollections: new Set(),
+};
+function globalDataReducer(state: GlobalDataState, action: Action): GlobalDataState { /* ... same as before ... */ 
+    switch (action.type) {
+    case 'RESET_STATE':
+      return { ...initialState, loading: false }; // Not loading if no user
+    case 'FETCH_INIT':
+      return { ...initialState, loading: true }; // Reset and start loading
+    case 'SET_DATA': {
+      const newLoaded = new Set(state._loadedCollections).add(action.payload.name);
+      const allLoaded = newLoaded.size >= TOTAL_COLLECTIONS;
+      return {
+        ...state,
+        [action.payload.name]: action.payload.data,
+        _loadedCollections: newLoaded,
+        loading: !allLoaded,
+      };
+    }
+    case 'SET_ERROR':
+      return { ...state, loading: false, error: action.payload };
+    default:
+      return state;
+  }
+}
+
+// --- SUBSCRIBER FUNCTIONS (OVERLOADED) ---
+const subscribeToCollectionWithConverter = <T>(
+  dispatch: React.Dispatch<Action>,
+  collectionName: CollectionName,
+  sortData: boolean,
+  converter: QueryConverter<T, DocumentData>
 ) => {
-  const collRef = converter
-    ? collection(db, collectionName).withConverter(converter)
-    : collection(db, collectionName);
-
-  let initialLoad = true;
+  const collRef = collection(db, collectionName).withConverter(converter);
   return onSnapshot(collRef, snapshot => {
-    let data = snapshot.docs.map(doc => (({
-      ...doc.data(),
-      id: doc.id
-    }) as T));
-
-    if (sortData) {
-      data = sortByName(data as any) as T[];
-    }
-
-    setData(data);
-    if (initialLoad) {
-        onDataLoaded();
-        initialLoad = false;
-    }
+    let data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as T);
+    if (sortData) data = sortByName(data as any);
+    dispatch({ type: 'SET_DATA', payload: { name: collectionName, data } });
   }, error => {
-    console.error(`Errore nel caricamento della collezione ${collectionName}:`, error);
-    onDataLoaded();
+    console.error(`Errore in ${collectionName}:`, error);
+    dispatch({ type: 'SET_ERROR', payload: error });
   });
 };
 
+const subscribeToCollection = <T>(
+  dispatch: React.Dispatch<Action>,
+  collectionName: CollectionName,
+  sortData: boolean
+) => {
+  const collRef = collection(db, collectionName);
+  return onSnapshot(collRef, snapshot => {
+    let data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as T);
+    if (sortData) data = sortByName(data as any);
+    dispatch({ type: 'SET_DATA', payload: { name: collectionName, data } });
+  }, error => {
+    console.error(`Errore in ${collectionName}:`, error);
+    dispatch({ type: 'SET_ERROR', payload: error });
+  });
+};
+
+// --- HOOK ---
 export const useGlobalData = () => {
   const { user } = useAuth();
-  const [rapportini, setRapportini] = useState<Rapportino[]>([]);
-  const [tecnici, setTecnici] = useState<Tecnico[]>([]);
-  const [ditte, setDitte] = useState<Ditta[]>([]);
-  const [categorie, setCategorie] = useState<Categoria[]>([]);
-  const [navi, setNavi] = useState<Nave[]>([]);
-  const [luoghi, setLuoghi] = useState<Luogo[]>([]);
-  const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
-  const [tipiGiornata, setTipiGiornata] = useState<TipoGiornata[]>([]);
-
-  const [error, setError] = useState<Error | null>(null);
-  const [loadedCollectionsCount, setLoadedCollectionsCount] = useState(0);
-  const TOTAL_COLLECTIONS = 8;
-
-  const loading = !!user && loadedCollectionsCount < TOTAL_COLLECTIONS;
+  const [state, dispatch] = useReducer(globalDataReducer, initialState);
 
   useEffect(() => {
     if (!user) {
-        setRapportini([]);
-        setTecnici([]);
-        setDitte([]);
-        setCategorie([]);
-        setNavi([]);
-        setLuoghi([]);
-        setVeicoli([]);
-        setTipiGiornata([]);
-        setLoadedCollectionsCount(0);
-        return;
+      dispatch({ type: 'RESET_STATE' });
+      return;
     }
-
-    setLoadedCollectionsCount(0);
-
-    const onDataLoaded = () => {
-        setLoadedCollectionsCount(prev => prev + 1);
-    };
-
+    dispatch({ type: 'FETCH_INIT' });
     try {
       const unsubscribers = [
-        // MODIFICA: Utilizzo corretto di rapportinoConverter
-        subscribeToCollection<Rapportino>('rapportini', setRapportini, onDataLoaded, rapportinoConverter),
-        subscribeToCollection<Tecnico>('tecnici', setTecnici, onDataLoaded, tecnicoConverter),
-        subscribeToCollection<Ditta>('ditte', setDitte, onDataLoaded, dittaConverter, true),
-        subscribeToCollection<Categoria>('categorie', setCategorie, onDataLoaded, categoriaConverter, true),
-        subscribeToCollection<Nave>('navi', setNavi, onDataLoaded, undefined, true),
-        subscribeToCollection<Luogo>('luoghi', setLuoghi, onDataLoaded, undefined, true),
-        subscribeToCollection<Veicolo>('veicoli', setVeicoli, onDataLoaded, veicoloConverter, true),
-        subscribeToCollection<TipoGiornata>('tipiGiornata', setTipiGiornata, onDataLoaded, undefined, true),
+        subscribeToCollectionWithConverter<Rapportino>(dispatch, 'rapportini', false, rapportinoConverter),
+        subscribeToCollectionWithConverter<Tecnico>(dispatch, 'tecnici', false, tecnicoConverter),
+        subscribeToCollectionWithConverter<Ditta>(dispatch, 'ditte', true, dittaConverter),
+        subscribeToCollectionWithConverter<Categoria>(dispatch, 'categorie', true, categoriaConverter),
+        subscribeToCollection<Nave>(dispatch, 'navi', true),
+        subscribeToCollection<Luogo>(dispatch, 'luoghi', true),
+        subscribeToCollectionWithConverter<Veicolo>(dispatch, 'veicoli', true, veicoloConverter),
+        subscribeToCollection<TipoGiornata>(dispatch, 'tipiGiornata', true),
       ];
-
-      return () => {
-          unsubscribers.forEach(unsub => unsub());
-      }
+      return () => unsubscribers.forEach(unsub => unsub());
     } catch (e: any) {
-      setError(e);
+      dispatch({ type: 'SET_ERROR', payload: e });
     }
   }, [user]);
 
-  return {
-    rapportini,
-    tecnici,
-    ditte,
-    categorie,
-    navi,
-    luoghi,
-    veicoli,
-    tipiGiornata,
-    loading,
-    error,
-  };
+  const { _loadedCollections, ...publicState } = state;
+  return publicState;
 };

@@ -4,7 +4,7 @@ Questo documento unificato traccia lo stato del processo di build, il piano per 
 
 ---
 
-## REGOLE OPERATIVE FONDAMENTALI (DA NON MODIFICARE)
+## REGOLE OPERATIVE FONDAMENTALI (DA NON MODIFICare)
 
 ### 1. Regola del "CIAO"
 Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono eccezioni.
@@ -29,7 +29,7 @@ Ogni modifica, senza eccezioni, segue questo ciclo:
 
 ### **STATO ATTUALE: BONIFICA IN CORSO**
 
-Il processo di bonifica è attivo. Il numero di problemi è sceso a **31 (17 errori, 14 avvisi)**. Si prosegue con l'applicazione sistematica del protocollo di correzione.
+Il processo di bonifica è attivo. Il numero di problemi è **29 (15 errori, 14 avvisi)**, dato confermato da una scansione completa. Si prosegue con l'applicazione sistematica del protocollo di correzione.
 
 ### **Piano di Bonifica Totale - Basato su `eslint`**
 
@@ -43,12 +43,22 @@ Il processo di bonifica è attivo. Il numero di problemi è sceso a **31 (17 err
 6.  **[FATTO] `src/components/ui/button.tsx` (`react-refresh/only-export-components`)**
 7.  **[FATTO] `src/contexts/AuthContext.tsx` (`react-refresh/only-export-components`)**
 
-**FASE 2: Errori Critici di Logica e Stabilità degli Hook**
+**FASE 2: Errori Critici di Logica e Stabilità degli Hook (useReducer Campaign)**
 
 *   **[FATTO] `src/contexts/NotificationContext.tsx`:** Sostituito `useState` con `useReducer`.
 *   **[FATTO] `src/hooks/useAnagrafiche.ts`:** Applicato il pattern `useReducer` per stabilizzare l'hook.
-*   **[IN CORSO] `src/hooks/useCollectionData.tsx`:** Aggiornamenti di stato sincroni nel render. **Azione Strategica:** Refactoring con `useReducer`.
-*   ... e altri 6 file con lo stesso problema critico.
+*   **[FATTO] `src/hooks/useCollectionData.tsx`:** Risolto aggiornamento di stato sincrono con `useReducer`.
+*   **[FATTO] `src/hooks/useFirestoreData.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`.
+*   **[FATTO] `src/hooks/useRapportini.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`.
+*   **[FATTO] `src/hooks/useFirestoreCollection.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`.
+*   **[FATTO] `src/hooks/useFirestoreQuery.ts`:** Risolto aggiornamento di stato sincrono con `useReducer`. **Errori rimanenti: 29**.
+*   **[IN CORSO] `src/hooks/useGlobalData.tsx`:** Ultimo hook con aggiornamenti di stato sincroni. **Azione Strategica:** Refactoring con `useReducer`.
+
+**FASE 3: Bonifica Errori Residui**
+
+*   `src/pages/MonthlyReportPage.tsx`, `src/pages/PresenzePage.tsx`, `src/pages/ReportListPage.tsx`, `src/pages/SettingsPage.tsx`: Errori `set-state-in-effect` nei componenti.
+*   `src/models/definitions.ts`: Errori `no-empty-object-type`.
+*   Altri avvisi e errori minori sparsi.
 
 ---
 
@@ -56,4 +66,9 @@ Il processo di bonifica è attivo. Il numero di problemi è sceso a **31 (17 err
 
 - **2024-08-03 - **STABILIZZAZIONE HOOKS E CONTESTI**:
     - **`NotificationContext.tsx`:** Completato refactoring con `useReducer`.
-    - **`useAnagrafiche.ts`:** Completato refactoring con `useReducer`. Eseguito commit `9a589eb` come da protocollo. **Errori rimanenti: 31**.
+    - **`useAnagrafiche.ts`:** Completato refactoring con `useReducer`.
+    - **`useCollectionData.tsx`:** Completato refactoring con `useReducer`.
+    - **`useFirestoreData.ts`:** Completato refactoring con `useReducer`.
+    - **`useRapportini.ts`:** Completato refactoring con `useReducer`.
+    - **`useFirestoreCollection.ts`:** Completato refactoring con `useReducer`.
+    - **`useFirestoreQuery.ts`:** Completato refactoring con `useReducer`.

@@ -1,15 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useReducer } from 'react';
 import { onSnapshot } from 'firebase/firestore';
 import type { Query, FirestoreError } from 'firebase/firestore';
 
-/**
- * Stato restituito dall'hook useFirestoreData.
- * @template T Il tipo di dati dei documenti.
- */
+// --- State and Reducer Definition ---
+
 interface FirestoreDataState<T> {
   data: T[] | null;
   loading: boolean;
   error: FirestoreError | null;
+}
+
+type Action<T> = 
+  | { type: 'RESET' }
+  | { type: 'INIT' }
+  | { type: 'SUCCESS', payload: T[] }
+  | { type: 'ERROR', payload: FirestoreError };
+
+function firestoreDataReducer<T>(state: FirestoreDataState<T>, action: Action<T>): FirestoreDataState<T> {
+    switch (action.type) {
+        case 'RESET':
+            return { data: null, loading: false, error: null };
+        case 'INIT':
+            return { ...state, loading: true, error: null };
+        case 'SUCCESS':
+            return { ...state, loading: false, data: action.payload };
+        case 'ERROR':
+            return { ...state, loading: false, error: action.payload, data: null };
+        default:
+            // Questo dovrebbe essere irraggiungibile con TypeScript
+            return state;
+    }
 }
 
 /**
@@ -21,42 +41,36 @@ interface FirestoreDataState<T> {
  * @returns {FirestoreDataState<T>} Un oggetto contenente i dati, lo stato di caricamento e l'eventuale errore.
  */
 export const useFirestoreData = <T extends { id: string }>(query: Query | null): FirestoreDataState<T> => {
-  const [data, setData] = useState<T[] | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<FirestoreError | null>(null);
+    const initialState: FirestoreDataState<T> = {
+        data: null,
+        loading: true,
+        error: null,
+    };
 
-  useEffect(() => {
-    // Se la query non è valida, resettiamo lo stato solo se necessario per evitare render a cascata.
-    if (!query) {
-      if (data !== null) setData(null);
-      if (loading) setLoading(false);
-      if (error !== null) setError(null);
-      return;
-    }
+    const [state, dispatch] = useReducer(firestoreDataReducer, initialState);
 
-    setLoading(true);
-    setError(null);
+    useEffect(() => {
+        if (!query) {
+            dispatch({ type: 'RESET' });
+            return;
+        }
 
-    const unsubscribe = onSnapshot(query, (querySnapshot) => {
-      const docs = querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
-      } as T));
-      setData(docs);
-      setLoading(false);
-    }, (err) => {
-      const firestoreError = err as FirestoreError;
-      console.error(`[useFirestoreData] Errore durante il fetch dei dati:`, firestoreError);
-      setError(firestoreError);
-      setData(null); // In caso di errore, i dati non sono più validi.
-      setLoading(false);
-    });
+        dispatch({ type: 'INIT' });
 
-    return () => unsubscribe();
+        const unsubscribe = onSnapshot(query, (querySnapshot) => {
+            const docs = querySnapshot.docs.map(doc => ({
+                ...doc.data(),
+                id: doc.id,
+            } as T));
+            dispatch({ type: 'SUCCESS', payload: docs });
+        }, (err) => {
+            const firestoreError = err as FirestoreError;
+            console.error(`[useFirestoreData] Errore durante il fetch dei dati:`, firestoreError);
+            dispatch({ type: 'ERROR', payload: firestoreError });
+        });
 
-  // Aggiungiamo le dipendenze mancanti per conformarci alle regole di React Hooks.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+        return () => unsubscribe();
+    }, [query]);
 
-  return { data, loading, error };
+    return state;
 };

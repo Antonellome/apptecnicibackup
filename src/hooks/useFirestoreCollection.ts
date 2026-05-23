@@ -1,11 +1,36 @@
-
-import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { useEffect, useReducer } from 'react';
+import { collection, onSnapshot, FirestoreError } from 'firebase/firestore';
 import { db } from '../firebase';
 
-interface Doc { 
+interface Doc {
     id: string;
-    [key: string]: any; 
+    [key: string]: any;
+}
+
+// --- State and Reducer Definition ---
+
+interface FirestoreCollectionState {
+    data: Doc[];
+    loading: boolean;
+    error: FirestoreError | null;
+}
+
+type Action =
+    | { type: 'INIT' }
+    | { type: 'SUCCESS', payload: Doc[] }
+    | { type: 'ERROR', payload: FirestoreError };
+
+function firestoreCollectionReducer(state: FirestoreCollectionState, action: Action): FirestoreCollectionState {
+    switch (action.type) {
+        case 'INIT':
+            return { ...state, loading: true, error: null };
+        case 'SUCCESS':
+            return { ...state, loading: false, data: action.payload };
+        case 'ERROR':
+            return { ...state, loading: false, error: action.payload, data: [] };
+        default:
+            return state;
+    }
 }
 
 /**
@@ -14,36 +39,36 @@ interface Doc {
  * @returns Un oggetto con i dati, lo stato di caricamento e un eventuale errore.
  */
 const useFirestoreCollection = (collectionName: string) => {
-  const [data, setData] = useState<Doc[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+    const initialState: FirestoreCollectionState = {
+        data: [],
+        loading: true,
+        error: null,
+    };
 
-  useEffect(() => {
-    // Creo un riferimento alla collezione
-    const collectionRef = collection(db, collectionName);
+    const [state, dispatch] = useReducer(firestoreCollectionReducer, initialState);
 
-    // onSnapshot imposta un listener in tempo reale.
-    // Ogni volta che i dati sul server cambiano, il codice viene eseguito di nuovo.
-    const unsubscribe = onSnapshot(collectionRef, 
-      (snapshot) => {
-        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setData(docs);
-        setLoading(false);
-      },
-      (err) => {
-        console.error(`Errore durante l'ascolto della collezione ${collectionName}:`, err);
-        setError(err);
-        setLoading(false);
-      }
-    );
+    useEffect(() => {
+        dispatch({ type: 'INIT' });
 
-    // La funzione di pulizia viene eseguita quando il componente si smonta.
-    // È fondamentale per rimuovere il listener e prevenire memory leak.
-    return () => unsubscribe();
+        const collectionRef = collection(db, collectionName);
 
-  }, [collectionName]); // L'effetto si attiva di nuovo se il nome della collezione cambia
+        const unsubscribe = onSnapshot(collectionRef,
+            (snapshot) => {
+                const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                dispatch({ type: 'SUCCESS', payload: docs });
+            },
+            (err) => {
+                const firestoreError = err as FirestoreError;
+                console.error(`Errore durante l'ascolto della collezione ${collectionName}:`, firestoreError);
+                dispatch({ type: 'ERROR', payload: firestoreError });
+            }
+        );
 
-  return { data, loading, error };
+        return () => unsubscribe();
+
+    }, [collectionName]);
+
+    return state;
 };
 
 export default useFirestoreCollection;
