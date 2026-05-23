@@ -8,7 +8,7 @@ import {
     Alert
 } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
-import { useNotifications } from '@/contexts/NotificationContext'; // <-- FONTE DATI CORRETTA
+import { useNotifications } from '@/hooks/useNotifications'; // <-- PERCORSO CORRETTO
 import { NotificationItem } from '@/components/notifiche/NotificationItem';
 
 const NotifichePage: React.FC = () => {

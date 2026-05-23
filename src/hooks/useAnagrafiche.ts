@@ -1,16 +1,56 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useReducer } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc, DocumentData } from "firebase/firestore";
 import { db } from '@/firebase';
 import type { Anagrafica } from '@/models/definitions';
 
+// --- useReducer Implementation ---
+
+interface State {
+    anagrafiche: Anagrafica[];
+    loading: boolean;
+    error: Error | null;
+}
+
+type Action = 
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS', payload: Anagrafica[] }
+  | { type: 'FETCH_ERROR', payload: Error }
+  | { type: 'ADD_SUCCESS', payload: Anagrafica }
+  | { type: 'UPDATE_SUCCESS', payload: { id: string, data: Partial<Anagrafica> } };
+
+const initialState: State = {
+    anagrafiche: [],
+    loading: true,
+    error: null,
+};
+
+function anagraficheReducer(state: State, action: Action): State {
+    switch (action.type) {
+        case 'FETCH_START':
+            return { ...state, loading: true, error: null };
+        case 'FETCH_SUCCESS':
+            return { ...state, loading: false, anagrafiche: action.payload };
+        case 'FETCH_ERROR':
+            return { ...state, loading: false, error: action.payload };
+        case 'ADD_SUCCESS':
+            return { ...state, anagrafiche: [...state.anagrafiche, action.payload] };
+        case 'UPDATE_SUCCESS':
+            return {
+                ...state,
+                anagrafiche: state.anagrafiche.map(a => 
+                    a.id === action.payload.id ? { ...a, ...action.payload.data } : a
+                ),
+            };
+        default:
+            return state;
+    }
+}
+
 export const useAnagrafiche = () => {
-    const [anagrafiche, setAnagrafiche] = useState<Anagrafica[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
+    const [state, dispatch] = useReducer(anagraficheReducer, initialState);
 
     const fetchAnagrafiche = useCallback(async () => {
-        setLoading(true);
-        setError(null);
+        dispatch({ type: 'FETCH_START' });
         try {
             const anagraficheCollectionRef = collection(db, "anagrafiche");
             const data = await getDocs(anagraficheCollectionRef);
@@ -18,24 +58,22 @@ export const useAnagrafiche = () => {
                 ...doc.data(),
                 id: doc.id,
             })) as Anagrafica[];
-            setAnagrafiche(anagraficheData);
+            dispatch({ type: 'FETCH_SUCCESS', payload: anagraficheData });
         } catch (err) {
             console.error("Errore durante il caricamento delle anagrafiche:", err);
-            setError(err as Error);
-        } finally {
-            setLoading(false);
+            dispatch({ type: 'FETCH_ERROR', payload: err as Error });
         }
-    }, []); // Dipendenza vuota, la funzione viene creata una sola volta.
+    }, []);
 
     const addAnagrafica = useCallback(async (anagrafica: Omit<Anagrafica, 'id'>) => {
         try {
             const anagraficheCollectionRef = collection(db, "anagrafiche");
             const docRef = await addDoc(anagraficheCollectionRef, anagrafica);
-            // Aggiorna lo stato localmente per una UI reattiva, senza ricaricare tutto.
-            setAnagrafiche(prev => [...prev, { ...anagrafica, id: docRef.id } as Anagrafica]);
+            const newAnagrafica = { ...anagrafica, id: docRef.id } as Anagrafica;
+            dispatch({ type: 'ADD_SUCCESS', payload: newAnagrafica });
         } catch (err) {
             console.error("Errore durante l'aggiunta dell'anagrafica:", err);
-            setError(err as Error);
+            dispatch({ type: 'FETCH_ERROR', payload: err as Error }); // Riutilizziamo l'azione di errore
         }
     }, []);
 
@@ -43,18 +81,16 @@ export const useAnagrafiche = () => {
         try {
             const anagraficaDoc = doc(db, "anagrafiche", id);
             await updateDoc(anagraficaDoc, dataToUpdate);
-            // Aggiorna lo stato localmente per una UI reattiva.
-            setAnagrafiche(prev => prev.map(a => a.id === id ? { ...a, ...dataToUpdate } : a));
+            dispatch({ type: 'UPDATE_SUCCESS', payload: { id, data: dataToUpdate } });
         } catch (err) {
             console.error("Errore durante l'aggiornamento dell'anagrafica:", err);
-            setError(err as Error);
+            dispatch({ type: 'FETCH_ERROR', payload: err as Error }); // Riutilizziamo l'azione di errore
         }
     }, []);
 
-    // Questo useEffect viene eseguito UNA SOLA VOLTA quando l'hook viene utilizzato per la prima volta.
     useEffect(() => {
         fetchAnagrafiche();
-    }, [fetchAnagrafiche]); // `fetchAnagrafiche` è stabile grazie a useCallback.
+    }, [fetchAnagrafiche]);
 
-    return { anagrafiche, loading, error, addAnagrafica, updateAnagrafica };
+    return { ...state, addAnagrafica, updateAnagrafica };
 };

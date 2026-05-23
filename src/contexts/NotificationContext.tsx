@@ -1,5 +1,4 @@
-
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { useEffect, ReactNode, useMemo, useCallback, useReducer } from 'react';
 import {
   collection,
   query,
@@ -12,7 +11,9 @@ import {
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { Notifica } from '@/models/definitions';
+import { NotificationContext, NotificationContextType } from './NotificationContextDefinition';
 
+// ... (interfaces remain the same)
 interface Target {
   type: 'user' | 'category' | 'all';
   id?: string;
@@ -30,17 +31,50 @@ interface FirebaseNotification {
   readBy?: { uid: string; name: string } | null;
 }
 
-interface NotificationContextType {
-  notifications: Notifica[];
-  unreadCount: number;
-  markAsRead: (notificationId: string) => Promise<void>;
-  hideNotification: (notificationId: string) => void;
-  loading: boolean;
+// --- useReducer Implementation ---
+
+interface State {
+  allNotifications: FirebaseNotification[];
+  hiddenIds: string[];
+  internalLoading: boolean;
   error: string | null;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+type Action = 
+  | { type: 'START_LOADING' }
+  | { type: 'SET_DATA', payload: FirebaseNotification[] }
+  | { type: 'SET_ERROR', payload: string }
+  | { type: 'RESET_STATE' }
+  | { type: 'SET_HIDDEN_IDS', payload: string[] }
+  | { type: 'ADD_HIDDEN_ID', payload: string };
 
+const initialState: State = {
+  allNotifications: [],
+  hiddenIds: [],
+  internalLoading: true,
+  error: null,
+};
+
+function notificationReducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'START_LOADING':
+      return { ...state, internalLoading: true, error: null };
+    case 'SET_DATA':
+      return { ...state, internalLoading: false, allNotifications: action.payload };
+    case 'SET_ERROR':
+      return { ...state, internalLoading: false, error: action.payload };
+    case 'RESET_STATE':
+      return initialState;
+    case 'SET_HIDDEN_IDS':
+      return { ...state, hiddenIds: action.payload };
+    case 'ADD_HIDDEN_ID':
+      return { ...state, hiddenIds: [...state.hiddenIds, action.payload] };
+    default:
+      return state;
+  }
+}
+
+// Helper functions for localStorage
 const getHiddenIdsFromStorage = (userId: string): string[] => {
   const stored = localStorage.getItem(`hidden_notifications_${userId}`);
   return stored ? JSON.parse(stored) : [];
@@ -52,31 +86,25 @@ const setHiddenIdsInStorage = (userId: string, ids: string[]) => {
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
-  const [allNotifications, setAllNotifications] = useState<FirebaseNotification[]>([]);
-  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(notificationReducer, initialState);
 
-  // --- DIPENDENZE PRIMITIVE E STABILI PER EVITARE LOOP ---
+  const isLoading = authLoading || state.internalLoading;
+
   const userUid = user?.uid;
   const userCategoryId = userProfile?.categoria?.id;
 
   useEffect(() => {
-    if (userUid) {
-      setHiddenIds(getHiddenIdsFromStorage(userUid));
-    }
-  }, [userUid]);
-
-  useEffect(() => {
-    // L'effetto si attiva solo se l'utente è caricato e autenticato.
-    if (authLoading || !userUid) {
-      setLoading(false);
-      setAllNotifications([]);
+    if (authLoading) {
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    if (!userUid) {
+      dispatch({ type: 'RESET_STATE' });
+      return;
+    }
+
+    dispatch({ type: 'START_LOADING' });
+    dispatch({ type: 'SET_HIDDEN_IDS', payload: getHiddenIdsFromStorage(userUid) });
 
     const collectionRef = collection(db, 'notifications');
     const q = query(collectionRef);
@@ -94,25 +122,21 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         });
 
         relevantNotifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-        setAllNotifications(relevantNotifications);
+        dispatch({ type: 'SET_DATA', payload: relevantNotifications });
 
       } catch (err: any) {
         console.error("Errore durante l'elaborazione delle notifiche:", err);
-        setError(`Errore interno nell'elaborazione notifiche: ${err.message}`);
-      } finally {
-        setLoading(false);
+        dispatch({ type: 'SET_ERROR', payload: `Errore interno nell'elaborazione notifiche: ${err.message}` });
       }
     }, (err) => {
       console.error("Errore nel listener delle notifiche:", err);
-      setError("Errore di connessione al centro notifiche.");
-      setLoading(false);
+      dispatch({ type: 'SET_ERROR', payload: "Errore di connessione al centro notifiche." });
     });
 
     return () => unsubscribe();
-  // --- FIX DEFINITIVO 429: L'effetto ora dipende solo da stringhe stabili. ---
   }, [userUid, userCategoryId, authLoading]);
 
-  const markAsRead = async (notificationId: string) => {
+  const markAsRead = useCallback(async (notificationId: string) => {
     if (!user || !userProfile) return;
     const notificationRef = doc(db, "notifications", notificationId);
     try {
@@ -124,40 +148,38 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     } catch (err) {
       console.error("Errore nell'invio della conferma di lettura:", err);
     }
-  };
+  }, [user, userProfile]);
 
-  const hideNotification = (notificationId: string) => {
+  const hideNotification = useCallback((notificationId: string) => {
     if (!userUid) return;
-    const newHiddenIds = [...hiddenIds, notificationId];
-    setHiddenIds(newHiddenIds);
-    setHiddenIdsInStorage(userUid, newHiddenIds);
-  };
+    dispatch({ type: 'ADD_HIDDEN_ID', payload: notificationId });
+    setHiddenIdsInStorage(userUid, [...state.hiddenIds, notificationId]);
+  }, [userUid, state.hiddenIds]);
 
   const visibleNotifications = useMemo(() => {
-    return allNotifications
-      .filter(n => !hiddenIds.includes(n.id))
-      .map(n => ({ 
+    return state.allNotifications
+      .filter(n => !state.hiddenIds.includes(n.id))
+      .map(n => ({
         id: n.id,
         title: n.title,
-        body: n.message, 
+        body: n.message,
         createdAt: n.createdAt,
         readBy: n.readBy ? { [n.readBy.uid]: true } : {},
       } as Notifica));
-  }, [allNotifications, hiddenIds]);
+  }, [state.allNotifications, state.hiddenIds]);
 
   const unreadCount = useMemo(() => {
-    return allNotifications.filter(n => n.status === 'unread' && !hiddenIds.includes(n.id)).length;
-  }, [allNotifications, hiddenIds]);
+    return state.allNotifications.filter(n => n.status === 'unread' && !state.hiddenIds.includes(n.id)).length;
+  }, [state.allNotifications, state.hiddenIds]);
 
-  const value = { notifications: visibleNotifications, unreadCount, markAsRead, hideNotification, loading, error };
+  const value: NotificationContextType = useMemo(() => ({
+    notifications: visibleNotifications,
+    unreadCount,
+    markAsRead,
+    hideNotification,
+    loading: isLoading,
+    error: state.error
+  }), [visibleNotifications, unreadCount, markAsRead, hideNotification, isLoading, state.error]);
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
-};
-
-export const useNotifications = (): NotificationContextType => {
-  const context = useContext(NotificationContext);
-  if (context === undefined) {
-    throw new Error('useNotifications deve essere usato dentro un NotificationProvider');
-  }
-  return context;
 };

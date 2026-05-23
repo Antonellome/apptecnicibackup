@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Accordion, AccordionSummary, AccordionDetails, Typography, IconButton, Box } from '@mui/material';
 import { ExpandMore as ExpandMoreIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material';
 import { Notifica } from '@/models/definitions';
-import { useNotifications } from '@/contexts/NotificationContext';
+import { useNotifications } from '@/hooks/useNotifications'; // <-- PERCORSO CORRETTO
 import { useAuth } from '@/hooks/useAuth';
 import { format, isToday, isYesterday } from 'date-fns';
 import { it } from 'date-fns/locale/it';

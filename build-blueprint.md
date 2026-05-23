@@ -12,6 +12,7 @@ Ogni mia singola risposta **DEVE** iniziare con la parola `CIAO.`. Non ci sono e
 ### 2. Regola della Stabilità Visiva (Divieto Assoluto di Modifiche Estetiche)
 - Mi è **SEVERAMENTE E CATEGORICAMENTE VIETATO** cambiare, alterare o modificare qualsiasi parte visiva o strutturale dell'applicazione.
 - Posso modificare **SOLO** le logiche interne (funzioni, gestione dati, algoritmi).
+- L'app Tecnici scambia dati con un'app Master. Le modifiche devono essere chirurgiche per non rompere l'integrazione.
 
 ### 3. PROTOCOLLO DI AZIONE RIGIDO (NUOVO)
 Ogni modifica, senza eccezioni, segue questo ciclo:
@@ -19,7 +20,8 @@ Ogni modifica, senza eccezioni, segue questo ciclo:
 2.  **LEGGI E VERIFICA:** Usa `read_file` per analizzare il codice sorgente attuale del file problematico.
 3.  **AGISCI:** Applica la correzione con `write_file`.
 4.  **VERIFICA POST-MODIFICA:** Esegui `eslint` sul singolo file modificato per confermare che l'errore specifico è stato risolto.
-5.  **LOG:** Aggiorna il log delle modifiche solo dopo che la verifica ha avuto successo.
+5.  **LOG:** Aggiorna questo blueprint.
+6.  **COMMIT & PUSH:** Salva in Git con un messaggio di commit che includa il numero di errori rimanenti.
 
 ---
 
@@ -27,48 +29,39 @@ Ogni modifica, senza eccezioni, segue questo ciclo:
 
 ### **STATO ATTUALE: BONIFICA IN CORSO**
 
-Il processo di bonifica è attivo. Il numero di problemi è stato ridotto da 51 a **36 (20 errori, 16 warning)**. Si prosegue con l'applicazione sistematica del protocollo di correzione. La priorità assoluta rimane la bonifica totale di questi problemi.
+Il processo di bonifica è attivo. Il numero di problemi è sceso a **32 (18 errori, 14 avvisi)**. Si prosegue con l'applicazione sistematica del protocollo di correzione.
 
 ### **Piano di Bonifica Totale - Basato su `eslint`**
 
-L'attacco sistematico prosegue, seguendo il protocollo rigido.
-
-**FASE 1: Errori Bloccanti e di Logica**
+**FASE 1: Errori Bloccanti e Refactoring Strutturali**
 
 1.  **[FATTO] Ignorare File Compilati (`.eslintignore`)**
 2.  **[FATTO] Configurazione Moduli ES per Cloud Functions (`functions/tsconfig.json`)**
 3.  **[FATTO] `src/components/AppBar.tsx` (`@typescript-eslint/no-unused-vars`)**
-    *   **Azione:** Rimossa la variabile `theme` inutilizzata.
 4.  **[FATTO] `src/components/MonthlyReportGrid.tsx` (`react-hooks/preserve-manual-memoization`)**
-    *   **Azione:** Rimossi i `useMemo` manuali per consentire l'ottimizzazione del React Compiler.
 5.  **[FATTO] `src/components/pdf/PdfPreviewDialog.tsx` (`react/no-unescaped-entities`)**
-    *   **Azione:** Sostituito l'apostrofo con l'entità HTML `&apos;`.
 6.  **[FATTO] `src/components/ui/button.tsx` (`react-refresh/only-export-components`)**
-    *   **Azione:** Separata la costante `buttonVariants` in un file dedicato per rispettare la regola di HMR.
+7.  **[FATTO] `src/contexts/AuthContext.tsx` (`react-refresh/only-export-components`)**
 
-**FASE 2: Avvisi e Refactoring Minori**
+**FASE 2: Errori Critici di Logica (`react-hooks/set-state-in-effect`)**
 
-*   `src/contexts/AuthContext.tsx`: Avviso `react-refresh/only-export-components`. Verrà risolto spostando il contesto in un file separato.
-*   ...e tutti gli altri problemi rimanenti.
-
----
-
-## Log Errori `eslint` (Fonte di Verità - 02/08/2024)
-
-Il riferimento completo è l'output del comando `npx eslint . --ext .ts,.tsx` che ora riporta **36 problemi (20 errori, 16 warning)**. Questa lista guida tutte le prossime azioni.
+*   **[FATTO] `src/contexts/NotificationContext.tsx`:** Causa render a cascata e loop di dipendenze. **Azione Correttiva:** Sostituito `useState` con `useReducer`, risolvendo tutti i problemi.
+*   **[IN CORSO] `src/hooks/useAnagrafiche.ts`:** Chiamata di fetch in `useEffect`. **Azione Strategica:** Applicare il pattern `useReducer` per stabilizzare l'hook.
+*   ... e altri 7 file con lo stesso problema critico.
 
 ---
 
 ## Log Modifiche
 
 - **2024-08-02 - INIZIO OPERAZIONE DI BONIFICA TOTALE:**
-    - Riconosciuto fallimento sistemico nella gestione degli errori di build.
-    - Aggiornato questo blueprint con un nuovo protocollo operativo rigido e non negoziabile.
-    - **Azione 1:** Creato file `.eslintignore` per escludere la directory `functions/lib`.
-    - **Azione 2:** Modificato `functions/tsconfig.json` per usare `module: NodeNext`.
+    - **Azioni 1-2:** Setup iniziale (`.eslintignore`, `tsconfig.json`).
 
 - **2024-08-02 - Continuazione Bonifica:**
-    - **Azione 3:** Corretto `no-unused-vars` in `src/components/AppBar.tsx`.
-    - **Azione 4:** Rimossi `useMemo` manuali in `src/components/MonthlyReportGrid.tsx`.
-    - **Azione 5:** Corretto `no-unescaped-entities` in `src/components/pdf/PdfPreviewDialog.tsx`.
-    - **Azione 6:** Refattorizzato `src/components/ui/button.tsx` spostando `buttonVariants` in `src/components/ui/button-variants.ts`.
+    - **Azioni 3-6:** Correzioni minori e refactoring HMR.
+
+- **2024-08-03 - Refactoring Contesti e Risoluzione Incidente:**
+    - **Azione 7:** Refactoring `src/contexts/AuthContext.tsx`.
+
+- **2024-08-03 - **VITTORIA STRATEGICA: `NotificationContext.tsx`**:
+    - **Decisione Strategica:** Implementazione di `useReducer`.
+    - **Stato:** **COMPLETATO**. Il file è ora stabile e privo di errori `eslint`.

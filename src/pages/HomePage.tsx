@@ -3,7 +3,7 @@ import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useNotifications } from '@/contexts/NotificationContext';
+import { useNotifications } from '@/hooks/useNotifications'; // <-- PERCORSO CORRETTO
 import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';

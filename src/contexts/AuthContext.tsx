@@ -1,18 +1,9 @@
-import { useState, useEffect, createContext, ReactNode, useMemo, useCallback } from 'react';
+import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/models/definitions';
-
-export interface AuthContextType {
-  user: User | null; // Firebase Auth User
-  userProfile: UserProfile | null; // Firestore User Profile
-  loading: boolean;
-  logout: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-}
-
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext, AuthContextType } from './AuthContextDefinition';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -32,7 +23,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               if (tecnicoDocSnap.exists()) {
                   const tecnicoData = tecnicoDocSnap.data();
                   
-                  // ++ FIX: Legge correttamente isAdmin dal documento
                   const isAdmin = tecnicoData.isAdmin || false;
 
                   const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
@@ -58,14 +48,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                       nome: tecnicoData.nome || '',
                       cognome: tecnicoData.cognome || '',
                       attivo: tecnicoData.attivo || false,
-                      isAdmin: isAdmin, // ++ FIX: Imposta isAdmin nel profilo
+                      isAdmin: isAdmin,
                       categoria: categoriaObj,
                   };
                   setUserProfile(profile);
 
               } else {
                   console.warn(`[Auth] Profilo tecnico non trovato per UID: ${currentUser.uid}. L'utente non avrà autorizzazioni complete.`);
-                  setUserProfile(null); // No profile found
+                  setUserProfile(null);
               }
           } catch (error) {
               console.error("[Auth] Errore critico nel caricamento del profilo utente:", error);
@@ -89,9 +79,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await sendPasswordResetEmail(auth, email);
   }, []);
 
-  const value = useMemo(() => ({
-    user, // Raw firebase user
-    userProfile, // Enriched firestore profile
+  const value: AuthContextType = useMemo(() => ({
+    user,
+    userProfile,
     loading,
     logout,
     resetPassword,
