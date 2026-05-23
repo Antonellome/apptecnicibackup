@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Autocomplete, Button, CircularProgress, Alert, Box, Chip, IconButton, Switch, FormControlLabel,
-    Dialog, DialogTitle, DialogContent, DialogActions
+    Dialog, DialogTitle, DialogContent, DialogActions, AlertColor
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
@@ -178,7 +178,9 @@ const ReportFormPage: React.FC = () => {
       [tipiGiornata]
     );
 
-    const memoizedShowSnackbar = useCallback(showSnackbar, []);
+    const memoizedShowSnackbar = useCallback((message: string, severity: AlertColor) => {
+        showSnackbar(message, severity);
+    }, [showSnackbar]);
 
     const otherTecnicos = useMemo(() => sortedTecnici.filter(t => t.id !== loggedInTecnicoId), [sortedTecnici, loggedInTecnicoId]);
     const altriTecniciIds = useMemo(() => dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId), [dettaglioOre, loggedInTecnicoId]);

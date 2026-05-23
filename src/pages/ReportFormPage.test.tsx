@@ -25,6 +25,7 @@ const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) 
     </BrowserRouter>
   );
 };
+AllTheProviders.displayName = 'AllTheProviders';
 
 // Custom render function that uses the wrapper
 const customRender = (ui: React.ReactElement, options?: any) =>
@@ -48,6 +49,7 @@ vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { uid: 'test-uid', email: 'test@test.com', displayName: 'Test User' },
     loading: false,
+    userProfile: { tecnicoId: 'test-uid', nome: 'Test', cognome: 'User' }
   }),
 }));
 
@@ -55,17 +57,17 @@ vi.mock('@/hooks/useAuth', () => ({
 const mockLocalData = {
     navi: [{ id: 'nave1', nome: 'Nave Prova' }],
     luoghi: [{ id: 'luogo1', nome: 'Luogo Prova' }],
-    tecnici: [{ id: 'test-uid', nome: 'Test', cognome: 'User' }],
+    tecnici: [{ id: 'test-uid', nome: 'Test', cognome: 'User', tecnicoId: 'test-uid' }],
     veicoli: [{ id: 'vei1', marca: 'Fiat', modello: 'Doblò', targa: 'AB123CD' }],
-    tipiGiornata: [{ id: 'tg1', nome: 'Ordinaria'}],
-    clienti: [], // Add clienti to avoid potential issues
-    categorie: [], // Add categorie to avoid potential issues
+    tipiGiornata: [{ id: 'tg1', nome: 'Ordinaria', lavorativo: true }],
+    clienti: [], 
+    categorie: [], 
 };
 vi.mock('@/hooks/useLocalData', () => ({
   useLocalData: () => ({ data: mockLocalData, loading: false, error: null }),
 }));
 
-// 4. Snackbar Context - Mock is kept, but provider is now correctly wrapping
+// 4. Snackbar Context
 vi.mock('@/contexts/SnackbarContext', async (importOriginal) => {
     const actual = await importOriginal() as any;
     return {
@@ -85,7 +87,7 @@ vi.mock('firebase/firestore', async (importOriginal) => {
         addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })),
         updateDoc: vi.fn(), 
         collection: vi.fn(),
-        writeBatch: vi.fn(() => ({ commit: vi.fn(), set: vi.fn() })),
+        runTransaction: vi.fn((db, callback) => callback({})), // Mock transaction
         Timestamp: { fromDate: (date: Date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 }), now: () => ({ seconds: Date.now() / 1000, nanoseconds: 0 })},
     }
 });
@@ -97,12 +99,16 @@ vi.mock('react-signature-canvas', () => {
         isEmpty: vi.fn().mockReturnValue(false),
         getTrimmedCanvas: () => ({ toDataURL: () => 'data:image/png;base64,fakesignature' }),
     };
-    const MockSignatureCanvas = React.forwardRef(( ref: any) => {
+    // Assign the component to a variable with a name.
+    const MockSignatureCanvas = React.forwardRef((props: any, ref: any) => {
         React.useImperativeHandle(ref, () => signaturePadMock);
-        return <canvas data-testid="signature-canvas" />;
+        return <canvas data-testid="signature-canvas" {...props} />;
     });
+    // Add the display name.
+    MockSignatureCanvas.displayName = 'MockSignatureCanvas';
     return { default: MockSignatureCanvas };
 });
+
 
 // ============== TEST SUITE ============== 
 
@@ -123,7 +129,7 @@ describe('ReportFormPage', () => {
     customRender(<ReportFormPage />);
 
     // Wait for async data to load
-    await screen.findByText('Test User');
+    await screen.findByText('User Test'); // Corrected name based on mock
 
     // Select a value
     await user.click(screen.getByLabelText(/Tipo Giornata/i));
