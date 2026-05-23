@@ -1,23 +1,50 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useReducer } from 'react';
 import { onSnapshot } from 'firebase/firestore';
 import type { Query, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
+// --- useReducer Implementation ---
+
+interface State<T> {
+    data: T[];
+    loading: boolean;
+    error: Error | null;
+}
+
+type Action<T> = 
+  | { type: 'RESET' }
+  | { type: 'INIT' }
+  | { type: 'SUCCESS', payload: T[] }
+  | { type: 'ERROR', payload: Error };
+
+function collectionDataReducer<T>(state: State<T>, action: Action<T>): State<T> {
+    switch (action.type) {
+        case 'RESET':
+            return { data: [], loading: false, error: null };
+        case 'INIT':
+            return { ...state, loading: true, error: null };
+        case 'SUCCESS':
+            return { ...state, loading: false, data: action.payload };
+        case 'ERROR':
+            return { ...state, loading: false, error: action.payload };
+        default:
+            throw new Error(`Unhandled action type`);
+    }
+}
+
 export const useCollectionData = <T extends DocumentData>(q: Query<DocumentData> | null) => {
-  const [data, setData] = useState<T[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [state, dispatch] = useReducer(collectionDataReducer, {
+    data: [],
+    loading: true,
+    error: null,
+  });
 
   useEffect(() => {
     if (!q) {
-      // Aggiorna lo stato solo se necessario per evitare rendering a cascata.
-      if (data.length > 0) setData([]);
-      if (loading) setLoading(false);
-      if (error) setError(null);
+      dispatch({ type: 'RESET' });
       return;
     }
 
-    // Imposta lo stato di caricamento prima di iniziare l'iscrizione ai dati.
-    setLoading(true);
+    dispatch({ type: 'INIT' });
 
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
@@ -25,19 +52,15 @@ export const useCollectionData = <T extends DocumentData>(q: Query<DocumentData>
         snapshot.forEach((doc: QueryDocumentSnapshot) => {
           result.push({ id: doc.id, ...doc.data() } as unknown as T);
         });
-        setData(result);
-        setLoading(false);
+        dispatch({ type: 'SUCCESS', payload: result });
       },
       (err) => {
-        setError(err);
-        setLoading(false);
+        dispatch({ type: 'ERROR', payload: err });
       }
     );
 
-    // La funzione di pulizia annulla l'iscrizione quando il componente viene smontato o la query cambia.
     return () => unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]); // La dipendenza è solo sulla query.
+  }, [q]);
 
-  return { data, loading, error };
+  return state;
 };

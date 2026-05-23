@@ -29,7 +29,7 @@ Ogni modifica, senza eccezioni, segue questo ciclo:
 
 ### **STATO ATTUALE: BONIFICA IN CORSO**
 
-Il processo di bonifica è attivo. Il numero di problemi è sceso a **32 (18 errori, 14 avvisi)**. Si prosegue con l'applicazione sistematica del protocollo di correzione.
+Il processo di bonifica è attivo. Il numero di problemi è sceso a **31 (17 errori, 14 avvisi)**. Si prosegue con l'applicazione sistematica del protocollo di correzione.
 
 ### **Piano di Bonifica Totale - Basato su `eslint`**
 
@@ -43,25 +43,17 @@ Il processo di bonifica è attivo. Il numero di problemi è sceso a **32 (18 err
 6.  **[FATTO] `src/components/ui/button.tsx` (`react-refresh/only-export-components`)**
 7.  **[FATTO] `src/contexts/AuthContext.tsx` (`react-refresh/only-export-components`)**
 
-**FASE 2: Errori Critici di Logica (`react-hooks/set-state-in-effect`)**
+**FASE 2: Errori Critici di Logica e Stabilità degli Hook**
 
-*   **[FATTO] `src/contexts/NotificationContext.tsx`:** Causa render a cascata e loop di dipendenze. **Azione Correttiva:** Sostituito `useState` con `useReducer`, risolvendo tutti i problemi.
-*   **[IN CORSO] `src/hooks/useAnagrafiche.ts`:** Chiamata di fetch in `useEffect`. **Azione Strategica:** Applicare il pattern `useReducer` per stabilizzare l'hook.
-*   ... e altri 7 file con lo stesso problema critico.
+*   **[FATTO] `src/contexts/NotificationContext.tsx`:** Sostituito `useState` con `useReducer`.
+*   **[FATTO] `src/hooks/useAnagrafiche.ts`:** Applicato il pattern `useReducer` per stabilizzare l'hook.
+*   **[IN CORSO] `src/hooks/useCollectionData.tsx`:** Aggiornamenti di stato sincroni nel render. **Azione Strategica:** Refactoring con `useReducer`.
+*   ... e altri 6 file con lo stesso problema critico.
 
 ---
 
 ## Log Modifiche
 
-- **2024-08-02 - INIZIO OPERAZIONE DI BONIFICA TOTALE:**
-    - **Azioni 1-2:** Setup iniziale (`.eslintignore`, `tsconfig.json`).
-
-- **2024-08-02 - Continuazione Bonifica:**
-    - **Azioni 3-6:** Correzioni minori e refactoring HMR.
-
-- **2024-08-03 - Refactoring Contesti e Risoluzione Incidente:**
-    - **Azione 7:** Refactoring `src/contexts/AuthContext.tsx`.
-
-- **2024-08-03 - **VITTORIA STRATEGICA: `NotificationContext.tsx`**:
-    - **Decisione Strategica:** Implementazione di `useReducer`.
-    - **Stato:** **COMPLETATO**. Il file è ora stabile e privo di errori `eslint`.
+- **2024-08-03 - **STABILIZZAZIONE HOOKS E CONTESTI**:
+    - **`NotificationContext.tsx`:** Completato refactoring con `useReducer`.
+    - **`useAnagrafiche.ts`:** Completato refactoring con `useReducer`. Eseguito commit `9a589eb` come da protocollo. **Errori rimanenti: 31**.
