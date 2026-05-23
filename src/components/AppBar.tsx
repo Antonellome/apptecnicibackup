@@ -8,10 +8,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
-// Rimosse le props non più necessarie
-interface CustomAppBarProps {}
-
-const CustomAppBar = ({}: CustomAppBarProps) => {
+const CustomAppBar = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -27,8 +24,6 @@ const CustomAppBar = ({}: CustomAppBarProps) => {
     navigate('/settings');
   };
 
-  // Funzione goToNotifiche rimossa
-
   return (
     <AppBar position="static" color="primary" enableColorOnDark>
       <Toolbar>
@@ -42,8 +37,6 @@ const CustomAppBar = ({}: CustomAppBarProps) => {
             <HomeIcon />
           </IconButton>
 
-          {/* Blocco campanella completamente rimosso */}
-          
           <IconButton onClick={goToSettings} color="inherit">
             <SettingsIcon />
           </IconButton>

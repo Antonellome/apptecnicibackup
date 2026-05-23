@@ -92,7 +92,7 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({
                         }}
                     />
                 ) : !isGenerating && (
-                     <Typography sx={{color: 'white'}}>Errore: impossibile visualizzare l'anteprima.</Typography>
+                     <Typography sx={{color: 'white'}}>Errore: impossibile visualizzare l&apos;anteprima.</Typography>
                 )}
             </Box>
         </Dialog>

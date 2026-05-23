@@ -1,5 +1,4 @@
 
-import { useMemo } from 'react';
 import { Tecnico, EnrichedRapportino, TipoGiornata } from '@/models/definitions'; // CORRETTO
 import { getDaysInMonth, isValid, parseISO } from 'date-fns';
 import { 
@@ -28,42 +27,35 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
     const daysInMonth = getDaysInMonth(new Date(year, month));
 
     // Mappa per accesso rapido ai tipi di giornata per ID
-    const tipiGiornataMap = useMemo(() => {
-        const map = new Map<string, TipoGiornata>();
-        tipiGiornata.forEach(t => map.set(t.id, t));
-        return map;
-    }, [tipiGiornata]);
+    const tipiGiornataMap = new Map<string, TipoGiornata>();
+    tipiGiornata.forEach(t => tipiGiornataMap.set(t.id, t));
 
     // Mappa nidificata per i rapportini: [tecnicoId][giorno] -> rapportino
-    const rapportiniMatrix = useMemo(() => {
-        const matrix = new Map<string, Map<number, EnrichedRapportino>>();
-        
-        tecnici.forEach(t => matrix.set(t.id, new Map()));
+    const rapportiniMatrix = new Map<string, Map<number, EnrichedRapportino>>();
+    
+    tecnici.forEach(t => rapportiniMatrix.set(t.id, new Map()));
 
-        rapportini.forEach(r => {
-            // Assicura che la data sia un oggetto Date valido
-            const reportDate = r.data instanceof Timestamp ? r.data.toDate() : (typeof r.data === 'string' ? parseISO(r.data) : r.data);
-            if (!isValid(reportDate)) return;
+    rapportini.forEach(r => {
+        // Assicura che la data sia un oggetto Date valido
+        const reportDate = r.data instanceof Timestamp ? r.data.toDate() : (typeof r.data === 'string' ? parseISO(r.data) : r.data);
+        if (!isValid(reportDate)) return;
 
-            if (reportDate.getMonth() === month && reportDate.getFullYear() === year) {
-                const dayOfMonth = reportDate.getDate();
-                // Il rapportino è associato al tecnico che lo ha scritto E a tutti i presenti
-                r.presenze.forEach(tecnicoPresente => {
-                    const tecnicoId = tecnicoPresente.id;
-                    const technicianMap = matrix.get(tecnicoId);
-                    if (technicianMap) {
-                        // Se c'è già un rapportino per quel giorno, non sovrascriverlo
-                        // (potrebbe essere un caso limite da gestire meglio se necessario)
-                        if (!technicianMap.has(dayOfMonth)) {
-                            technicianMap.set(dayOfMonth, r);
-                        }
+        if (reportDate.getMonth() === month && reportDate.getFullYear() === year) {
+            const dayOfMonth = reportDate.getDate();
+            // Il rapportino è associato al tecnico che lo ha scritto E a tutti i presenti
+            r.presenze.forEach(tecnicoPresente => {
+                const tecnicoId = tecnicoPresente.id;
+                const technicianMap = rapportiniMatrix.get(tecnicoId);
+                if (technicianMap) {
+                    // Se c'è già un rapportino per quel giorno, non sovrascriverlo
+                    // (potrebbe essere un caso limite da gestire meglio se necessario)
+                    if (!technicianMap.has(dayOfMonth)) {
+                        technicianMap.set(dayOfMonth, r);
                     }
-                });
-            }
-        });
-        return matrix;
-    }, [rapportini, tecnici, month, year]);
-
+                }
+            });
+        }
+    });
     
     const renderDayCell = (tecnico: Tecnico, day: number) => {
         const date = new Date(year, month, day);
