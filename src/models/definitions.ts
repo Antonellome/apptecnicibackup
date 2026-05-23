@@ -22,10 +22,7 @@ export interface FormField {
 }
 
 // UserProfile per il contesto di autenticazione
-export interface UserProfile extends Tecnico {
-    // Aggiungi qui eventuali campi specifici del profilo utente
-    // che non sono presenti nel modello Tecnico base.
-}
+export type UserProfile = Tecnico;
 
 // EnrichedRapportino per UI che richiede dati denormalizzati
 export interface EnrichedRapportino extends Rapportino {
@@ -95,8 +92,9 @@ export interface Tecnico extends GenericItem {
     noteInterne?: string;
 }
 
-export interface Cliente extends GenericItem {}
-export interface Sede extends GenericItem {}
+export type Cliente = GenericItem;
+export type Sede = GenericItem;
+
 export interface TipoGiornata extends GenericItem {
     colore?: string;
     sigla?: string;
@@ -106,10 +104,11 @@ export interface Veicolo extends GenericItem {
     marca?: string;
     modello?: string;
 }
-export interface Luogo extends GenericItem {}
-export interface Nave extends GenericItem {}
-export interface Ditta extends GenericItem {}
-export interface Categoria extends GenericItem {}
+
+export type Luogo = GenericItem;
+export type Nave = GenericItem;
+export type Ditta = GenericItem;
+export type Categoria = GenericItem;
 
 export interface Documento extends GenericItem {
     url: string;
