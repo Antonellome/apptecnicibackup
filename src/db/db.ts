@@ -1,13 +1,11 @@
 import Dexie, { Table } from 'dexie';
 import { Rapportino } from '@/models/definitions';
 
-// Definiamo un tipo per il rapportino in sospeso che include un ID locale opzionale
 export interface RapportinoInSospeso extends Omit<Rapportino, 'id'> {
   localId?: number;
   id?: string; 
 }
 
-// NUOVA INTERFACCIA per le condivisioni in coda
 export interface CondivisioneInSospeso {
   id?: number;
   blob: Blob;
@@ -16,16 +14,25 @@ export interface CondivisioneInSospeso {
 
 export class MySubClassedDexie extends Dexie {
   rapportiniInSospeso!: Table<RapportinoInSospeso>; 
-  condivisioniInSospeso!: Table<CondivisioneInSospeso>; // <-- NUOVA TABELLA
+  condivisioniInSospeso!: Table<CondivisioneInSospeso>;
 
   constructor() {
     super('rapportiniDB');
-    this.version(2).stores({ // <-- AUMENTO VERSIONE A 2
-      rapportiniInSospeso: '++localId',
-      condivisioniInSospeso: '++id' // <-- DEFINIZIONE NUOVA TABELLA
+    // AZIONE CORRETTIVA: Versione 3
+    // Aggiunto l'indice 'id' a rapportiniInSospeso per permettere la ricerca
+    // e l'aggiornamento dei rapportini offline tramite il loro ID di Firestore.
+    this.version(3).stores({
+      rapportiniInSospeso: '++localId, id', // <-- INDICE AGGIUNTO
+      condivisioniInSospeso: '++id' 
     });
+
+    // Manteniamo la compatibilità con la versione precedente per evitare errori durante l'upgrade
+    this.version(2).stores({
+      rapportiniInSospeso: '++localId',
+      condivisioniInSospeso: '++id'
+    });
+
   }
 }
 
-// Esportiamo un'istanza singola (singleton) del nostro database.
 export const db = new MySubClassedDexie();

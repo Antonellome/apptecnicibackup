@@ -1,27 +1,47 @@
-# Dipendenze
-node_modules/
-**/node_modules/
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
 
-# Build e Output
-dist/
-lib/
-**/lib/
-*.log
-firebase-debug.log*
-firestore-debug.log*
-functions-debug.log*
+# Testing
+/coverage
 
-# Ambiente e Segreti
+# Build output
+/dist
+/build
+
+# Vite
+.vite/
+.vite-inspect/
+
+# Environment variables
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
-# IDE
+# Editor directories and files
 .vscode/
-.idx/
 .idea/
-.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Firebase
-.firebase/
-.runtimeconfig.json
+firebase.json
+src/firebase.ts
+src/config.ts
+
+# Archives
+*.tar.gz
+*.zip
+*.rar

@@ -4,9 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Autocomplete, Button, CircularProgress, Alert, Box, Chip, IconButton, Switch, FormControlLabel,
-    Dialog, DialogTitle, DialogContent, DialogActions, AlertColor
+    Dialog, DialogTitle, DialogContent, DialogActions, AlertColor, Grid
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShareIcon from '@mui/icons-material/Share';
@@ -14,13 +13,13 @@ import BorderColorIcon from '@mui/icons-material/BorderColor';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
-import { isSameMonth, format } from 'date-fns';
+import { isSameMonth, format, eachDayOfInterval, startOfDay } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalData } from '@/hooks/useLocalData';
 import { db as firestoreDb } from '@/firebase';
 import { db } from '@/db/db';
 import { aggiungiAllaCoda } from '@/services/offlineSync';
-import { doc, getDoc, addDoc, collection, Timestamp, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, Timestamp, runTransaction, writeBatch } from 'firebase/firestore';
 import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData } from '@/models/definitions'; 
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
@@ -337,25 +336,30 @@ const ReportFormPage: React.FC = () => {
         setDettaglioOre(prev => prev.filter(d => d.tecnicoId !== tecnicoIdToRemove));
     };
 
-    const getFullReportData = (): Omit<Rapportino, 'id'> => {
+    const getFullReportData = (dataPerReport: Date = dataInizio || new Date()): Omit<Rapportino, 'id'> => {
         const mainTecnicoDetail = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId)!;
-        // 1. Aggiunta la generazione del nome
         const nomeDestinazione = navi.find(n => n.id === naveId)?.nome || luoghi.find(l => l.id === luogoId)?.nome || 'Generico';
-        const nomeReport = `Rapportino del ${format(dataInizio || new Date(), 'dd/MM/yyyy')} - ${nomeDestinazione}`;
+        const nomeReport = `Rapportino del ${format(dataPerReport, 'dd/MM/yyyy')} - ${nomeDestinazione}`;
 
         return {
             nome: nomeReport,
-            data: Timestamp.fromDate(dataInizio || new Date()),
+            data: Timestamp.fromDate(dataPerReport),
             tecnicoId: loggedInTecnicoId!,
-            tipoGiornataId, isTrasferta: mainTecnicoDetail.isManual, oraInizio: mainTecnicoDetail.oraInizio,
-            oraFine: mainTecnicoDetail.oraFine, pausa: mainTecnicoDetail.pausa,
+            tipoGiornataId,
+            isTrasferta: mainTecnicoDetail.isManual,
+            oraInizio: mainTecnicoDetail.oraInizio,
+            oraFine: mainTecnicoDetail.oraFine,
+            pausa: mainTecnicoDetail.pausa,
             dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => rest),
-            presenze: dettaglioOre.map(d => d.tecnicoId), 
+            presenze: dettaglioOre.map(d => d.tecnicoId),
             veicoloId: veicoloId ?? undefined,
             naveId: naveId ?? undefined,
             luogoId: luogoId ?? undefined,
-            descrizioneBreve: descrizioneBreve || '', lavoroEseguito: lavoroEseguito || '', materialiImpiegati: materialiImpiegati || '',
-            firmaFirmatarioNome: firmaFirmatarioNome || '', firmaFirmatarioSocieta: firmaFirmatarioSocieta || '', 
+            descrizioneBreve: descrizioneBreve || '',
+            lavoroEseguito: lavoroEseguito || '',
+            materialiImpiegati: materialiImpiegati || '',
+            firmaFirmatarioNome: firmaFirmatarioNome || '',
+            firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
             firmaVettoriale: firmaVettoriale ?? undefined,
             createdAt: isEditMode && reportId ? Timestamp.now() : Timestamp.now(),
             updatedAt: Timestamp.now(),
@@ -414,14 +418,86 @@ const ReportFormPage: React.FC = () => {
             setIsSaving(false);
         }
     };
+    
+    const handleMultiDaySave = async () => {
+        if (!dataInizio || !dataFine || !tipoGiornataId || !loggedInTecnicoId) {
+            memoizedShowSnackbar("Per la creazione multipla, sono necessarie le date di inizio e fine e il tipo di giornata.", "warning");
+            return;
+        }
+    
+        setIsSaving(true);
+        try {
+            const giorniDaCreare = eachDayOfInterval({
+                start: startOfDay(dataInizio),
+                end: startOfDay(dataFine)
+            });
+    
+            const nomeTipoGiornata = tipiGiornata.find(t => t.id === tipoGiornataId)?.nome || 'Evento';
 
-    const handleSave = async () => {
-        if (isMultiDay) { /* Logica multi-day omessa */ } 
-        else {
-            const savedId = await salvaOAccodaRapportino();
-            if (savedId) navigate('/lista-report');
+            if (navigator.onLine) {
+                const batch = writeBatch(firestoreDb);
+                giorniDaCreare.forEach(giorno => {
+                    const reportRef = doc(collection(firestoreDb, 'rapportini'));
+                    const reportData: Omit<Rapportino, 'id'> = {
+                        nome: `Rapportino del ${format(giorno, 'dd/MM/yyyy')} - ${nomeTipoGiornata}`,
+                        data: Timestamp.fromDate(giorno),
+                        tecnicoId: loggedInTecnicoId,
+                        tipoGiornataId,
+                        isTrasferta: false,
+                        oraInizio: '',
+                        oraFine: '',
+                        pausa: 0,
+                        dettaglioOreTecnici: [{ tecnicoId: loggedInTecnicoId, ore: 8, isManual: true, nome: tecnicoScrivente?.nome || '' }],
+                        presenze: [loggedInTecnicoId],
+                        createdAt: Timestamp.now(),
+                        updatedAt: Timestamp.now(),
+                    };
+                    batch.set(reportRef, reportData);
+                });
+                await batch.commit();
+            } else {
+                for (const giorno of giorniDaCreare) {
+                     const reportData: Omit<Rapportino, 'id'> = {
+                        nome: `Rapportino del ${format(giorno, 'dd/MM/yyyy')} - ${nomeTipoGiornata}`,
+                        data: Timestamp.fromDate(giorno),
+                        tecnicoId: loggedInTecnicoId,
+                        tipoGiornataId,
+                        isTrasferta: false,
+                        oraInizio: '',
+                        oraFine: '',
+                        pausa: 0,
+                        dettaglioOreTecnici: [{ tecnicoId: loggedInTecnicoId, ore: 8, isManual: true, nome: tecnicoScrivente?.nome || '' }],
+                        presenze: [loggedInTecnicoId],
+                        createdAt: Timestamp.now(),
+                        updatedAt: Timestamp.now(),
+                    };
+                    await aggiungiAllaCoda(reportData);
+                }
+            }
+    
+            memoizedShowSnackbar(`Creati ${giorniDaCreare.length} rapportini con successo! La lista verrà aggiornata a breve.`, "success");
+            navigate('/lista-report');
+    
+        } catch (error) {
+            console.error("Errore durante la creazione multipla dei rapportini: ", error);
+            memoizedShowSnackbar("Si è verificato un errore durante la creazione dei rapportini.", "error");
+        } finally {
+            setIsSaving(false);
         }
     };
+
+
+    const handleSave = async () => {
+        if (isMultiDay) {
+            await handleMultiDaySave();
+        } else {
+            const savedId = await salvaOAccodaRapportino();
+            if (savedId) {
+                navigate('/lista-report');
+            }
+        }
+    };
+
 
     const handleShare = async () => {
         setIsPdfPreviewOpen(true);
@@ -510,11 +586,11 @@ const ReportFormPage: React.FC = () => {
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
                     
                     <Section title="Dati Principali">
-                        {!isEditMode && (
-                             <Grid size={12}>
+                        <Grid size={12}>
+                            {!isEditMode && (
                                 <FormControlLabel control={<Switch checked={isMultiDay} onChange={handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={isEditMode} />
-                            </Grid>
-                        )}
+                            )}
+                        </Grid>
                         <Grid size={{ xs: 12, md: isMultiDay ? 6 : 12 }}>
                              <DatePicker label={isMultiDay ? "Dal" : "Data"} value={dataInizio} onChange={setDataInizio} disabled={disableActions} sx={{width: '100%'}} />
                         </Grid>
@@ -542,114 +618,119 @@ const ReportFormPage: React.FC = () => {
                         </Grid>
                     </Section>
 
-                    <Section title="Tecnici Coinvolti">
-                         {scriventeDettaglio && !isLavorativo && (
-                             <Grid size={12}><Typography variant="body2" color="text.secondary">Per giornate non lavorative, le ore sono impostate a 8 di default.</Typography></Grid>
-                         )}
-                         {scriventeDettaglio && isLavorativo && (
-                            <Grid size={12}>
-                                <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleScriventeOreUpdate} isReadOnly={disableActions} isScrivente={true} />
-                            </Grid>
-                        )}
-                        <Grid size={12}>
-                                <Autocomplete
-                                multiple
-                                options={otherTecnicos}
-                                getOptionLabel={(o) => `${o.cognome} ${o.nome}`}
-                                value={selectedTecnicos}
-                                onChange={handleAltriTecniciChange}
-                                renderInput={params => <TextField {...params} label={isLavorativo ? "Aggiungi altri tecnici" : "Aggiungi tecnici"} />}
-                                disabled={disableActions}
-                            />
-                        </Grid>
-
-                        {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
-                            <Grid key={dett.tecnicoId} size={12}>
-                                <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                                    <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography>
-                                        {isLavorativo ? <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${(dett.ore || 0).toFixed(2)}h)`} size="small" /> : <Chip label={`8 ore di default`} size="small" />}
-                                    </Box>
-                                    <Box>
-                                        {isLavorativo && <IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={disableActions}><EditIcon /></IconButton>}
-                                        <IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={disableActions}><DeleteIcon /></IconButton>
-                                    </Box>
-                                </Paper>
-                            </Grid>
-                        ))}
-                    </Section>
-
-                    {isLavorativo && (
+                    {!isMultiDay && (
                         <>
-                            <Section title="Dettagli Intervento">
-                                <Grid size={{ xs: 12, md: 6 }}>
-                                    <FormControl fullWidth disabled={disableActions}>
-                                        <InputLabel id="nave-label">Nave</InputLabel>
-                                        <Select labelId="nave-label" value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value as string)}>
-                                            <MenuItem value=""><em>Nessuna</em></MenuItem>
-                                            {sortedNavi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid size={{ xs: 12, md: 6 }}>
-                                    <FormControl fullWidth disabled={disableActions}>
-                                        <InputLabel id="luogo-label">Luogo</InputLabel>
-                                        <Select labelId="luogo-label" value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value as string)}>
-                                            <MenuItem value=""><em>Nessuno</em></MenuItem>
-                                            {sortedLuoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
+                            <Section title="Tecnici Coinvolti">
+                                {scriventeDettaglio && !isLavorativo && (
+                                    <Grid size={12}><Typography variant="body2" color="text.secondary">Per giornate non lavorative, le ore sono impostate a 8 di default.</Typography></Grid>
+                                )}
+                                {scriventeDettaglio && isLavorativo && (
+                                    <Grid size={12}>
+                                        <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleScriventeOreUpdate} isReadOnly={disableActions} isScrivente={true} />
+                                    </Grid>
+                                )}
                                 <Grid size={12}>
-                                    <FormControl fullWidth disabled={disableActions}>
-                                        <InputLabel id="veicolo-label">Veicolo</InputLabel>
-                                        <Select
-                                            labelId="veicolo-label"
-                                            value={veicoloId || ''}
-                                            label="Veicolo"
-                                            onChange={e => setVeicoloId(e.target.value as string)}
-                                            renderValue={(selectedId) => getVeicoloLabel(sortedVeicoli.find(v => v.id === selectedId))}
-                                        >
-                                            <MenuItem value=""><em>Nessuno</em></MenuItem>
-                                            {sortedVeicoli.map(v => <MenuItem key={v.id} value={v.id}>{getVeicoloLabel(v)}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
+                                        <Autocomplete
+                                        multiple
+                                        options={otherTecnicos}
+                                        getOptionLabel={(o) => `${o.cognome} ${o.nome}`}
+                                        value={selectedTecnicos}
+                                        onChange={handleAltriTecniciChange}
+                                        renderInput={params => <TextField {...params} label={isLavorativo ? "Aggiungi altri tecnici" : "Aggiungi tecnici"} />}
+                                        disabled={disableActions}
+                                    />
                                 </Grid>
-                                <Grid size={12}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
-                                <Grid size={12}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
-                                <Grid size={12}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={disableActions} /></Grid>
+
+                                {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
+                                    <Grid key={dett.tecnicoId} size={12}>
+                                        <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                                            <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography>
+                                                {isLavorativo ? <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${(dett.ore || 0).toFixed(2)}h)`} size="small" /> : <Chip label={`8 ore di default`} size="small" />}
+                                            </Box>
+                                            <Box>
+                                                {isLavorativo && <IconButton size="small" onClick={() => handleOpenModal(dett)} disabled={disableActions}><EditIcon /></IconButton>}
+                                                <IconButton size="small" onClick={() => removeTecnico(dett.tecnicoId)} disabled={disableActions}><DeleteIcon /></IconButton>
+                                            </Box>
+                                        </Paper>
+                                    </Grid>
+                                ))}
                             </Section>
 
-                            <Section title="Firma Cliente">
-                                <Grid size={{ xs: 12, md: 6 }}>
-                                    <TextField label="Nome e Cognome Firmatario" value={firmaFirmatarioNome} onChange={(e) => setFirmaFirmatarioNome(e.target.value)} fullWidth required disabled={disableActions}/>
-                                </Grid>
-                                <Grid size={{ xs: 12, md: 6 }}>
-                                    <TextField label="Società" value={firmaFirmatarioSocieta} onChange={(e) => setFirmaFirmatarioSocieta(e.target.value)} fullWidth disabled={disableActions}/>
-                                </Grid>
-                                <Grid size={12}>
-                                    {firmaVettoriale ? (
-                                        <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center'}}>
-                                            <Typography variant="body2" gutterBottom>Firma salvata:</Typography>
-                                            <img 
-                                                src={firmaVettoriale} 
-                                                alt="Firma" 
-                                                style={{
-                                                    maxWidth: '200px', 
-                                                    height: 'auto', 
-                                                    border: '1px solid #eee',
-                                                    margin: 'auto',
-                                                    filter: mode === 'dark' ? 'invert(1)' : 'none'
-                                                }}/>
-                                            <br />
-                                            <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1}} disabled={disableActions}>Modifica Firma</Button>
-                                        </Box>
-                                    ) : (
-                                        <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={disableActions} fullWidth>Aggiungi Firma Cliente</Button>
-                                    )}
-                                </Grid>
-                            </Section>
+                            {isLavorativo && (
+                                <>
+                                    <Section title="Dettagli Intervento">
+                                        <Grid size={{ xs: 12, md: 6 }}>
+                                            <FormControl fullWidth disabled={disableActions}>
+                                                <InputLabel id="nave-label">Nave</InputLabel>
+                                                <Select labelId="nave-label" value={naveId || ''} label="Nave" onChange={e => setNaveId(e.target.value as string)}>
+                                                    <MenuItem value=""><em>Nessuna</em></MenuItem>
+                                                    {sortedNavi.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>)}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid size={{ xs: 12, md: 6 }}>
+                                            <FormControl fullWidth disabled={disableActions}>
+                                                <InputLabel id="luogo-label">Luogo</InputLabel>
+                                                <Select labelId="luogo-label" value={luogoId || ''} label="Luogo" onChange={e => setLuogoId(e.target.value as string)}>
+                                                    <MenuItem value=""><em>Nessuno</em></MenuItem>
+                                                    {sortedLuoghi.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid size={12}>
+                                            <FormControl fullWidth disabled={disableActions}>
+                                                <InputLabel id="veicolo-label">Veicolo</InputLabel>
+                                                <Select
+                                                    labelId="veicolo-label"
+                                                    value={veicoloId || ''}
+                                                    label="Veicolo"
+                                                    onChange={e => setVeicoloId(e.target.value as string)}
+                                                    renderValue={(selectedId) => getVeicoloLabel(sortedVeicoli.find(v => v.id === selectedId))}
+                                                >
+                                                    <MenuItem value=""><em>Nessuno</em></MenuItem>
+                                                    {sortedVeicoli.map(v => <MenuItem key={v.id} value={v.id}>{getVeicoloLabel(v)}</MenuItem>)}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid size={12}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
+                                        <Grid size={12}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
+                                        <Grid size={12}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} disabled={disableActions} /></Grid>
+                                    </Section>
+
+                                    <Section title="Firma Cliente">
+                                        <Grid size={{ xs: 12, md: 6 }}>
+                                            <TextField label="Nome e Cognome Firmatario" value={firmaFirmatarioNome} onChange={(e) => setFirmaFirmatarioNome(e.target.value)} fullWidth required disabled={disableActions}/>
+                                        </Grid>
+                                        <Grid size={{ xs: 12, md: 6 }}>
+                                            <TextField label="Società" value={firmaFirmatarioSocieta} onChange={(e) => setFirmaFirmatarioSocieta(e.target.value)} fullWidth disabled={disableActions}/>
+                                        </Grid>
+                                        <Grid size={12}>
+                                            {firmaVettoriale ? (
+                                                <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center'}}>
+                                                    <Typography variant="body2" gutterBottom>Firma salvata:</Typography>
+                                                    <img 
+                                                        src={firmaVettoriale} 
+                                                        alt="Firma" 
+                                                        style={{
+                                                            maxWidth: '200px', 
+                                                            height: 'auto', 
+                                                            border: '1px solid #eee',
+                                                            margin: 'auto',
+                                                            filter: mode === 'dark' ? 'invert(1)' : 'none'
+                                                        }}/>
+                                                    <br />
+                                                    <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1}} disabled={disableActions}>Modifica Firma</Button>
+                                                </Box>
+                                            ) : (
+                                                <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={disableActions} fullWidth>Aggiungi Firma Cliente</Button>
+                                            )}
+                                        </Grid>
+                                    </Section>
+                                </>
+                            )}
                         </>
                     )}
+
 
                     <Box id="action-buttons" sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
                         <Button variant="outlined" onClick={handleCancel} disabled={isSaving || isSharing}>Annulla</Button>

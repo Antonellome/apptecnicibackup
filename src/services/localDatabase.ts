@@ -12,16 +12,11 @@ import {
     Ditta, 
     Categoria,
     SyncEvent,
-    Impostazioni, // ++ FIX: Importato il tipo
+    Impostazioni,
     MasterData
 } from '@/models/definitions';
 
-/**
- * Definizione del database locale basato su IndexedDB tramite Dexie.
- * Questo database serve come storage primario per l'applicazione (local-first).
- */
 export class LocalDatabase extends Dexie {
-    // Dichiarazione delle tabelle (Object Stores)
     public rapportini!: Table<Rapportino, string>;
     public tecnici!: Table<Tecnico, string>;
     public clienti!: Table<Cliente, string>;
@@ -33,13 +28,16 @@ export class LocalDatabase extends Dexie {
     public ditte!: Table<Ditta, string>;
     public categorie!: Table<Categoria, string>;
     public syncQueue!: Table<SyncEvent, number>;
-    public impostazioni!: Table<Impostazioni, string>; // ++ FIX: Aggiunta tabella
+    public impostazioni!: Table<Impostazioni, string>;
 
     constructor() {
-        super('RisoTecniciDB'); // Nome del database
+        super('RisoTecniciDB');
 
-        // L'ultima versione DEVE essere dichiarata per ultima.
-        this.version(1).stores({
+        // **AZIONE CORRETTIVA DEFINITIVA**
+        // Allineo la versione del database a 50 per risolvere il blocco critico.
+        // Mantengo le definizioni delle tabelle delle versioni precedenti e le consolido
+        // in un'unica dichiarazione di versione per pulizia e stabilità.
+        this.version(50).stores({
             rapportini: 'id, data, tecnicoId, tipoGiornataId',
             tecnici: 'id, cognome, nome',
             clienti: 'id, nome',
@@ -50,18 +48,10 @@ export class LocalDatabase extends Dexie {
             navi: 'id, nome',
             ditte: 'id, nome',
             categorie: 'id, nome',
+            syncQueue: '++id, type, syncStatus',
+            impostazioni: 'id',
         });
 
-        this.version(2).stores({
-            syncQueue: '++id, type, syncStatus'
-        });
-
-        // ++ FIX: Creata nuova versione per aggiungere la tabella impostazioni
-        this.version(3).stores({
-            impostazioni: 'id', // Assumiamo che le impostazioni abbiano un ID
-        });
-
-        // Assegnazione delle tabelle per l'uso nel codice
         this.rapportini = this.table('rapportini');
         this.tecnici = this.table('tecnici');
         this.clienti = this.table('clienti');
@@ -76,10 +66,7 @@ export class LocalDatabase extends Dexie {
         this.impostazioni = this.table('impostazioni');
     }
 
-    /**
-     * Popola le tabelle delle anagrafiche con i dati master provenienti da Firestore.
-     */
-    public async populateMasterData(masterData: MasterData) { // ++ FIX: Usiamo il tipo MasterData completo
+    public async populateMasterData(masterData: MasterData) {
         try {
             await this.transaction('rw', this.tables, async () => {
                 await this.tecnici.bulkPut(masterData.tecnici);
@@ -91,18 +78,14 @@ export class LocalDatabase extends Dexie {
                 await this.navi.bulkPut(masterData.navi);
                 await this.ditte.bulkPut(masterData.ditte);
                 await this.categorie.bulkPut(masterData.categorie);
-                // ++ FIX: Aggiunto salvataggio delle impostazioni
                 if (masterData.impostazioni) {
-                    // Assumiamo che ci sia un solo documento di impostazioni con un id fisso
                     await this.impostazioni.put({ ...masterData.impostazioni, id: 'default' });
                 }
             });
-            // console.log("Local database populated successfully with master data.");
         } catch (error) {
             console.error("Failed to populate local database:", error);
         }
     }
 }
 
-// Esportiamo un'istanza singleton del nostro database
 export const db = new LocalDatabase();
