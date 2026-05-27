@@ -1,8 +1,9 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
 
-// Your web app's Firebase configuration
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { getMessaging } from 'firebase/messaging';
+
 const firebaseConfig = {
   apiKey: "AIzaSyBlpnXKXYvh52cQtojfLsTFUcet-geKzqQ",
   authDomain: "riso-project-app.firebaseapp.com",
@@ -13,11 +14,8 @@ const firebaseConfig = {
   appId: "1:157316892209:web:c591c034fa132e549bb710"
 };
 
-// Initialize Firebase and export the app instance
-export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
-
-// Initialize Cloud Firestore and get a reference to the service
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const messaging = getMessaging(app);

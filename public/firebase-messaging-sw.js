@@ -1,5 +1,6 @@
-importScripts("https://www.gstatic.com/firebasejs/9.2.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/9.2.0/firebase-messaging-compat.js");
+
+import { initializeApp } from 'firebase/app';
+import { getMessaging, onBackgroundMessage } from 'firebase/messaging/sw';
 
 const firebaseConfig = {
     apiKey: "AIzaSyBlpnXKXYvh52cQtojfLsTFUcet-geKzqQ",
@@ -11,17 +12,16 @@ const firebaseConfig = {
     appId: "1:157316892209:web:c591c034fa132e549bb710"
 };
 
-firebase.initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
+const messaging = getMessaging(app);
 
-const messaging = firebase.messaging();
+onBackgroundMessage(messaging, (payload) => {
+  console.log('[firebase-messaging-sw.js] Received background message ', payload);
 
-messaging.onBackgroundMessage(function(payload) {
-  console.log("[firebase-messaging-sw.js] Received background message ", payload);
-  
   const notificationTitle = payload.notification.title;
   const notificationOptions = {
     body: payload.notification.body,
-    icon: '/logo192.png' // Assicurati che il file esista
+    icon: './vite.svg' // Puoi cambiare questa icona con il tuo logo
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);

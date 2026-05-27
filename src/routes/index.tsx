@@ -1,4 +1,3 @@
-
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 // Layout
@@ -14,6 +13,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import MonthlyReportPage from '@/pages/MonthlyReportPage';
 import CheckinPage from '@/pages/CheckinPage';
 import ReportFormPage from '@/pages/ReportFormPage';
+import NotifichePage from '@/pages/NotifichePage';
 
 export const router = createBrowserRouter([
     {
@@ -28,6 +28,7 @@ export const router = createBrowserRouter([
             { path: 'impostazioni', element: <SettingsPage /> },
             { path: 'report-mensile', element: <MonthlyReportPage /> },
             { path: 'check-in', element: <CheckinPage /> },
+            { path: 'notifiche', element: <NotifichePage /> },
         ]
     },
     {

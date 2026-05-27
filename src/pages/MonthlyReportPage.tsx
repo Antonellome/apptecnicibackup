@@ -43,15 +43,9 @@ const MonthlyReportPage = () => {
     const { userProfile } = useAuth();
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
-    // --- LOGICA 100% OFFLINE --- 
-
-    // 1. Carica le anagrafiche DIRETTAMENTE dalla cache locale
     const localAnagrafiche = useLiveQuery(() => db.anagrafiche.toArray(), [], null);
-
-    // 2. Carica le impostazioni (tariffe) DIRETTAMENTE dalla cache locale
     const impostazioniLocali = useLiveQuery(() => db.tariffe_locali.get('main'), [], null);
 
-    // 3. Costruisce l'oggetto masterData SULLA BASE dei dati locali
     const masterData = useMemo<MasterData | null>(() => {
         if (!localAnagrafiche || !impostazioniLocali) return null;
         
@@ -65,20 +59,15 @@ const MonthlyReportPage = () => {
 
     }, [localAnagrafiche, impostazioniLocali]);
 
-    // 4. Carica i rapportini del mese corrente DIRETTAMENTE dalla cache locale
     const rapportiniLocali = useLiveQuery(() => {
         if (!userProfile) return [];
         const start = startOfMonth(currentMonth);
         const end = endOfMonth(currentMonth);
-        // CORREZIONE QUERY: Usa presenze array-contains, non tecnicoId
         return db.rapportini
             .where('data').between(start, end, true, true)
             .filter(r => (r.presenze || []).includes(userProfile.tecnicoId))
             .sortBy('data');
     }, [userProfile, currentMonth], [] as Rapportino[]);
-
-
-    // --- Logica di arricchimento e calcolo (INVARIATA, ma ora 100% offline) ---
 
     const rapportiniArricchiti = useMemo(() => {
         if (!rapportiniLocali || !masterData || !userProfile) return [];
@@ -120,41 +109,30 @@ const MonthlyReportPage = () => {
             let costoGiorno = 0;
             let oreOrdinarieLoop = 0;
             let oreStraordinarieLoop = 0;
-            const tipoGiornataNome = report.tipoGiornata.nome.toLowerCase();
 
-            if (['ordinaria', 'trasferta italia', 'trasferta europa', 'trasferta extraeuropea'].includes(tipoGiornataNome)) {
-                oreOrdinarieLoop = Math.min(oreGiorno, 8);
-                oreStraordinarieLoop = Math.max(0, oreGiorno - 8);
-            } else if (tipoGiornataNome === 'straordinario') {
-                oreStraordinarieLoop = oreGiorno;
-            } else { oreOrdinarieLoop = oreGiorno; }
+            if (tariffaCorrente.unita === 'g') {
+                costoGiorno = tariffaCorrente.costo;
+                oreOrdinarieLoop = 8;
+            } else {
+                const tipoGiornataNome = report.tipoGiornata.nome.toLowerCase();
 
-            switch (tipoGiornataNome) {
-                case 'ferie':
-                case 'festivo':
-                    costoGiorno = tariffaCorrente.costo;
-                    break;
-                case 'permesso':
-                case 'legge 104':
-                case '104':
-                case 'malattia':
-                    costoGiorno = oreGiorno * tariffaCorrente.costo;
-                    break;
-                case 'straordinario':
+                if (['ordinaria', 'trasferta italia', 'trasferta europa', 'trasferta extraeuropea'].includes(tipoGiornataNome)) {
+                    oreOrdinarieLoop = Math.min(oreGiorno, 8);
+                    oreStraordinarieLoop = Math.max(0, oreGiorno - 8);
+                    
+                    const costoStraordinario = tariffaStraordinaria?.costo ?? tariffaOrdinaria?.costo ?? 0;
+                    const costoOre = (oreOrdinarieLoop * (tariffaOrdinaria?.costo ?? 0)) + (oreStraordinarieLoop * costoStraordinario);
+                    costoGiorno = tipoGiornataNome.startsWith('trasferta') ? costoOre + tariffaCorrente.costo : costoOre;
+
+                } else if (tipoGiornataNome === 'straordinario') {
+                    oreStraordinarieLoop = oreGiorno;
                     costoGiorno = oreGiorno * (tariffaStraordinaria?.costo ?? 0);
-                    break;
-                case 'ordinaria':
-                case 'trasferta italia':
-                case 'trasferta europa':
-                case 'trasferta extraeuropea':
-                    if (tariffaOrdinaria) {
-                        const costoStraordinario = tariffaStraordinaria?.costo ?? tariffaOrdinaria.costo;
-                        const costoOre = (oreOrdinarieLoop * tariffaOrdinaria.costo) + (oreStraordinarieLoop * costoStraordinario);
-                        costoGiorno = tipoGiornataNome.startsWith('trasferta') ? costoOre + tariffaCorrente.costo : costoOre;
-                    }
-                    break;
-                default: costoGiorno = 0; break;
+                } else {
+                    oreOrdinarieLoop = oreGiorno;
+                    costoGiorno = oreGiorno * tariffaCorrente.costo;
+                }
             }
+            
             riepilogo.costoTotale += costoGiorno;
             const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || { nome: report.tipoGiornata.nome, colore: report.tipoGiornata.colore, oreOrdinarie: 0, oreStraordinario: 0, costo: 0, unita: tariffaCorrente.unita, giorni: 0 };
             dettaglioGiorno.oreOrdinarie += oreOrdinarieLoop;
@@ -173,7 +151,6 @@ const MonthlyReportPage = () => {
     const isNextButtonDisabled = isSameMonth(currentMonth, new Date());
     const isLoadingPage = !localAnagrafiche || !impostazioniLocali || !masterData;
 
-    // --- JSX (con logica di caricamento corretta) ---
     if (isLoadingPage) {
         return <FullScreenLoader message="Caricamento dati dalla cache locale..." />;
     }
@@ -196,12 +173,7 @@ const MonthlyReportPage = () => {
             )}
             {riepilogoMese && (
                  <Grid container spacing={3}>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 5,
-                            lg: 4
-                        }}>
+                    <Grid size={{ xs: 12, md: 5, lg: 4 }}>
                         <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                             <Typography variant="h5" gutterBottom>Riepilogo</Typography>
                             <TableContainer component={Paper} variant="outlined">
@@ -220,12 +192,7 @@ const MonthlyReportPage = () => {
                             </TableContainer>
                         </Paper>
                     </Grid>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 7,
-                            lg: 8
-                        }}>
+                    <Grid size={{ xs: 12, md: 7, lg: 8 }}>
                         <DettaglioCostiTipoGiornata dettaglio={riepilogoMese.dettaglio} />
                     </Grid>
                     <Grid sx={{ mt: 2 }} size={12}>

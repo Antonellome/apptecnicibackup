@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Accordion, AccordionSummary, AccordionDetails, Typography, IconButton, Box } from '@mui/material';
 import { ExpandMore as ExpandMoreIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material';
 import { Notifica } from '@/models/definitions';
-import { useNotifications } from '@/hooks/useNotifications'; // <-- PERCORSO CORRETTO
+import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { format, isToday, isYesterday } from 'date-fns';
 import { it } from 'date-fns/locale/it';
@@ -74,7 +74,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
       </AccordionSummary>
       <AccordionDetails>
         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-          {notification.body}
+          {notification.message}
         </Typography>
         <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
           <IconButton onClick={handleHide} size="small" title="Nascondi notifica">
