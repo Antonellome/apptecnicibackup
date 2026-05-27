@@ -15,7 +15,7 @@ const TARIFFS_BLUEPRINT: { nome: string; costo: number; unita: 'g' | 'h'; }[] = 
     { nome: 'Ferie', costo: 80, unita: 'g' },
     { nome: 'Festivo', costo: 80, unita: 'g' },
     { nome: 'Legge 104', costo: 10, unita: 'h' },
-    { nome: 'Malattia', costo: 80, unita: 'g' }, // CORRETTO
+    { nome: 'Malattia', costo: 80, unita: 'g' },
     { nome: 'Ordinaria', costo: 10, unita: 'h' },
     { nome: 'Permesso', costo: 10, unita: 'h' },
     { nome: 'Straordinario', costo: 15, unita: 'h' },
@@ -36,11 +36,8 @@ async function fetchMasterDataFromFirebase(): Promise<Omit<MasterData, 'impostaz
 }
 
 async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): Promise<MasterData> {
-    console.log("Clearing and populating local database...");
+    console.log("Populating local database with data correction logic...");
     await db.anagrafiche.clear();
-    
-    // NON CANCELLARE LE TARIFFE PER PRESERVARE LE MODIFICHE UTENTE
-    // await db.tariffe_locali.clear(); 
 
     for (const key of ANAGRAFICA_COLLECTIONS) {
         await db.anagrafiche.put({ id: key, data: (anagrafiche as any)[key] || [], timestamp: new Date() });
@@ -54,12 +51,28 @@ async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): P
 
     const finalTariffe: TariffaLocale[] = tipiGiornataDaDB.map((tipoGiornata) => {
         const existing = existingTariffeMap.get(tipoGiornata.id);
-        if (existing) {
-            return existing; // Mantiene la tariffa modificata dall'utente
-        }
-
         const lookupName = tipoGiornata.nome?.toLowerCase() || '';
         const blueprintDefault = blueprintMapByName.get(lookupName) || blueprintMapByName.get(lookupName === '104' ? 'legge 104' : '');
+
+        // PATCH SPECIFICA: Se troviamo il valore vecchio e sbagliato di "Malattia", lo ignoriamo
+        // e forziamo l'uso del valore corretto dal blueprint. Questo corregge il DB locale avvelenato.
+        if (existing && existing.nome === 'Malattia' && existing.costo === 10 && existing.unita === 'h') {
+            console.log('Found and correcting poisoned "Malattia" tariff.');
+            return {
+                id: tipoGiornata.id,
+                tipoGiornataId: tipoGiornata.id,
+                nome: tipoGiornata.nome,
+                costo: blueprintDefault?.costo ?? 80, // Valore corretto
+                unita: blueprintDefault?.unita ?? 'g',   // Valore corretto
+            };
+        }
+
+        // Logica standard: se esiste una tariffa locale (personalizzata), usa quella.
+        if (existing) {
+            return existing;
+        }
+
+        // Altrimenti, crea la tariffa dal blueprint (per nuovi utenti o nuove tariffe).
         return {
             id: tipoGiornata.id,
             tipoGiornataId: tipoGiornata.id,
@@ -71,7 +84,7 @@ async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): P
 
     const finalImpostazioni: Impostazioni = { tariffe: finalTariffe };
     await db.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
-    console.log("Local database populated/updated successfully.");
+    console.log("Local database and tariffs populated correctly.");
 
     return { ...anagrafiche, impostazioni: finalImpostazioni };
 }
