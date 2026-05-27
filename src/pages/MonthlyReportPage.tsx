@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useReducer } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -10,22 +10,21 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableRow
+  TableRow,
+  Grid
 } from '@mui/material';
-import Grid from "@mui/material/Grid";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
-import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { useMasterData } from '@/hooks/useMasterData';
-import { Rapportino, EnrichedRapportino, Tecnico, TariffaLocale } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, Tecnico, TariffaLocale, MasterData } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { localDB } from '@/db/local-db';
+import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
 import DettaglioCostiTipoGiornata from '@/components/Rapportini/DettaglioCostiTipoGiornata';
+import FullScreenLoader from '@/components/FullScreenLoader';
 
-// --- STRUTTURA DATI MODIFICATA PER INCLUDERE IL DETTAGLIO ORE ---
+
+// --- STRUTTURA DATI (INVARIATA) ---
 export interface RiepilogoMese {
     oreTotali: number;
     costoTotale: number;
@@ -40,120 +39,81 @@ export interface RiepilogoMese {
     }>;
 }
 
-// --- STATE MANAGEMENT CON useReducer ---
-interface MonthlyReportState {
-    rapportini: EnrichedRapportino[];
-    loading: boolean;
-    error: string | null;
-}
-
-type Action = 
-    | { type: 'FETCH_START' }
-    | { type: 'FETCH_SUCCESS'; payload: EnrichedRapportino[] }
-    | { type: 'FETCH_ERROR'; payload: string }
-    | { type: 'RESET_STATE' };
-
-const initialState: MonthlyReportState = {
-    rapportini: [],
-    loading: true,
-    error: null,
-};
-
-function monthlyReportReducer(state: MonthlyReportState, action: Action): MonthlyReportState {
-    switch (action.type) {
-        case 'FETCH_START':
-            return { ...state, loading: true, error: null };
-        case 'FETCH_SUCCESS':
-            return { ...state, loading: false, rapportini: action.payload, error: null };
-        case 'FETCH_ERROR':
-            return { ...state, loading: false, error: action.payload };
-        case 'RESET_STATE':
-            return { ...initialState, loading: false };
-        default:
-            return state;
-    }
-}
-
-const ReportMensilePage = () => {
-    const { user } = useAuth();
-    const { masterData, loading: masterDataLoading } = useMasterData();
-    const impostazioniLocali = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
-
+const MonthlyReportPage = () => {
+    const { userProfile } = useAuth();
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [state, dispatch] = useReducer(monthlyReportReducer, initialState);
-    const { rapportini, loading, error } = state;
 
-    useEffect(() => {
-        if (!user || !masterData) {
-            if (!masterDataLoading) {
-                dispatch({ type: 'RESET_STATE' });
-            }
-            return;
-        }
+    // --- LOGICA 100% OFFLINE --- 
 
-        const fetchAsync = async () => {
-            dispatch({ type: 'FETCH_START' });
-            
-            const start = startOfMonth(currentMonth);
-            const end = endOfMonth(currentMonth);
-            const q = query(
-                collection(db, "rapportini"),
-                where("presenze", "array-contains", user.uid),
-                where("data", ">=", Timestamp.fromDate(start)),
-                where("data", "<=", Timestamp.fromDate(end)),
-                orderBy("data", "asc")
-            );
+    // 1. Carica le anagrafiche DIRETTAMENTE dalla cache locale
+    const localAnagrafiche = useLiveQuery(() => db.anagrafiche.toArray(), [], null);
 
-            try {
-                const querySnapshot = await getDocs(q);
-                const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
-                const tecniciMap = new Map(masterData.tecnici.map(t => [t.id, t]));
-                const enrichedData = querySnapshot.docs.map(doc => {
-                    const data = doc.data() as Rapportino;
-                    const oreLavoro = data.dettaglioOreTecnici?.find(d => d.tecnicoId === user.uid)?.ore ?? data.oreLavoro ?? 0;
-                    const tipoGiornata = tipiGiornataMap.get(data.tipoGiornataId) || { id: '', nome: 'Sconosciuto', colore: '#808080', sigla: '' };
-                    const presenzeArricchite = (data.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
-                    return {
-                        ...data,
-                        id: doc.id,
-                        data: (data.data as Timestamp).toDate(),
-                        tipoGiornata,
-                        presenze: presenzeArricchite,
-                        oreGiorno: oreLavoro,
-                    } as EnrichedRapportino;
-                });
-                
-                dispatch({ type: 'FETCH_SUCCESS', payload: enrichedData });
-            } catch (err) {
-                console.error("Errore nel caricamento da Firestore: ", err);
-                dispatch({ type: 'FETCH_ERROR', payload: "Impossibile caricare i report." });
-            }
-        };
+    // 2. Carica le impostazioni (tariffe) DIRETTAMENTE dalla cache locale
+    const impostazioniLocali = useLiveQuery(() => db.tariffe_locali.get('main'), [], null);
 
-        fetchAsync();
-    }, [user, masterData, currentMonth, masterDataLoading]);
+    // 3. Costruisce l'oggetto masterData SULLA BASE dei dati locali
+    const masterData = useMemo<MasterData | null>(() => {
+        if (!localAnagrafiche || !impostazioniLocali) return null;
+        
+        const data: { [key: string]: any[] } = {};
+        localAnagrafiche.forEach(item => { data[item.id] = item.data; });
+        
+        return {
+            ...data,
+            impostazioni: impostazioniLocali.data,
+        } as MasterData;
 
-    // --- LOGICA DI CALCOLO (INVARIATA) ---
+    }, [localAnagrafiche, impostazioniLocali]);
+
+    // 4. Carica i rapportini del mese corrente DIRETTAMENTE dalla cache locale
+    const rapportiniLocali = useLiveQuery(() => {
+        if (!userProfile) return [];
+        const start = startOfMonth(currentMonth);
+        const end = endOfMonth(currentMonth);
+        // CORREZIONE QUERY: Usa presenze array-contains, non tecnicoId
+        return db.rapportini
+            .where('data').between(start, end, true, true)
+            .filter(r => (r.presenze || []).includes(userProfile.tecnicoId))
+            .sortBy('data');
+    }, [userProfile, currentMonth], [] as Rapportino[]);
+
+
+    // --- Logica di arricchimento e calcolo (INVARIATA, ma ora 100% offline) ---
+
+    const rapportiniArricchiti = useMemo(() => {
+        if (!rapportiniLocali || !masterData || !userProfile) return [];
+        const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
+        const tecniciMap = new Map(masterData.tecnici.map((t) => [t.id, t]));
+
+        return rapportiniLocali.map(report => {
+            const oreLavoro = report.dettaglioOreTecnici?.find(d => d.tecnicoId === userProfile.tecnicoId)?.ore ?? report.oreLavoro ?? 0;
+            const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId) || { id: '', nome: 'Sconosciuto', colore: '#808080', sigla: '' };
+            const presenzeArricchite = (report.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
+
+            return {
+                ...report,
+                data: new Date(report.data),
+                tipoGiornata,
+                presenze: presenzeArricchite,
+                oreGiorno: oreLavoro,
+            } as EnrichedRapportino;
+        });
+    }, [rapportiniLocali, masterData, userProfile]);
+
     const riepilogoMese = useMemo<RiepilogoMese | null>(() => {
-        if (!rapportini.length || !impostazioniLocali || !user) return null;
+        if (!rapportiniArricchiti.length || !masterData || !userProfile) return null;
 
-        const tariffe = impostazioniLocali.data.tariffe as TariffaLocale[];
+        const tariffe = masterData.impostazioni.tariffe as TariffaLocale[];
         const tariffeMap = new Map(tariffe.map(t => [t.tipoGiornataId, t]));
         const tariffaOrdinaria = tariffe.find(t => t.nome.toLowerCase() === 'ordinaria');
         const tariffaStraordinaria = tariffe.find(t => t.nome.toLowerCase() === 'straordinario');
 
-        const riepilogo: RiepilogoMese = {
-            oreTotali: 0,
-            costoTotale: 0,
-            dettaglio: new Map(),
-        };
+        const riepilogo: RiepilogoMese = { oreTotali: 0, costoTotale: 0, dettaglio: new Map() };
 
-        for (const report of rapportini) {
+        for (const report of rapportiniArricchiti) {
             const oreGiorno = report.oreGiorno ?? 0;
             const tariffaCorrente = tariffeMap.get(report.tipoGiornata.id);
-
-            if (!tariffaCorrente) continue;
-            if (oreGiorno === 0 && tariffaCorrente.unita !== 'g') continue;
+            if (!tariffaCorrente || (oreGiorno === 0 && tariffaCorrente.unita !== 'g')) continue;
 
             riepilogo.oreTotali += oreGiorno;
 
@@ -162,17 +122,13 @@ const ReportMensilePage = () => {
             let oreStraordinarieLoop = 0;
             const tipoGiornataNome = report.tipoGiornata.nome.toLowerCase();
 
-            // 1. Calcolo suddivisione ore
             if (['ordinaria', 'trasferta italia', 'trasferta europa', 'trasferta extraeuropea'].includes(tipoGiornataNome)) {
                 oreOrdinarieLoop = Math.min(oreGiorno, 8);
                 oreStraordinarieLoop = Math.max(0, oreGiorno - 8);
             } else if (tipoGiornataNome === 'straordinario') {
                 oreStraordinarieLoop = oreGiorno;
-            } else {
-                oreOrdinarieLoop = oreGiorno;
-            }
+            } else { oreOrdinarieLoop = oreGiorno; }
 
-            // 2. Calcolo costo
             switch (tipoGiornataNome) {
                 case 'ferie':
                 case 'festivo':
@@ -197,47 +153,31 @@ const ReportMensilePage = () => {
                         costoGiorno = tipoGiornataNome.startsWith('trasferta') ? costoOre + tariffaCorrente.costo : costoOre;
                     }
                     break;
-                default:
-                    costoGiorno = 0;
-                    break;
+                default: costoGiorno = 0; break;
             }
-
             riepilogo.costoTotale += costoGiorno;
-
-            // 3. Aggiornamento mappa dettaglio con i dati corretti
-            const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || {
-                nome: report.tipoGiornata.nome,
-                colore: report.tipoGiornata.colore,
-                oreOrdinarie: 0,
-                oreStraordinario: 0,
-                costo: 0,
-                unita: tariffaCorrente.unita,
-                giorni: 0,
-            };
-
+            const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || { nome: report.tipoGiornata.nome, colore: report.tipoGiornata.colore, oreOrdinarie: 0, oreStraordinario: 0, costo: 0, unita: tariffaCorrente.unita, giorni: 0 };
             dettaglioGiorno.oreOrdinarie += oreOrdinarieLoop;
             dettaglioGiorno.oreStraordinario += oreStraordinarieLoop;
             dettaglioGiorno.costo += costoGiorno;
-            if (oreGiorno > 0 || tariffaCorrente.unita === 'g') {
-                dettaglioGiorno.giorni += 1;
-            }
+            if (oreGiorno > 0 || tariffaCorrente.unita === 'g') { dettaglioGiorno.giorni += 1; }
             riepilogo.dettaglio.set(report.tipoGiornata.id, dettaglioGiorno);
         }
-
         return riepilogo.oreTotali > 0 || riepilogo.dettaglio.size > 0 ? riepilogo : null;
-    }, [rapportini, impostazioniLocali, user]);
-
+    }, [rapportiniArricchiti, masterData, userProfile]);
 
     const handleMonthChange = (increment: number) => {
         setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
     };
 
-    const today = new Date();
-    const isNextButtonDisabled = isSameMonth(currentMonth, today);
-    // La variabile isLoadingPage ora dipende dallo stato del reducer e da masterDataLoading
-    const isLoadingPage = loading || masterDataLoading || !impostazioniLocali;
+    const isNextButtonDisabled = isSameMonth(currentMonth, new Date());
+    const isLoadingPage = !localAnagrafiche || !impostazioniLocali || !masterData;
 
-    // --- JSX (INVARIATO) ---
+    // --- JSX (con logica di caricamento corretta) ---
+    if (isLoadingPage) {
+        return <FullScreenLoader message="Caricamento dati dalla cache locale..." />;
+    }
+
     return (
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
@@ -248,13 +188,13 @@ const ReportMensilePage = () => {
                 <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
                 <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
             </Paper>
-            {isLoadingPage && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 4}}>
-                    <CircularProgress />
-                </Box>
+            {!riepilogoMese && (
+                 <Paper sx={{ p: 4, textAlign: 'center' }}>
+                     <Typography variant="h6">Nessun dato per questo mese</Typography>
+                     <Typography color="text.secondary">Non sono stati trovati rapportini nella cache locale per il periodo selezionato.</Typography>
+                 </Paper>
             )}
-            {error && <Alert severity="error">{error}</Alert>}
-            {!isLoadingPage && !error && riepilogoMese && (
+            {riepilogoMese && (
                  <Grid container spacing={3}>
                     <Grid
                         size={{
@@ -293,14 +233,8 @@ const ReportMensilePage = () => {
                     </Grid>
                 </Grid>
             )}
-            {!isLoadingPage && !error && !riepilogoMese && (
-                <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography variant="h6">Nessun dato per questo mese</Typography>
-                    <Typography color="text.secondary">Non sono stati trovati rapportini per il periodo selezionato.</Typography>
-                </Paper>
-            )}
         </Box>
     );
 };
 
-export default ReportMensilePage;
+export default MonthlyReportPage;

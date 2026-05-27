@@ -1,64 +1,50 @@
 
 import { useState, useEffect } from 'react';
-import { db as localDb } from '@/services/localDatabase'; // Assuming a local DB service
-import { Impostazioni, MasterData } from '@/models/definitions';
+import { db } from '@/db/local-db';
+import { MasterData } from '@/models/definitions';
+import { useLiveQuery } from 'dexie-react-hooks';
 
-// Questo è un hook simulato. In una vera implementazione, 
-// questo hook si interfaccerà con IndexedDB (tramite Dexie.js o simile)
-// per caricare le anagrafiche e fornire dati reattivi.
+const ANAGRAFICA_IDS = [
+    'tecnici', 'clienti', 'sedi', 'tipiGiornata', 'veicoli',
+    'luoghi', 'navi', 'ditte', 'categorie'
+];
 
 export const useLocalData = () => {
+    // Usiamo useLiveQuery per ottenere dati reattivi da Dexie.
+    // Questo hook si aggiornerà automaticamente se i dati in IndexedDB cambiano.
+    const anagraficheData = useLiveQuery(() => db.anagrafiche.bulkGet(ANAGRAFICA_IDS), [], []);
+
     const [data, setData] = useState<MasterData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
-        const fetchData = async () => {
+        if (anagraficheData.length > 0) {
             setLoading(true);
             try {
-                // Simuliamo il fetch di tutte le anagrafiche in parallelo dal DB locale
-                const [tecnici, clienti, sedi, tipiGiornata, veicoli, luoghi, navi, ditte, categorie, impostazioniArr] = await Promise.all([
-                    localDb.table('tecnici').toArray(),
-                    localDb.table('clienti').toArray(),
-                    localDb.table('sedi').toArray(),
-                    localDb.table('tipiGiornata').toArray(),
-                    localDb.table('veicoli').toArray(),
-                    localDb.table('luoghi').toArray(),
-                    localDb.table('navi').toArray(),
-                    localDb.table('ditte').toArray(),
-                    localDb.table('categorie').toArray(),
-                    localDb.table('impostazioni').toArray(),
-                ]);
-
-                const impostazioni: Impostazioni = impostazioniArr[0] || { tariffe: [] };
-
-                setData({
-                    tecnici,
-                    clienti,
-                    sedi,
-                    tipiGiornata,
-                    veicoli,
-                    luoghi,
-                    navi,
-                    ditte,
-                    categorie,
-                    impostazioni, // ++ FIX: Aggiunta la proprietà mancante
+                const masterDataResult: any = {};
+                anagraficheData.forEach((record, index) => {
+                    const key = ANAGRAFICA_IDS[index];
+                    masterDataResult[key] = record ? record.data : [];
                 });
 
+                // Le impostazioni sono gestite separatamente, quindi le omettiamo qui
+                // o le carichiamo se necessario per questo hook specifico.
+                setData(masterDataResult as MasterData);
+                setError(null);
             } catch (err) {
-                console.error("Failed to fetch local data:", err);
+                console.error("Failed to process local data:", err);
                 setError(err as Error);
-            } finally {
+            }
+            finally {
                 setLoading(false);
             }
-        };
-
-        fetchData();
-
-        // TODO: Implementare un listener per gli aggiornamenti del database locale
-        // e aggiornare lo stato di conseguenza.
-
-    }, []);
+        } else if (!loading) {
+            // Se non ci sono dati dopo il caricamento iniziale, potrebbe essere un errore
+            // o semplicemente il DB è vuoto. Per ora, impostiamo lo stato di caricamento su false.
+            setLoading(false);
+        }
+    }, [anagraficheData]); // L'effetto dipende dai dati live da Dexie
 
     return { data, loading, error };
 };

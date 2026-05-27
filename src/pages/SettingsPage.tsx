@@ -1,13 +1,13 @@
 
 import React, { useEffect, useReducer } from 'react';
 import {
-    Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
+    Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { localDB, TariffaLocaleCache } from '@/db/local-db';
+import { db, TariffaLocaleCache } from '@/db/local-db';
 import { TariffaLocale } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMasterData } from '@/hooks/useMasterData';
@@ -22,7 +22,8 @@ interface SettingsState {
 
 type SettingsAction =
     | { type: 'SYNC_TARIFFE'; payload: TariffaLocale[] }
-    | { type: 'UPDATE_TARIFFA'; payload: { id: string; value: string } }
+    | { type: 'UPDATE_TARIFFA_COSTO'; payload: { id: string; value: string } }
+    | { type: 'UPDATE_TARIFFA_UNITA'; payload: { id: string; unita: 'h' | 'g' } }
     | { type: 'SET_SAVING'; payload: boolean }
     | { type: 'SAVE_SUCCESS' };
 
@@ -35,11 +36,10 @@ const initialState: SettingsState = {
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
     switch (action.type) {
         case 'SYNC_TARIFFE':
-            if (state.isDirty) {
-                return state;
-            }
+            // RIMOSSO BLOCCO isDirty per permettere aggiornamento dopo salvataggio
             return { ...state, tariffe: action.payload, isDirty: false };
-        case 'UPDATE_TARIFFA': {
+        
+        case 'UPDATE_TARIFFA_COSTO': {
             const { id, value } = action.payload;
             const valueWithDot = value.replace(',', '.');
             if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
@@ -53,6 +53,19 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
             }
             return state;
         }
+
+        case 'UPDATE_TARIFFA_UNITA': {
+            const { id, unita } = action.payload;
+             if (!unita) return state; // Evita aggiornamenti nulli
+            return {
+                ...state,
+                isDirty: true,
+                tariffe: state.tariffe.map(t =>
+                    t.id === id ? { ...t, unita } : t
+                ),
+            };
+        }
+
         case 'SET_SAVING':
             return { ...state, isSaving: action.payload };
         case 'SAVE_SUCCESS':
@@ -68,7 +81,7 @@ const SettingsPage: React.FC = () => {
     const navigate = useNavigate();
     const { loading: masterDataLoading } = useMasterData();
 
-    const impostazioniLive = useLiveQuery(() => localDB.tariffe_locali.get('main'), []);
+    const impostazioniLive = useLiveQuery(() => db.tariffe_locali.get('main'), []);
 
     const [state, dispatch] = useReducer(settingsReducer, initialState);
     const { tariffe, isSaving, isDirty } = state;
@@ -76,12 +89,19 @@ const SettingsPage: React.FC = () => {
     useEffect(() => {
         if (impostazioniLive?.data?.tariffe) {
             const tariffeOrdinate = [...impostazioniLive.data.tariffe].sort((a,b) => a.nome.localeCompare(b.nome));
-            dispatch({ type: 'SYNC_TARIFFE', payload: tariffeOrdinate });
+            // Sincronizza lo stato solo se non ci sono modifiche pendenti
+            if (!isDirty) {
+                 dispatch({ type: 'SYNC_TARIFFE', payload: tariffeOrdinate });
+            }
         }
     }, [impostazioniLive, isDirty]);
 
-    const handleTariffaChange = (id: string, value: string) => {
-        dispatch({ type: 'UPDATE_TARIFFA', payload: { id, value } });
+    const handleTariffaCostoChange = (id: string, value: string) => {
+        dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { id, value } });
+    };
+
+    const handleTariffaUnitaChange = (id: string, unita: 'h' | 'g') => {
+        dispatch({ type: 'UPDATE_TARIFFA_UNITA', payload: { id, unita } });
     };
     
     const handleSalva = async () => {
@@ -91,17 +111,25 @@ const SettingsPage: React.FC = () => {
         }
         dispatch({ type: 'SET_SAVING', payload: true });
 
+        // Crea una mappa delle tariffe aggiornate per un accesso rapido
+        const updatedTariffeMap = new Map(tariffe.map(t => [t.id, t]));
+
+        // Aggiorna le tariffe originali preservando quelle non presenti nello stato (misura di sicurezza)
+        const finalTariffeToSave = impostazioniLive.data.tariffe.map(
+            originalTariffa => updatedTariffeMap.get(originalTariffa.id) || originalTariffa
+        );
+
         const dataToSave: TariffaLocaleCache = {
             id: 'main',
             timestamp: new Date(),
             data: {
-                ...(impostazioniLive.data || {}),
-                tariffe: tariffe,
+                ...impostazioniLive.data,
+                tariffe: finalTariffeToSave, 
             }
         };
 
         try {
-            await localDB.tariffe_locali.put(dataToSave);
+            await db.tariffe_locali.put(dataToSave);
             showSnackbar('Tariffe salvate con successo in locale!', 'success');
             dispatch({ type: 'SAVE_SUCCESS' });
         } catch (error) {
@@ -150,19 +178,33 @@ const SettingsPage: React.FC = () => {
                     {tariffe.map((tariffa, index) => (
                         <React.Fragment key={tariffa.id}>
                             {index > 0 && <Divider component="li" />}
-                            <ListItem sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                                <ListItemText primary={tariffa.nome} />
-                                <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 1, sm: 0 } }}>
+                            <ListItem sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                                <ListItemText primary={tariffa.nome} sx={{ flex: '1 1 150px' }} />
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '1 1 250px', justifyContent: 'flex-end' }}>
                                     <TextField
                                         type="text"
                                         size="small"
                                         value={tariffa.costo.toFixed(2)}
-                                        onChange={(e) => handleTariffaChange(tariffa.id, e.target.value)}
+                                        onChange={(e) => handleTariffaCostoChange(tariffa.id, e.target.value)}
                                         sx={{ width: '100px' }}
                                         inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
                                         disabled={isSaving}
                                     />
-                                    <Typography variant="body1" sx={{ ml: 1 }}>€/{tariffa.unita}</Typography>
+                                    <ToggleButtonGroup
+                                        value={tariffa.unita}
+                                        exclusive
+                                        size="small"
+                                        onChange={(e, newUnita) => handleTariffaUnitaChange(tariffa.id, newUnita)}
+                                        aria-label="text alignment"
+                                        disabled={isSaving}
+                                    >
+                                        <ToggleButton value="h" aria-label="hourly">
+                                            €/h
+                                        </ToggleButton>
+                                        <ToggleButton value="g" aria-label="daily">
+                                            €/g
+                                        </ToggleButton>
+                                    </ToggleButtonGroup>
                                 </Box>
                             </ListItem>
                         </React.Fragment>

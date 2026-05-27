@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/services/localDatabase'; // <-- PERCORSO CORRETTO
+import { db } from '@/db/local-db'; // <-- PERCORSO CORRETTO
 import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';

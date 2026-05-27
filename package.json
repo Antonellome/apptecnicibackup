@@ -33,7 +33,7 @@
     "formik-mui": "^5.0.0-alpha.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.7",
+    "jspdf-autotable": "^5.0.8",
     "react": "^19.2.0",
     "react-calendar-heatmap": "^1.10.0",
     "react-dom": "^19.2.0",

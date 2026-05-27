@@ -1,6 +1,6 @@
 
 import Dexie, { Table } from 'dexie';
-import { Impostazioni, Rapportino } from '@/models/definitions';
+import { Impostazioni, Rapportino, SyncEvent } from '@/models/definitions';
 
 export interface AnagraficaCache {
   id: string; // 'tecnici', 'tipiGiornata', etc.
@@ -14,26 +14,35 @@ export interface TariffaLocaleCache {
     timestamp: Date;
 }
 
-export interface RapportiniMeseCache {
-    id: string; // YYYY-MM formato
-    data: Rapportino[];
-    timestamp: Date;
-}
-
 export class AppLocalDB extends Dexie {
   anagrafiche!: Table<AnagraficaCache, string>;
   tariffe_locali!: Table<TariffaLocaleCache, string>;
-  rapportini_mensili!: Table<RapportiniMeseCache, string>;
+  syncQueue!: Table<SyncEvent, number>; // La chiave primaria è auto-incrementante
+  rapportini!: Table<Rapportino, string>; // La chiave primaria è l'id del rapportino (stringa)
 
   constructor() {
     super('AppLocalDB');
-    this.version(1).stores({
-      // La chiave primaria è 'id'. Definiamo gli indici se necessario.
-      anagrafiche: 'id', 
+    // INCREMENTO VERSIONE A 2
+    this.version(2).stores({
+      anagrafiche: 'id',
       tariffe_locali: 'id',
-      rapportini_mensili: 'id',
+      syncQueue: '++id, type',
+      rapportini: 'id, data, tecnicoId',
+    });
+
+    // Definizione della versione 1 per garantire una migrazione corretta
+    this.version(1).stores({
+        anagrafiche: 'id',
+        tariffe_locali: 'id',
+        rapportini_mensili: 'id', // Vecchia tabella, ora obsoleta
+    });
+
+    // Apriamo il DB
+    this.open().catch(err => {
+        console.error(`Errore nell'apertura di Dexie: ${err.stack || err}`);
     });
   }
 }
 
-export const localDB = new AppLocalDB();
+// Riportiamo l'export a 'db' per compatibilità con il resto del codebase
+export const db = new AppLocalDB();

@@ -17,7 +17,7 @@ import { isSameMonth, format, eachDayOfInterval, startOfDay } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalData } from '@/hooks/useLocalData';
 import { db as firestoreDb } from '@/firebase';
-import { db } from '@/services/localDatabase';
+import { db } from '@/db/local-db';
 import { aggiungiAllaCoda } from '@/services/offlineSync';
 import { doc, getDoc, addDoc, collection, Timestamp, runTransaction, writeBatch } from 'firebase/firestore';
 import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData, SyncEvent } from '@/models/definitions'; 
@@ -202,9 +202,14 @@ const ReportFormPage: React.FC = () => {
                 setPageLoading(true);
                 try {
                     let report: Rapportino | undefined;
+                    
                     if (isOfflineMode) {
-                        const syncEvent = await db.syncQueue.get({ id: reportId });
-                        if(syncEvent) report = syncEvent.payload as Rapportino;
+                        const syncEvent = await db.syncQueue.where('entityId').equals(reportId).first();
+                        if(syncEvent) {
+                            report = syncEvent.payload as Rapportino;
+                            setIsReadOnly(true); 
+                            setLockReason("Questo report è in attesa di sincronizzazione. Può solo essere visualizzato.");
+                        } 
                     } else {
                         const reportRef = doc(firestoreDb, 'rapportini', reportId);
                         const reportSnap = await getDoc(reportRef);
@@ -214,7 +219,7 @@ const ReportFormPage: React.FC = () => {
                     }
                     
                     if (report) {
-                        const dataToLoad = report.data instanceof Timestamp ? report.data.toDate() : new Date(report.data)
+                        const dataToLoad = report.data instanceof Timestamp ? report.data.toDate() : new Date(report.data);
                         setDataInizio(dataToLoad);
                         setTipoGiornataId(report.tipoGiornataId);
                         setVeicoloId(report.veicoloId || '');
@@ -246,18 +251,20 @@ const ReportFormPage: React.FC = () => {
                         });
                         setDettaglioOre(allTecnicoDetails);
 
-                        const reportDate = dataToLoad;
-                        if (!isSameMonth(reportDate, new Date()) && !userProfile?.isAdmin) {
+                        if (!isOfflineMode && !isSameMonth(dataToLoad, new Date()) && !userProfile?.isAdmin) {
                             setIsReadOnly(true);
                             setLockReason("Questo rapportino è bloccato perché appartiene a un mese precedente e non può più essere modificato.");
                         }
                     } else {
-                        memoizedShowSnackbar("Rapportino non trovato.", "error");
+                        // *** THIS IS THE CORRECTED LINE ***
+                        memoizedShowSnackbar("Rapportino non trovato (o la coda è vuota).", "error");
                         navigate('/lista-report');
                     }
                 } catch (error) {
                     console.error("Errore caricamento dati rapportino: ", error);
                     memoizedShowSnackbar("Errore nel caricamento del rapportino.", "error");
+                } finally {
+                    setPageLoading(false);
                 }
             } else if (tecnicoScrivente) {
                 setDettaglioOre(prev => prev.map(d => 
@@ -265,8 +272,8 @@ const ReportFormPage: React.FC = () => {
                     ? { ...d, nome: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim() } 
                     : d
                 ));
+                setPageLoading(false);
             }
-            setPageLoading(false);
         };
 
         if (!collectionsLoading) {
@@ -412,14 +419,16 @@ const ReportFormPage: React.FC = () => {
         try {
             const reportData = getFullReportData();
 
-            if (navigator.onLine && !isOfflineMode) {
+            if (navigator.onLine) {
                 let finalId = reportId;
                 if (isEditMode && reportId) {
+                     if(isOfflineMode) throw new Error("La modifica offline non è permessa.");
+
                     await runTransaction(firestoreDb, async (transaction) => {
                         const reportRef = doc(firestoreDb, 'rapportini', reportId);
                         const sfDoc = await transaction.get(reportRef);
                         if (!sfDoc.exists()) {
-                            throw new Error(`Documento con ID ${reportId} non trovato. Potrebbe essere stato cancellato.`);
+                            throw new Error(`Documento con ID ${reportId} non trovato.`);
                         }
                         transaction.update(reportRef, { ...reportData, updatedAt: Timestamp.now() });
                     });
@@ -427,29 +436,29 @@ const ReportFormPage: React.FC = () => {
                     const docRef = await addDoc(collection(firestoreDb, 'rapportini'), { ...reportData, createdAt: Timestamp.now() });
                     finalId = docRef.id;
                 }
-                memoizedShowSnackbar(isEditMode ? "Rapportino aggiornato con successo!" : "Rapportino creato con successo!", "success");
+                memoizedShowSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
                 return finalId ?? null;
             } else {
-                const idToUse = isOfflineMode ? reportId : undefined;
-                const queuedId = await aggiungiAllaCoda(reportData, idToUse);
-                memoizedShowSnackbar("Sei offline. Il rapportino è stato salvato localmente e sarà sincronizzato appena torni online.", "info");
+                const queuedId = await aggiungiAllaCoda(reportData, reportId);
+                memoizedShowSnackbar("Offline. Il rapportino è stato salvato localmente.", "info");
                 return queuedId;
             }
         } catch (error) {
-            console.error("Errore durante il salvataggio o l'accodamento: ", error);
-            const errorMessage = (error instanceof Error) ? error.message : "Si è verificato un errore durante il salvataggio.";
-            memoizedShowSnackbar(`Errore: ${errorMessage} Le modifiche sono state salvate localmente.`, "error");
+            console.error("Errore durante il salvataggio: ", error);
+            const errorMessage = (error instanceof Error) ? error.message : "Errore di salvataggio.";
+            memoizedShowSnackbar(`Errore: ${errorMessage}`, "error");
 
-            if (navigator.onLine || isOfflineMode) {
-                try {
-                    const reportData = getFullReportData();
-                    const idToUse = isOfflineMode ? reportId : `local-${Date.now()}`;
-                    await aggiungiAllaCoda(reportData, idToUse);
-                } catch (queueError) {
-                    console.error("Errore critico: impossibile anche accodare il rapportino. ", queueError);
-                }
+            try {
+                console.log("Fallback: tentativo di accodare il rapportino localmente.");
+                const reportData = getFullReportData();
+                const queuedId = await aggiungiAllaCoda(reportData, reportId);
+                memoizedShowSnackbar("Il salvataggio online è fallito. Le modifiche sono state salvate nella coda locale.", "warning");
+                return queuedId;
+            } catch (queueError) {
+                console.error("ERRORE CRITICO: Fallito anche l'accodamento locale. ", queueError);
+                memoizedShowSnackbar("Errore critico: impossibile salvare i dati.", "error");
+                return null;
             }
-            return null;
         } finally {
             setIsSaving(false);
         }
@@ -509,11 +518,11 @@ const ReportFormPage: React.FC = () => {
                 }
             }
     
-            memoizedShowSnackbar(`Creati ${giorniDaCreare.length} rapportini con successo! La lista verrà aggiornata a breve.`, "success");
+            memoizedShowSnackbar(`Creati ${giorniDaCreare.length} rapportini con successo!`, "success");
             navigate('/lista-report');
     
         } catch (error) {
-            console.error("Errore durante la creazione multipla dei rapportini: ", error);
+            console.error("Errore creazione multipla: ", error);
             memoizedShowSnackbar("Si è verificato un errore durante la creazione dei rapportini.", "error");
         } finally {
             setIsSaving(false);
@@ -552,7 +561,7 @@ const ReportFormPage: React.FC = () => {
         try {
             const savedOrQueuedId = await salvaOAccodaRapportino();
             if (!savedOrQueuedId) {
-                 showSnackbar("Attenzione: impossibile salvare. Il PDF generato potrebbe non essere l'ultima versione.", "warning");
+                 showSnackbar("Attenzione: impossibile salvare. Il PDF potrebbe non essere aggiornato.", "warning");
             }
             
             const reportDataForPdf = getFullReportData();
@@ -643,23 +652,39 @@ const ReportFormPage: React.FC = () => {
                     {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
                     
                     <Section title="Dati Principali">
-                        <Grid size={{ xs: 12 }}>
+                        <Grid size={12}>
                             {!isEditMode && (
                                 <FormControlLabel control={<Switch checked={isMultiDay} onChange={handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={isEditMode} />
                             )}
                         </Grid>
-                        <Grid size={{ xs: 12, md: isMultiDay ? 6 : 12 }}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                md: isMultiDay ? 6 : 12
+                            }}>
                              <DatePicker label={isMultiDay ? "Dal" : "Data"} value={dataInizio} onChange={setDataInizio} disabled={disableActions} sx={{width: '100%'}} />
                         </Grid>
                         {isMultiDay && (
-                            <Grid size={{ xs: 12, md: 6 }}>
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    md: 6
+                                }}>
                                 <DatePicker label="Al" value={dataFine} onChange={setDataFine} disabled={disableActions} sx={{width: '100%'}} minDate={dataInizio || undefined} />
                             </Grid>
                         )}
-                         <Grid size={{ xs: 12, md: 6 }}>
+                         <Grid
+                             size={{
+                                 xs: 12,
+                                 md: 6
+                             }}>
                             <TextField label="Tecnico Responsabile" value={scriventeDettaglio?.nome || 'Caricamento...'} fullWidth disabled />
                         </Grid>
-                         <Grid size={{ xs: 12, md: 6 }}>
+                         <Grid
+                             size={{
+                                 xs: 12,
+                                 md: 6
+                             }}>
                            <FormControl fullWidth required disabled={disableActions}>
                                 <InputLabel id="tipo-giornata-label">Tipo Giornata</InputLabel>
                                 <Select
@@ -679,14 +704,14 @@ const ReportFormPage: React.FC = () => {
                         <>
                             <Section title="Tecnici Coinvolti">
                                 {scriventeDettaglio && !isLavorativo && (
-                                    <Grid size={{ xs: 12 }}><Typography variant="body2" color="text.secondary">Per giornate non lavorative, le ore sono impostate a 8 di default.</Typography></Grid>
+                                    <Grid size={12}><Typography variant="body2" color="text.secondary">Per giornate non lavorative, le ore sono impostate a 8 di default.</Typography></Grid>
                                 )}
                                 {scriventeDettaglio && isLavorativo && (
-                                    <Grid size={{ xs: 12 }}>
+                                    <Grid size={12}>
                                         <OreLavoroSingoloTecnico key={scriventeDettaglio.tecnicoId} datiOre={scriventeDettaglio} onUpdate={handleScriventeOreUpdate} isReadOnly={disableActions} isScrivente={true} />
                                     </Grid>
                                 )}
-                                <Grid size={{ xs: 12 }}>
+                                <Grid size={12}>
                                         <Autocomplete
                                         multiple
                                         options={otherTecnicos}
@@ -699,7 +724,7 @@ const ReportFormPage: React.FC = () => {
                                 </Grid>
 
                                 {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
-                                    <Grid key={dett.tecnicoId} size={{ xs: 12 }}>
+                                    <Grid key={dett.tecnicoId} size={12}>
                                         <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                                             <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography>
                                                 {isLavorativo ? <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${(dett.ore || 0).toFixed(2)}h)`} size="small" /> : <Chip label={`8 ore di default`} size="small" />}
@@ -716,7 +741,11 @@ const ReportFormPage: React.FC = () => {
                             {isLavorativo && (
                                 <>
                                     <Section title="Dettagli Intervento">
-                                        <Grid size={{ xs: 12, md: 6 }}>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                md: 6
+                                            }}>
                                             <FormControl fullWidth required disabled={disableActions}>
                                                 <InputLabel id="nave-label">Nave</InputLabel>
                                                 <Select labelId="nave-label" value={naveId} label="Nave" onChange={e => setNaveId(e.target.value as string)}>
@@ -725,7 +754,11 @@ const ReportFormPage: React.FC = () => {
                                                 </Select>
                                             </FormControl>
                                         </Grid>
-                                        <Grid size={{ xs: 12, md: 6 }}>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                md: 6
+                                            }}>
                                             <FormControl fullWidth required disabled={disableActions}>
                                                 <InputLabel id="luogo-label">Luogo</InputLabel>
                                                 <Select labelId="luogo-label" value={luogoId} label="Luogo" onChange={e => setLuogoId(e.target.value as string)}>
@@ -734,7 +767,7 @@ const ReportFormPage: React.FC = () => {
                                                 </Select>
                                             </FormControl>
                                         </Grid>
-                                        <Grid size={{ xs: 12 }}>
+                                        <Grid size={12}>
                                             <FormControl fullWidth disabled={disableActions}>
                                                 <InputLabel id="veicolo-label">Veicolo</InputLabel>
                                                 <Select
@@ -749,19 +782,27 @@ const ReportFormPage: React.FC = () => {
                                                 </Select>
                                             </FormControl>
                                         </Grid>
-                                        <Grid size={{ xs: 12 }}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
-                                        <Grid size={{ xs: 12 }}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
-                                        <Grid size={{ xs: 12 }}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} required disabled={disableActions} /></Grid>
+                                        <Grid size={12}><TextField label="Breve Descrizione Lavoro" value={descrizioneBreve} onChange={e => setDescrizioneBreve(e.target.value)} fullWidth disabled={disableActions} /></Grid>
+                                        <Grid size={12}><TextField label="Materiali Impiegati" value={materialiImpiegati} onChange={e => setMaterialiImpiegati(e.target.value)} fullWidth multiline rows={2} disabled={disableActions} /></Grid>
+                                        <Grid size={12}><TextField label="Lavoro Eseguito" value={lavoroEseguito} onChange={e => setLavoroEseguito(e.target.value)} fullWidth multiline rows={4} required disabled={disableActions} /></Grid>
                                     </Section>
 
                                     <Section title="Firma Cliente">
-                                        <Grid size={{ xs: 12, md: 6 }}>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                md: 6
+                                            }}>
                                             <TextField label="Nome e Cognome Firmatario" value={firmaFirmatarioNome} onChange={(e) => setFirmaFirmatarioNome(e.target.value)} fullWidth required disabled={disableActions}/>
                                         </Grid>
-                                        <Grid size={{ xs: 12, md: 6 }}>
+                                        <Grid
+                                            size={{
+                                                xs: 12,
+                                                md: 6
+                                            }}>
                                             <TextField label="Società" value={firmaFirmatarioSocieta} onChange={(e) => setFirmaFirmatarioSocieta(e.target.value)} fullWidth disabled={disableActions}/>
                                         </Grid>
-                                        <Grid size={{ xs: 12 }}>
+                                        <Grid size={12}>
                                             {firmaVettoriale ? (
                                                 <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center', backgroundColor: '#616161' }}>
                                                     <Typography variant="body2" gutterBottom sx={{ color: 'white' }}>Firma salvata:</Typography>

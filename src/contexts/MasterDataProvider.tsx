@@ -1,23 +1,21 @@
-import React, { useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase';
-import type { TipoGiornata, Impostazioni, TariffaLocale, MasterData, Tecnico, Cliente, Veicolo, Luogo, Nave, Sede, Ditta, Categoria } from '@/models/definitions';
-import { localDB } from '@/db/local-db';
+import { db as firestoreDb } from '@/firebase';
+import type { MasterData, Impostazioni, TipoGiornata, TariffaLocale } from '@/models/definitions';
+import { db } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
-import { Alert, Box } from '@mui/material';
-import { MasterDataContext, MasterDataContextType } from '@/contexts/MasterDataContext';
+import { Alert, Box, Typography, Button } from '@mui/material';
+import { MasterDataContext } from './MasterDataContext';
 
 const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni'>)[] = [
     'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti', 'sedi', 'ditte', 'categorie'
 ];
 
-type BlueprintTariff = { nome: string; costo: number; unita: 'g' | 'h'; };
-
-const TARIFFS_BLUEPRINT: BlueprintTariff[] = [
+const TARIFFS_BLUEPRINT: { nome: string; costo: number; unita: 'g' | 'h'; }[] = [
     { nome: 'Ferie', costo: 80, unita: 'g' },
     { nome: 'Festivo', costo: 80, unita: 'g' },
     { nome: 'Legge 104', costo: 10, unita: 'h' },
-    { nome: 'Malattia', costo: 10, unita: 'h' },
+    { nome: 'Malattia', costo: 80, unita: 'g' }, // CORRETTO
     { nome: 'Ordinaria', costo: 10, unita: 'h' },
     { nome: 'Permesso', costo: 10, unita: 'h' },
     { nome: 'Straordinario', costo: 15, unita: 'h' },
@@ -26,97 +24,154 @@ const TARIFFS_BLUEPRINT: BlueprintTariff[] = [
     { nome: 'Trasferta Italia', costo: 20, unita: 'g' },
 ];
 
-const blueprintMapByName = new Map(TARIFFS_BLUEPRINT.map(t => [t.nome.toLowerCase(), t]));
+async function fetchMasterDataFromFirebase(): Promise<Omit<MasterData, 'impostazioni'>> {
+    const loadedAnagrafiche: { [key: string]: any[] } = {};
+    for (const key of ANAGRAFICA_COLLECTIONS) {
+        console.log(`Fetching ${key} from Firebase...`);
+        const querySnapshot = await getDocs(collection(firestoreDb, key));
+        const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedAnagrafiche[key] = items;
+    }
+    return loadedAnagrafiche as Omit<MasterData, 'impostazioni'>;
+}
+
+async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): Promise<MasterData> {
+    console.log("Clearing and populating local database...");
+    await db.anagrafiche.clear();
+    
+    // NON CANCELLARE LE TARIFFE PER PRESERVARE LE MODIFICHE UTENTE
+    // await db.tariffe_locali.clear(); 
+
+    for (const key of ANAGRAFICA_COLLECTIONS) {
+        await db.anagrafiche.put({ id: key, data: (anagrafiche as any)[key] || [], timestamp: new Date() });
+    }
+
+    const tipiGiornataDaDB = (anagrafiche.tipiGiornata || []) as TipoGiornata[];
+    const blueprintMapByName = new Map(TARIFFS_BLUEPRINT.map(t => [t.nome.toLowerCase(), t]));
+    
+    const existingTariffe = await db.tariffe_locali.get('main');
+    const existingTariffeMap = new Map(existingTariffe?.data.tariffe.map(t => [t.tipoGiornataId, t]));
+
+    const finalTariffe: TariffaLocale[] = tipiGiornataDaDB.map((tipoGiornata) => {
+        const existing = existingTariffeMap.get(tipoGiornata.id);
+        if (existing) {
+            return existing; // Mantiene la tariffa modificata dall'utente
+        }
+
+        const lookupName = tipoGiornata.nome?.toLowerCase() || '';
+        const blueprintDefault = blueprintMapByName.get(lookupName) || blueprintMapByName.get(lookupName === '104' ? 'legge 104' : '');
+        return {
+            id: tipoGiornata.id,
+            tipoGiornataId: tipoGiornata.id,
+            nome: tipoGiornata.nome,
+            costo: blueprintDefault?.costo ?? 0,
+            unita: blueprintDefault?.unita ?? 'h',
+        };
+    });
+
+    const finalImpostazioni: Impostazioni = { tariffe: finalTariffe };
+    await db.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
+    console.log("Local database populated/updated successfully.");
+
+    return { ...anagrafiche, impostazioni: finalImpostazioni };
+}
+
+async function loadDataFromCache(): Promise<MasterData | null> {
+    console.log("Attempting to load data from cache...");
+    const localAnagrafiche = await db.anagrafiche.toArray();
+    if (localAnagrafiche.length === 0) {
+        console.log("Cache is empty.");
+        return null;
+    }
+    const data: { [key: string]: any[] } = {};
+    localAnagrafiche.forEach(item => { data[item.id] = item.data; });
+    const impostazioni = await db.tariffe_locali.get('main');
+    console.log("Data loaded from cache successfully.");
+    return { ...data, impostazioni: impostazioni?.data } as MasterData;
+}
 
 export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [masterData, setMasterData] = useState<MasterData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
 
-    const fetchAndCacheData = useCallback(async () => {
+    const loadData = useCallback(async (isForcedRefresh = false) => {
         setLoading(true);
         setError(null);
 
         try {
-            await localDB.tariffe_locali.clear();
-
-            const loadedAnagrafiche: { [key: string]: any[] } = {};
-            for (const key of ANAGRAFICA_COLLECTIONS) {
-                const querySnapshot = await getDocs(collection(db, key));
-                const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                loadedAnagrafiche[key] = items;
-                await localDB.anagrafiche.put({ id: key, data: items, timestamp: new Date() });
-            }
-            
-            const tipiGiornataDaDB = loadedAnagrafiche.tipiGiornata as TipoGiornata[];
-            const cachedImpostazioni = await localDB.tariffe_locali.get('main');
-            const cachedTariffeMap = new Map(cachedImpostazioni?.data?.tariffe?.map((t: TariffaLocale) => [t.id, t]) || []);
-
-            const finalTariffe: TariffaLocale[] = tipiGiornataDaDB.map((tipoGiornata) => {
-                const lookupName = tipoGiornata.nome?.toLowerCase() || '';
-                let blueprintDefault = blueprintMapByName.get(lookupName);
-
-                if (!blueprintDefault) {
-                    if (lookupName === '104') {
-                        blueprintDefault = blueprintMapByName.get('legge 104');
-                    }
+            console.log("Starting data sync process...");
+            const fetchedData = await fetchMasterDataFromFirebase();
+            const finalData = await populateLocalDB(fetchedData);
+            setMasterData(finalData);
+        } catch (onlineError: any) {
+            console.warn("Online fetch failed. Attempting to fallback to cache.", onlineError.message);
+            try {
+                const cachedData = await loadDataFromCache();
+                if (cachedData) {
+                    setMasterData(cachedData);
+                } else {
+                    throw onlineError; // Re-throw original error if cache is also empty
                 }
-
-                const cachedTariff = cachedTariffeMap.get(tipoGiornata.id);
-                const id = tipoGiornata.id;
-                const costo = cachedTariff?.costo ?? blueprintDefault?.costo ?? 0;
-                const unita = blueprintDefault?.unita ?? 'h';
-
-                return {
-                    id: id,
-                    tipoGiornataId: id,
-                    nome: tipoGiornata.nome,
-                    costo: costo,
-                    unita: unita,
-                };
-            });
-
-            const finalImpostazioni: Impostazioni = {
-                ...(cachedImpostazioni?.data || {}),
-                tariffe: finalTariffe
-            };
-            await localDB.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
-
-            // COSTRUZIONE ESPLICITA E SICURA DELL'OGGETTO MASTERDATA
-            const finalMasterData: MasterData = {
-                tecnici: (loadedAnagrafiche.tecnici || []) as Tecnico[],
-                clienti: (loadedAnagrafiche.clienti || []) as Cliente[],
-                tipiGiornata: tipiGiornataDaDB || [],
-                veicoli: (loadedAnagrafiche.veicoli || []) as Veicolo[],
-                luoghi: (loadedAnagrafiche.luoghi || []) as Luogo[],
-                navi: (loadedAnagrafiche.navi || []) as Nave[],
-                sedi: (loadedAnagrafiche.sedi || []) as Sede[],
-                ditte: (loadedAnagrafiche.ditte || []) as Ditta[],
-                categorie: (loadedAnagrafiche.categorie || []) as Categoria[],
-                impostazioni: finalImpostazioni,
-            };
-
-            setMasterData(finalMasterData);
-
-        } catch (err: any) {
-            console.error("Errore critico durante il caricamento dei dati master:", err);
-            setError(`Errore critico durante il caricamento dei dati master: ${err.message}`);
+            } catch (cacheError) {
+                console.error("CRITICAL: Online and Cache data loading failed.", onlineError);
+                setError(onlineError); // Set the original online error for debugging
+            }
         } finally {
             setLoading(false);
+            console.log("Data sync process finished.");
+        }
+    }, []);
+
+    const forceClearAndReload = useCallback(async () => {
+        console.log("Forcing cache clear and reload...");
+        setLoading(true);
+        setError(null);
+        try {
+            await db.delete();
+            await db.open();
+        } catch (e) {
+            console.error("Failed to clear database", e);
+        } finally {
+            window.location.reload();
         }
     }, []);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchAndCacheData();
-        }, 0);
-        return () => clearTimeout(timer);
-    }, [fetchAndCacheData]);
+        loadData();
+    }, [loadData]);
 
-    const contextValue: MasterDataContextType = { masterData, loading, error, refetchData: fetchAndCacheData };
+    const contextValue = useMemo(() => ({
+        masterData, 
+        loading, 
+        error, 
+        refetchData: () => loadData(true) 
+    }), [masterData, loading, error, loadData]);
 
-    if (loading && !masterData && !error) return <FullScreenLoader />;
-    if (error) return <Box sx={{ p: 4 }}><Alert severity="error">{error}</Alert></Box>;
+    if (loading && !masterData) return <FullScreenLoader message="Sincronizzazione dati maestri..." />;
+    
+    if (error) {
+        return (
+            <Box sx={{ p: { xs: 2, sm: 4 }, m: { xs: 1, sm: 2 }, border: '1px solid red', borderRadius: 2, backgroundColor: '#ffebee' }}>
+                <Alert severity="error" sx={{ mb: 2 }}>
+                    <Typography variant="h6">Errore Critico di Sincronizzazione</Typography>
+                </Alert>
+                <Typography variant="body1" color="text.secondary">Impossibile avviare l'applicazione. Non è stato possibile scaricare i dati dal server e la cache locale è vuota o corrotta.</Typography>
+                <Button variant="contained" color="error" onClick={forceClearAndReload} sx={{ mt: 2, mb: 2 }}>
+                    Tenta di nuovo (Svuota la cache e ricarica)
+                </Button>
+                <Box component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', backgroundColor: '#f5f5f5', p: 2, mt: 2, borderRadius: 1, maxHeight: '40vh', overflow: 'auto' }}>
+                    {
+                        `Error Name: ${error.name}\n` +
+                        `Message: ${error.message}\n\n` +
+                        `Stack: ${error.stack}`
+                    }
+                </Box>
+            </Box>
+        );
+    }
+
+    if (!masterData) return <FullScreenLoader message="Inizializzazione dati..." />;
 
     return (
         <MasterDataContext.Provider value={contextValue}>

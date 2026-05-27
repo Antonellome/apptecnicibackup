@@ -23,12 +23,15 @@ const DettaglioOreSection: React.FC<DettaglioOreSectionProps> = ({ control, regi
       <Grid size={12}>
           <Typography variant="h6" gutterBottom>Dettaglio Ore Altri Tecnici</Typography>
       </Grid>
-      
       {fields.map((item, index) => (
-        <Grid size={12} key={item.id}>
+        <Grid key={item.id} size={12}>
             <Box sx={{ mb: 2, p: 2, border: '1px solid #ccc', borderRadius: '4px' }}>
               <Grid container spacing={2} alignItems="center">
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid
+                  size={{
+                    xs: 12,
+                    sm: 6
+                  }}>
                   <Autocomplete
                     options={tecnici}
                     getOptionLabel={(option) => option.nome || ''}
@@ -38,7 +41,11 @@ const DettaglioOreSection: React.FC<DettaglioOreSectionProps> = ({ control, regi
                     }
                   />
                 </Grid>
-                <Grid size={{ xs: 10, sm: 4 }}>
+                <Grid
+                  size={{
+                    xs: 10,
+                    sm: 4
+                  }}>
                   <TextField 
                     fullWidth
                     label="Ore"
@@ -46,7 +53,11 @@ const DettaglioOreSection: React.FC<DettaglioOreSectionProps> = ({ control, regi
                     {...register(`dettaglioOreTecnici.${index}.ore`)}
                   />
                 </Grid>
-                <Grid size={{ xs: 2, sm: 2 }}>
+                <Grid
+                  size={{
+                    xs: 2,
+                    sm: 2
+                  }}>
                   <IconButton onClick={() => remove(index)}>
                     <DeleteIcon />
                   </IconButton>
@@ -55,7 +66,6 @@ const DettaglioOreSection: React.FC<DettaglioOreSectionProps> = ({ control, regi
             </Box>
         </Grid>
       ))}
-
       <Grid size={12}>
           <Button onClick={() => append({ tecnicoId: '', ore: 8, tipoOrario: 'manuale', inizio: '', fine: '', pausa: '' })}>
             Aggiungi Tecnico

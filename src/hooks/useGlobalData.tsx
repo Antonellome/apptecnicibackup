@@ -76,7 +76,10 @@ function subscribeToCollectionWithConverter<T>(
 ) {
   const collRef = collection(db, collectionName).withConverter(converter);
   return onSnapshot(collRef, snapshot => {
-    let data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as T);
+    let data = snapshot.docs.map(doc => (({
+      ...doc.data(),
+      id: doc.id
+    }) as T));
     if (sortData) data = sortByName(data as any);
     dispatch({ type: 'SET_DATA', payload: { name: collectionName, data } });
   }, error => {
@@ -92,7 +95,10 @@ function subscribeToCollection<T>(
 ) {
   const collRef = collection(db, collectionName);
   return onSnapshot(collRef, snapshot => {
-    let data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as T);
+    let data = snapshot.docs.map(doc => (({
+      ...doc.data(),
+      id: doc.id
+    }) as T));
     if (sortData) data = sortByName(data as any);
     dispatch({ type: 'SET_DATA', payload: { name: collectionName, data } });
   }, error => {

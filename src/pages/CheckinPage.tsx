@@ -114,7 +114,7 @@ const CheckinPage: React.FC = () => {
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
-                        <Grid size={12}>
+                        <Grid size={{ xs: 12 }}>
                             <FormControl fullWidth>
                                 <InputLabel id="nave-label">Nave</InputLabel>
                                 <Select
@@ -127,7 +127,7 @@ const CheckinPage: React.FC = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={12}>
+                        <Grid size={{ xs: 12 }}>
                             <FormControl fullWidth>
                                 <InputLabel id="luogo-label">Luogo</InputLabel>
                                 <Select
@@ -141,9 +141,9 @@ const CheckinPage: React.FC = () => {
                             </FormControl>
                         </Grid>
 
-                        {error && <Grid size={12}><Alert severity="error">{error}</Alert></Grid>}
+                        {error && <Grid size={{ xs: 12 }}><Alert severity="error">{error}</Alert></Grid>}
                         
-                        <Grid sx={{ mt: 2 }} size={12}>
+                        <Grid sx={{ mt: 2 }} size={{ xs: 12 }}>
                             <Button 
                                 type="submit" 
                                 variant="contained" 

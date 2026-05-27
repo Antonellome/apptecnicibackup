@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 // Servizi, DB e Context
-import { db } from '@/services/localDatabase';
+import { db } from '@/db/local-db'; // Percorso corretto
 import { sincronizzaConFirebase } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 
@@ -21,6 +21,7 @@ const MainLayout: React.FC = () => {
     const { showSnackbar } = useSnackbar();
     const isSyncing = useRef(false);
 
+    // Conteggio live degli elementi in coda di sincronizzazione
     const rapportiniInSospeso = useLiveQuery(() => db.syncQueue.count(), []);
 
     const handleSync = useCallback(async (isManualTrigger = false) => {
@@ -53,9 +54,10 @@ const MainLayout: React.FC = () => {
         }
     }, [showSnackbar]);
 
+    // Effetto per la sincronizzazione automatica al ritorno online
     useEffect(() => {
         const onOnline = () => handleSync(false);
-        onOnline();
+        onOnline(); // Tenta una sincronizzazione all'avvio del componente se online
         window.addEventListener('online', onOnline);
         return () => {
             window.removeEventListener('online', onOnline);
@@ -86,8 +88,6 @@ const MainLayout: React.FC = () => {
                         <IconButton title="Home" color="inherit" onClick={() => navigate('/')}>
                             <HomeIcon />
                         </IconButton>
-
-                        {/* Blocco Notifiche Rimosso */}
 
                         <IconButton title="Impostazioni" color="inherit" onClick={() => navigate('/impostazioni')}>
                             <SettingsIcon />

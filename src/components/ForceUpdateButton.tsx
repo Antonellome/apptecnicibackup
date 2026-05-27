@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Button, CircularProgress } from '@mui/material';
 import { useSnackbar } from '@/contexts/SnackbarContext';
-import { localDB } from '@/db/local-db';
+import { db } from '@/db/local-db';
 
 export const ForceUpdateButton = () => {
     const [updating, setUpdating] = useState(false);
@@ -22,7 +22,7 @@ export const ForceUpdateButton = () => {
                 const keys = await caches.keys();
                 await Promise.all(keys.map(key => caches.delete(key)));
             }
-            await localDB.delete();
+            await db.delete();
             setTimeout(() => { window.location.reload(); }, 2000);
         } catch (error) {
             console.error("Errore durante l'aggiornamento forzato:", error);

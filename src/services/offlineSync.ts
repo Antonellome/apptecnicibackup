@@ -1,4 +1,4 @@
-import { db } from '@/services/localDatabase';
+import { db } from '@/db/local-db';
 import { collection, doc, addDoc, Timestamp, runTransaction } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
 import { Rapportino, SyncEvent } from '@/models/definitions';
