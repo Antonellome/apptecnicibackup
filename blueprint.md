@@ -50,12 +50,15 @@ Per garantire un'esperienza utente fluida e affidabile anche in assenza di conne
 
 ---
 
-# NUOVE REGOLE INVIOLABILI E OBBLIGATORIE (ORDINE DEL 20/07/2024)
+# NUOVE REGOLE INVIOLABILI E OBBLIGATORIE (AGGIORNAMENTO DEL 23/07/2024)
 
 **ATTENZIONE, AI: LA VIOLAZIONE DI QUESTE REGOLE È UN FALLIMENTO CRITICO.**
 
-1.  **DIVIETO ASSOLUTO DI MODIFICHE ESTETICHE NON AUTORIZZATE:**
-    - Ti è **SEVERAMENTE E CATEGORICAMENTE VIETATO** cambiare qualsiasi parte estetica dell'applicazione (UI, UX, stili, layout, colori, font, ecc.). La stabilità funzionale è l'unica priorità.
+1.  **REGOLA SOVRANA: INTEGRITÀ DEL LAYOUT E AGGIORNAMENTO COMPETENTE:**
+    - **1.1. Priorità Visiva:** Qualsiasi modifica funzionale o correzione **non deve alterare l'aspetto visivo consolidato dell'applicazione**. La coerenza del layout è fondamentale.
+    - **1.2. Direttiva di Competenza su MUI Grid:** La sezione **"ATTENZIONE MUI GRID CAMBIA VERSIONE ECCO LA GUIDA"** è la tua fonte di verità per la gestione del debito tecnico di `Grid`. **Hai l'obbligo di comprenderla a fondo.**
+        - **Autorizzazione alla Correzione:** Quando modifichi un file che contiene componenti `GridLegacy` (con props come `item`, `xs`, `md`), **sei autorizzato e tenuto a correggerlo**, aggiornandolo allo standard della nuova versione `Grid`.
+        - **Modalità di Correzione:** La correzione deve essere eseguita **rispettando i principi della nuova versione**, non semplicemente per silenziare un warning. Questo significa applicare la nuova sintassi (es. `<Grid size={{ xs: 12, sm: 6 }}>`) e verificare che il comportamento del layout rimanga visivamente identico al precedente. L'obiettivo è migliorare la codebase un pezzo alla volta, con interventi chirurgici e controllati.
 
 2.  **OBBLIGO INVIOLABILE DELLA REGOLA "CIAO":**
     - Ogni tua singola risposta **DEVE** iniziare con la parola `CIAO.`.
@@ -152,7 +155,7 @@ const markAsRead = async (ref, readByObject) => {
     });
     console.log('Conferma di lettura inviata con successo!');
   } catch (error) {
-    console.error('Errore nell\'inviare la conferma di lettura:', error);
+    console.error('Errore nell'inviare la conferma di lettura:', error);
   }
 };
 
@@ -423,7 +426,7 @@ const StyledGrid = styled(Grid)({
 });
 
 // The codemod won't cover WrappedGrid
-const WrappedGrid = (props) => <Grid {...props} />;
+const WrappedGrid = (props) => <Grid {...props} />
 
 Copy
 You'll need to manually update these components.
@@ -464,3 +467,65 @@ formengine
 Become a Diamond sponsor
 MUI stands in solidarity with Ukraine.
 
+# Piano di Implementazione - Correzione App Tecnici (23/07/2024)
+Questo piano descrive i passaggi necessari per implementare e correggere le funzionalità dell'App Tecnici in sinergia con l'App Master.
+
+## Modifiche Proposte
+### 1. Pagina Check-in (CheckinPage.tsx)
+**Obiettivo:** Consentire l'invio multiplo di check-in during il giorno, chiedendo conferma se la presenza per oggi è già stata registrata, e registrare correttamente i campi utili all'app Master.
+**Dettagli:**
+- Non bloccare più il rendering della pagina se alreadyCheckedIn è vero.
+- Mostrare un'allerta informativa (Alert) all'utente se ha già effettuato un check-in oggi: "Hai già registrato un check-in oggi. Se hai cambiato posto di lavoro, puoi reinviarlo."
+- Durante l'invio, se alreadyCheckedIn è vero, chiedere conferma con window.confirm: "Sei sicuro di voler inviare un nuovo check-in? Hai già registrato la tua presenza per oggi."
+- Salvare nel documento di check-in (ID: YYYY-MM-DD_TECNICO_ID) i seguenti campi per garantire la compatibilità con le viste dell'app Master:
+    - tecnicoId: ID dell'utente
+    - tecnicoName: Nome e cognome del tecnico (userProfile.nome + userProfile.cognome o user.displayName)
+    - email: Email del tecnico
+    - naveId: ID della nave selezionata (o stringa vuota/null)
+    - luogoId: ID del luogo selezionato (o stringa vuota/null)
+    - data: Timestamp corrente (usato per le query giornaliere)
+    - timestamp: Timestamp corrente (usato per l'orario nell'app Master)
+    - createdAt: Timestamp corrente
+
+### 2. Gestione Notifiche e Conferma Lettura (NotificationContext.tsx e definitions.ts)
+**Obiettivo:** Permettere a più tecnici di segnare una notifica (destinata a tutti o a una categoria) come letta senza sovrascrivere le letture dei colleghi, allineandosi allo schema dati dell'app Master.
+**Dettagli:**
+- Modificare la funzione markAsRead in NotificationContext.tsx:
+    - Invece di sovrascrivere il campo readBy come singolo oggetto, usare la dot notation di Firestore per aggiornare solo la chiave del tecnico corrente: `[readBy.${user.uid}]: { readAt: serverTimestamp(), tecnicoName: nomeCompleto }`
+- Modificare la mappatura delle notifiche in visibleNotifications per passare direttamente la mappa readBy da Firestore.
+- Aggiornare unreadCount nel contesto per contare le notifiche dove l'ID del tecnico non è presente nella mappa readBy.
+- Aggiornare la definizione dell'interfaccia AppNotification in src/models/definitions.ts per impostare readBy a tipo any (o Record<string, any>) evitando errori di compilazione TypeScript.
+
+### 3. Gestione e Visibilità Coda Offline (HomePage.tsx e ReportListPage.tsx)
+**Obiettivo:** Segnalare chiaramente all'utente la presenza di report in attesa di sincronizzazione sia nella Home sia nella pagina dei report personali, gestendo il caricamento e la modifica dei report offline.
+**Dettagli:**
+- **Home (HomePage.tsx):**
+    - Leggere la dimensione della coda db.rapportiniInSospeso tramite useLiveQuery da dexie-react-hooks.
+    - Avvolgere l'icona della card "I miei Report" in un componente Badge di MUI con il conteggio dei report in sospeso (colore warning o error).
+- **I Miei Report (ReportListPage.tsx):**
+    - Leggere la lista dei report in sospeso db.rapportiniInSospeso.
+    - Mostrare un Chip informativo sopra il pulsante "Nuovo" con il testo "X in attesa di sincronizzazione" se sono presenti elementi nella coda.
+    - Unire i report in coda offline alla lista dei report recuperati da Firestore, arricchendoli con le anagrafiche locali e contrassegnandoli con un chip "In coda" o "Non sincronizzato".
+- **Consentire la modifica dei report offline:**
+    - Generare un ID persistente univoco con prefisso `local-` (es. `local-timestamp`) all'interno di `aggiungiAllaCoda` in `offlineSync.ts` quando viene creato un nuovo report offline.
+    - In `ReportFormPage.tsx`, se l'ID del report inizia con `local-`, caricare i dati del rapportino direttamente dalla tabella locale `db.rapportiniInSospeso` anziché da Firestore.
+    - In `offlineSync.ts`, nella funzione `sincronizzaConFirebase`, verificare se l'ID del report inizia con `local-` per trattarlo come nuova creazione su Firestore, altrimenti eseguire la transazione di aggiornamento su Firestore.
+
+### 4. Cache Locale dei Report per Sincronizzazione Offline (ReportListPage.tsx e MonthlyReportPage.tsx)
+**Obiettivo:** Memorizzare una copia dei report scaricati da Firestore nel database locale di Dexie (`localDb.rapportini` da `localDatabase.ts`) per consentire la visualizzazione e il calcolo dei report mensili anche in assenza di connessione.
+**Dettagli:**
+- Quando l'applicazione è online e recupera i report da Firestore, salvare una copia dei report scaricati nel database locale `localDb.rapportini` tramite `bulkPut`.
+- Se l'applicazione è offline, caricare i dati dei report direttamente da `localDb.rapportini` filtrando per mese e tecnico in memoria.
+
+## Piano di Verifica
+### Verifica Manuale
+- **Verifica Check-in:**
+    - Effettuare un primo check-in e verificare che avvenga con successo.
+    - Rientrare nella pagina di check-in, verificare che venga visualizzata l'allerta di presenza registrata, e provare ad inviare una nuova posizione. Verificare la comparsa del popup di conferma.
+- **Verifica Notifiche:**
+    - Aprire una notifica non letta e verificare che lo stato cambi in letta. Verificare su Firestore che nel documento della notifica sotto `readBy` sia stata aggiunta una chiave con il proprio UID e nome, senza cancellare eventuali chiavi preesistenti.
+- **Verifica Offline:**
+    - Disattivare la connessione internet.
+    - Creare un nuovo rapportino. Verificare che venga salvato offline e che compaiano i badge/chip nella Home e in "I miei Report".
+    - Modificare il rapportino offline appena creato e salvare nuovamente.
+    - Riattivare la connessione internet e verificare la sincronizzazione automatica.

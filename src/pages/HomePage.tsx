@@ -3,7 +3,9 @@ import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useNotifications } from '@/hooks/useNotifications'; // <-- PERCORSO CORRETTO
+import { useNotifications } from '@/hooks/useNotifications';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/services/localDatabase'; // <-- PERCORSO CORRETTO
 import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
@@ -14,12 +16,21 @@ const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { unreadCount } = useNotifications();
+    const offlineReportsCount = useLiveQuery(() => db.syncQueue.count(), [], 0);
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
     const dashboardItems = [
         { title: 'Nuovo report', path: '/nuovo-report', icon: <PostAddIcon sx={iconStyles} /> },
-        { title: 'I miei Report', path: './lista-report', icon: <ArticleIcon sx={iconStyles} /> },
+        { 
+            title: 'I miei Report', 
+            path: './lista-report', 
+            icon: (
+                <Badge badgeContent={offlineReportsCount} color="warning">
+                    <ArticleIcon sx={iconStyles} />
+                </Badge>
+            ) 
+        },
         { title: 'Report Mensili', path: '/report-mensile', icon: <CalendarViewMonthIcon sx={iconStyles} /> },
         { 
             title: 'Notifiche',

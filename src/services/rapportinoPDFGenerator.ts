@@ -5,6 +5,52 @@ import { Rapportino, MasterData } from '@/models/definitions';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
+// --- Funzione per processare l'immagine della firma per il PDF ---
+const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return reject(new Error('Failed to get canvas context'));
+            }
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            // 1. Colora la firma di nero
+            ctx.drawImage(img, 0, 0); // Disegna l'originale (bianco su trasparente)
+            ctx.globalCompositeOperation = 'source-in';
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Risultato: Firma nera su sfondo trasparente
+
+            // 2. Rendi il tratto più spesso disegnando l'immagine nera sopra se stessa con piccoli scostamenti
+            const thickness = 0.5; // Controlla lo spessore aggiunto
+            ctx.globalCompositeOperation = 'source-over'; // Modalità di disegno normale
+            ctx.drawImage(canvas, thickness, 0);
+            ctx.drawImage(canvas, -thickness, 0);
+            ctx.drawImage(canvas, 0, thickness);
+            ctx.drawImage(canvas, 0, -thickness);
+            // Risultato: Firma nera e più spessa su sfondo trasparente
+
+            // 3. Aggiungi uno sfondo bianco
+            ctx.globalCompositeOperation = 'destination-over'; // Disegna sotto il contenuto esistente
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Risultato: Firma nera e spessa su sfondo bianco
+
+            // 4. Ripristina e restituisci
+            ctx.globalCompositeOperation = 'source-over';
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = (err) => reject(err);
+        img.src = whiteSignatureDataUrl;
+    });
+};
+
+
 // --- Funzione per generare il PDF --- 
 export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: MasterData): Promise<Blob> => {
 
@@ -63,10 +109,20 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     // --- 3. DATI INIZIALI ---
     const { navi = [], luoghi = [], veicoli = [] } = masterData;
     const dataRapportino = rapportino.data ? format(rapportino.data.toDate(), 'dd MMMM yyyy', { locale: it }) : 'N/D';
-    const nave = navi.find(n => n.id === rapportino.naveId)?.nome || 'N/D';
-    const luogo = luoghi.find(l => l.id === rapportino.luogoId)?.nome || 'N/D';
+    
+    const nave = rapportino.naveId === 'Nessuna' 
+        ? 'Nessuna' 
+        : navi.find(n => n.id === rapportino.naveId)?.nome || rapportino.naveId || '';
+
+    const luogo = rapportino.luogoId === 'Nessuno'
+        ? 'Nessuno'
+        : luoghi.find(l => l.id === rapportino.luogoId)?.nome || rapportino.luogoId || '';
+
     const veicoloData = veicoli.find(v => v.id === rapportino.veicoloId);
-    const veicolo = veicoloData ? `${veicoloData.marca} ${veicoloData.modello} - ${veicoloData.targa}` : 'N/D';
+    const veicolo = rapportino.veicoloId === 'Nessuno' 
+        ? 'Nessuno' 
+        : (veicoloData ? `${veicoloData.marca} ${veicoloData.modello} - ${veicoloData.targa}` : rapportino.veicoloId || '');
+
     
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
@@ -82,7 +138,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         doc.setFont('helvetica', 'bold');
         doc.text(`${item.label}:`, margin, cursorY);
         doc.setFont('helvetica', 'normal');
-        doc.text(item.value, margin + 40, cursorY);
+        doc.text(item.value || '', margin + 40, cursorY);
         cursorY += 7;
     });
 
@@ -98,18 +154,22 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
             content: 'Orari',
             styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' }
         }]],
-        // 1. Aggiunto fallback a array vuoto per evitare errori
         body: (rapportino.dettaglioOreTecnici || []).map(dett => {
             const tecnico = masterData.tecnici.find(t => t.id === dett.tecnicoId);
             const nomeTecnico = tecnico ? `${tecnico.cognome} ${tecnico.nome}` : 'Sconosciuto';
-            const orario = (dett.isManual || !dett.oraInizio || !dett.oraFine) 
-                ? `${(dett.ore || 0).toFixed(2)} ore` 
-                : `${dett.oraInizio} - ${dett.oraFine}`;
+            
+            let orario;
+            if (dett.isManual || !dett.oraInizio || !dett.oraFine) {
+                orario = `${(dett.ore || 0).toFixed(2)} ore`;
+            } else {
+                const pausaText = (dett.pausa || 0) > 0 ? ` (Pausa: ${dett.pausa} min)` : '';
+                orario = `${dett.oraInizio} - ${dett.oraFine}${pausaText}`;
+            }
+            
             return [nomeTecnico, orario];
         }),
         theme: 'grid',
         didDrawPage: (data) => {
-            // 2. Aggiunto controllo per data.cursor
             if (data.cursor) {
                 cursorY = data.cursor.y;
             }
@@ -120,8 +180,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     // --- 5. TERZO SEPARATORE E DETTAGLI LAVORO ---
     cursorY = addSeparatorLine(cursorY) + 5;
 
-    // 3. Modificato addWorkDetail per accettare string | undefined
-    const addWorkDetail = (label: string, content: string | undefined) => {
+    const addWorkDetail = (label: string, content: string | undefined | null) => {
         if (cursorY > 250) { doc.addPage(); cursorY = margin; }
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
@@ -132,8 +191,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(COLOR_BLACK);
-        // Fornisce 'N/D' come fallback se il contenuto è undefined
-        const lines = doc.splitTextToSize(content || 'N/D', contentWidth);
+        const lines = doc.splitTextToSize(content || '', contentWidth);
         doc.text(lines, margin, cursorY);
         cursorY += (lines.length * 4) + 5;
     };
@@ -163,14 +221,15 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.text(`Società: ${societaFirmatario}`, col1X, col1Y);
     col1Y += 5;
     if (rapportino.firmaVettoriale) {
-         doc.addImage(rapportino.firmaVettoriale, 'PNG', col1X, col1Y, 50, 20);
+        const processedSignature = await processSignatureForPdf(rapportino.firmaVettoriale);
+        doc.addImage(processedSignature, 'PNG', col1X, col1Y, 50, 20);
     }
 
     // Colonna 2: Firma Tecnico
     const col2X = pageWidth / 2 + 15;
     let col2Y = cursorY;
     const tecnicoScrivente = masterData.tecnici.find(t => t.id === rapportino.tecnicoId);
-    const nomeTecnicoScrivente = tecnicoScrivente ? `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}` : 'N/D';
+    const nomeTecnicoScrivente = tecnicoScrivente ? `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}` : '';
     doc.text('Firma Tecnico Responsabile', col2X, col2Y);
     col2Y += 10;
     doc.text(nomeTecnicoScrivente, col2X, col2Y);

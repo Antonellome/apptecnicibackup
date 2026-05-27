@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, FormControl, InputLabel, Select, MenuItem, Button, CircularProgress, Alert } from '@mui/material';
-import Grid from '@mui/material/Grid'; // <-- IMPORT CORRETTO (V2)
+import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -10,7 +10,7 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import { db } from '@/firebase';
 
 const CheckinPage: React.FC = () => {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const { navi, luoghi } = useGlobalData();
     const navigate = useNavigate();
     const { showSnackbar } = useSnackbar();
@@ -18,24 +18,27 @@ const CheckinPage: React.FC = () => {
     const [naveId, setNaveId] = useState('');
     const [luogoId, setLuogoId] = useState('');
     const [loading, setLoading] = useState(false);
+    const [pageLoading, setPageLoading] = useState(true);
     const [error, setError] = useState('');
-    const [alreadyCheckedIn, setAlreadyCheckedIn] = useState<boolean | null>(null);
+    const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
 
     const todayDocId = user ? format(new Date(), 'yyyy-MM-dd') + '_' + user.uid : '';
 
     useEffect(() => {
         const checkExistingCheckin = async () => {
-            if (!user) return;
-            setLoading(true);
-            const docRef = doc(db, 'checkin_giornalieri', todayDocId);
+            if (!user) {
+                setPageLoading(false);
+                return;
+            }
             try {
+                const docRef = doc(db, 'checkin_giornalieri', todayDocId);
                 const docSnap = await getDoc(docRef);
                 setAlreadyCheckedIn(docSnap.exists());
             } catch (err) {
                 setError('Impossibile verificare lo stato del check-in.');
                 console.error(err);
             } finally {
-                setLoading(false);
+                setPageLoading(false);
             }
         };
         checkExistingCheckin();
@@ -47,25 +50,38 @@ const CheckinPage: React.FC = () => {
             setError('Utente non autenticato.');
             return;
         }
-        if (!naveId || !luogoId) {
-            setError('Tutti i campi sono obbligatori.');
+        
+        if (!naveId && !luogoId) {
+            setError('È necessario selezionare almeno una nave o un luogo.');
             return;
+        }
+
+        if (alreadyCheckedIn) {
+            const confirmed = window.confirm("Sei sicuro di voler inviare un nuovo check-in? Hai già registrato la tua presenza per oggi.");
+            if (!confirmed) {
+                return;
+            }
         }
 
         setLoading(true);
         setError('');
 
         try {
+            const now = Timestamp.now();
+            const fullName = userProfile ? `${userProfile.nome} ${userProfile.cognome}` : user.displayName;
+
             const checkinData = {
                 tecnicoId: user.uid,
+                tecnicoName: fullName || user.email,
                 email: user.email,
-                data: Timestamp.fromDate(new Date()),
-                naveId,
-                luogoId,
-                createdAt: Timestamp.now(),
+                naveId: naveId || null,
+                luogoId: luogoId || null,
+                data: now,
+                timestamp: now,
+                createdAt: now,
             };
 
-            await setDoc(doc(db, 'checkin_giornalieri', todayDocId), checkinData);
+            await setDoc(doc(db, 'checkin_giornalieri', todayDocId), checkinData, { merge: true });
             
             showSnackbar('Check-in registrato con successo!', 'success');
             navigate('/');
@@ -79,17 +95,8 @@ const CheckinPage: React.FC = () => {
         }
     };
     
-    if (loading) {
+    if (pageLoading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
-    }
-
-    if (alreadyCheckedIn) {
-        return (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-                 <Alert severity="success" sx={{ mb: 3 }}>Hai già effettuato il check-in per oggi.</Alert>
-                 <Button variant="contained" onClick={() => navigate('/')}>Torna alla Home</Button>
-            </Box>
-        );
     }
 
     return (
@@ -99,10 +106,16 @@ const CheckinPage: React.FC = () => {
                     Check-in giornaliero
                 </Typography>
 
+                {alreadyCheckedIn && (
+                    <Alert severity="info" sx={{ mb: 3 }}>
+                        Hai già registrato un check-in oggi. Se hai cambiato posto di lavoro, puoi reinviarlo.
+                    </Alert>
+                )}
+
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
                         <Grid size={12}>
-                            <FormControl fullWidth required>
+                            <FormControl fullWidth>
                                 <InputLabel id="nave-label">Nave</InputLabel>
                                 <Select
                                     labelId="nave-label"
@@ -115,7 +128,7 @@ const CheckinPage: React.FC = () => {
                             </FormControl>
                         </Grid>
                         <Grid size={12}>
-                            <FormControl fullWidth required>
+                            <FormControl fullWidth>
                                 <InputLabel id="luogo-label">Luogo</InputLabel>
                                 <Select
                                     labelId="luogo-label"

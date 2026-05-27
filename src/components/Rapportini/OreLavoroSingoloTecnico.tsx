@@ -21,6 +21,18 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
 
 const PAUSA_OPTIONS = [0, 30, 60];
 
+const ORE_MANUALI_OPTIONS = Array.from({ length: 29 }, (_, i) => {
+    const value = i * 0.5;
+    let label = '';
+    if (value <= 8) {
+        label = `${value} ore`;
+    } else {
+        const straordinario = value - 8;
+        label = `8 + ${straordinario.toFixed(1)} ore`;
+    }
+    return { value, label };
+});
+
 const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiOre, onUpdate, isReadOnly, isScrivente }) => {
 
     const handleGenericChange = (field: keyof DettaglioOreData, value: any) => {
@@ -48,15 +60,20 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
 
                 {datiOre.isManual ? (
                     <Grid size={{ xs: 12 }}>
-                        <TextField
-                            label="Ore Lavorate"
-                            type="number"
-                            value={datiOre.ore || ''}
-                            onChange={e => handleGenericChange('ore', parseFloat(e.target.value) || 0)}
-                            fullWidth
-                            disabled={isReadOnly}
-                            inputProps={{ step: "0.5" }}
-                        />
+                        <FormControl fullWidth disabled={isReadOnly}>
+                            <InputLabel>Ore Lavorate</InputLabel>
+                            <Select
+                                value={datiOre.ore || ''}
+                                onChange={e => handleGenericChange('ore', parseFloat(e.target.value as string) || 0)}
+                                label="Ore Lavorate"
+                            >
+                                {ORE_MANUALI_OPTIONS.map(option => (
+                                    <MenuItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
                     </Grid>
                 ) : (
                     <>

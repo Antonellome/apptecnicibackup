@@ -1,5 +1,5 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
     Dialog,
     Box,
@@ -24,6 +24,16 @@ const SignatureDialog: React.FC<SignatureDialogProps> = ({
     onSave,
 }) => {
     const sigCanvas = useRef<SignaturePad>(null);
+
+    // Hook che si attiva quando lo stato di 'open' cambia.
+    useEffect(() => {
+        // Se il dialogo è aperto e il riferimento al canvas esiste...
+        if (open && sigCanvas.current) {
+            // ...pulisci il canvas per presentare una tela bianca all'utente.
+            sigCanvas.current.clear();
+        }
+    }, [open]); // La dipendenza [open] assicura che questo codice venga eseguito solo quando il dialogo si apre o si chiude.
+
 
     const handleClear = () => {
         sigCanvas.current?.clear();
@@ -60,7 +70,9 @@ const SignatureDialog: React.FC<SignatureDialogProps> = ({
                 {/* La lavagna per la firma occupa l'intero contenitore */}
                 <SignaturePad
                     ref={sigCanvas}
-                    options={{penColor:'#FFFFFF'}} 
+                    options={{
+                        penColor: '#FFFFFF', // Penna bianca per contrasto con lo sfondo scuro
+                    }} 
                     canvasProps={{
                         style: {
                             width: '100%',

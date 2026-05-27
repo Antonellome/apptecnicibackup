@@ -1,12 +1,12 @@
 
 import React, { useEffect, useCallback, useRef } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Box, AppBar, Toolbar, Typography, IconButton, Chip } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 // Servizi, DB e Context
-import { db } from '@/db/db';
+import { db } from '@/services/localDatabase';
 import { sincronizzaConFirebase } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 
@@ -14,7 +14,6 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
-import SyncIcon from '@mui/icons-material/Sync';
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
@@ -22,7 +21,7 @@ const MainLayout: React.FC = () => {
     const { showSnackbar } = useSnackbar();
     const isSyncing = useRef(false);
 
-    const rapportiniInSospeso = useLiveQuery(() => db.rapportiniInSospeso.count(), []);
+    const rapportiniInSospeso = useLiveQuery(() => db.syncQueue.count(), []);
 
     const handleSync = useCallback(async (isManualTrigger = false) => {
         if (isSyncing.current) {
@@ -34,7 +33,7 @@ const MainLayout: React.FC = () => {
             return;
         }
         
-        const count = await db.rapportiniInSospeso.count();
+        const count = await db.syncQueue.count();
         if (count === 0) {
             if (isManualTrigger) showSnackbar('Nessun dato da sincronizzare.', 'success');
             return;
@@ -84,18 +83,6 @@ const MainLayout: React.FC = () => {
                     <Box sx={{ flexGrow: 1 }} />
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {rapportiniInSospeso !== undefined && rapportiniInSospeso > 0 && (
-                            <Chip 
-                                icon={<SyncIcon />} 
-                                label={`${rapportiniInSospeso} in coda`}
-                                color="warning"
-                                onClick={() => handleSync(true)} 
-                                clickable
-                                size="small"
-                                title="Ci sono rapportini salvati localmente. Clicca per forzare la sincronizzazione."
-                            />
-                        )}
-
                         <IconButton title="Home" color="inherit" onClick={() => navigate('/')}>
                             <HomeIcon />
                         </IconButton>

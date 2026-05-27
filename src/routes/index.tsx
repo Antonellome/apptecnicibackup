@@ -24,6 +24,7 @@ export const router = createBrowserRouter([
             { path: '', element: <HomePage /> },
             { path: 'nuovo-report', element: <NuovoReportPage /> },
             { path: 'report/edit/:reportId', element: <ReportFormPage /> },
+            { path: 'report/edit-offline/:reportId', element: <ReportFormPage /> }, // <-- ROTTA OFFLINE AGGIUNTA
             { path: 'lista-report', element: <ReportListPage /> },
             { path: 'impostazioni', element: <SettingsPage /> },
             { path: 'report-mensile', element: <MonthlyReportPage /> },
