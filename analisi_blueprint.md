@@ -1,49 +1,45 @@
+
 # Analisi e Blueprint del Progetto Tecnico
 
-## 1. Overview
+## 0. Stato Attuale del Progetto (25/07/2024)
 
-Questa applicazione è uno strumento di lavoro per tecnici sul campo. Il suo scopo principale è la creazione e la gestione dei rapportini di lavoro. L'applicazione è progettata con una filosofia "Local-First", per garantire la massima velocità e operatività anche in assenza di connessione a Internet.
+**OBIETTIVO**: Raggiungere zero errori di compilazione per preparare l'applicazione per il deploy in hosting.
 
-## 2. Architettura
-
-L'architettura del progetto si basa su due applicazioni distinte e separate:
-
-*   **App Tecnici (Questo Progetto):** L'applicazione utilizzata dai tecnici. È responsabile della creazione, modifica e salvataggio dei rapportini. Il backend associato ha un ruolo di supporto limitato, principalmente per l'aggregazione di dati quantitativi (ore, giorni) per i report personali del tecnico.
-*   **App Master (Progetto Separato):** L'applicazione utilizzata dal personale d'ufficio per la supervisione e la gestione. Il suo backend gestisce la logica di business principale, comprese le notifiche e le analisi avanzate.
-
-### Flusso Dati del Rapportino
-
-1.  **Creazione Locale:** Il tecnico crea un rapportino nel database locale (IndexedDB).
-2.  **Sincronizzazione:** Un servizio di sincronizzazione carica il rapportino su Firestore quando l'applicazione è online.
-3.  **Elaborazione Backend:** I backend di entrambe le applicazioni (Tecnici e Master) elaborano il nuovo rapportino per i rispettivi scopi.
-
-## 3. Gestione Offline
-
-L'applicazione implementa una robusta gestione offline:
-
-*   **Coda di Sincronizzazione Dati:** I rapportini creati o modificati offline vengono salvati in una coda locale e sincronizzati con Firebase non appena la connessione viene ripristinata.
-*   **Coda di Condivisione:** I tentativi di condivisione di PDF offline vengono accodati e eseguiti al ripristino della connessione.
-
-## 4. Regole di Sviluppo
-
-*   **Divieto di Modifiche Estetiche:** È assolutamente vietato modificare l'aspetto visivo dell'applicazione (colori, layout, ecc.) senza un'autorizzazione esplicita.
-*   **Obbligo di Correzione di `GridLegacy`:** Durante la modifica di un file, è obbligatorio correggere l'utilizzo di componenti `GridLegacy` di MUI, aggiornandoli alla nuova sintassi per migliorare la codebase.
-
-## 5. Stato Attuale del Progetto (25/07/2024)
+**STATO**: **IN CORSO**. Il numero di errori è stato ridotto da **120+** a **66**.
 
 ### Correzioni Recenti
 
-*   **Risoluzione degli Errori di Linting:** Sono stati risolti tutti gli errori critici di linting, inclusi:
-    *   `set-state-in-effect`: Corretto in tutti i file interessati, inclusi `MasterDataProvider.tsx`, `useLocalData.tsx` e `ReportListPage.tsx`.
-    *   `no-empty-object-type`: Risolto eliminando l'interfaccia vuota `BaseEntity` e utilizzando `FirebaseDoc` direttamente.
+*   **Stabilizzazione del Modello Dati**: Riscritto il file `src/models/definitions.ts` per allineare le interfacce TypeScript all'uso reale dei dati nei componenti, risolvendo la maggior parte degli errori di tipo.
 
-### Stato di Linting Attuale
+---
 
-Al momento, il progetto non presenta più errori critici di linting. Tuttavia, rimangono alcuni avvisi.
+## 1. Architettura e Flusso Dati (Analisi Completata)
 
-## 6. Prossimi Passi
+L'architettura è una PWA Offline-First con una chiara separazione tra la cache dei dati master e la coda di sincronizzazione. La logica di business è suddivisa tra la raccolta dati (`ReportFormPage`) e il calcolo economico (`MonthlyReportPage`).
 
-Il prossimo obiettivo è risolvere gli avvisi di linting rimanenti:
+---
 
-*   **`@typescript-eslint/no-unused-vars`:** Rimuovere le variabili non utilizzate in `LoginPage.tsx`, `ReportFormPage.tsx`, e `report/ReportListPage.tsx`.
-*   **`react-refresh/only-export-components`:** Spostare costanti e funzioni non-component in file separati per i file in `src/contexts`.
+## 2. Protocollo di Risoluzione Finale
+
+1.  **Analisi dell'Errore**: Affrontare il primo errore nella lista di build.
+2.  **Correzione Chirurgica**: Applicare una modifica mirata per risolvere quell'errore specifico.
+3.  **Build di Verifica**: Eseguire `npm run build` dopo **ogni singola modifica**.
+4.  **Validazione**: Se il numero totale di errori diminuisce, la modifica è **APPROVATA**.
+5.  **Rollback**: Se il numero di errori non diminuisce, eseguire `git reset --hard` per annullare la modifica e rianalizzare il problema.
+6.  **Aggiornamento**: Aggiornare questo blueprint con il nuovo stato dopo ogni modifica approvata.
+
+---
+
+## 3. Lista Nemici Attuale: Errori di Build (66 Errori)
+
+```
+src/components/ReportMensileDialog.tsx(53,57): error TS2769: No overload matches this call. ... (Type 'Tariffa' is missing the following properties from type 'TariffaLocale': costo, unita)
+src/components/ReportMensileDialog.tsx(57,42): error TS18048: 'report.tipoGiornata' is possibly 'undefined'.
+src/contexts/AuthContext.tsx(44,23): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'UserProfile'.
+src/contexts/MasterDataProvider.tsx(52,11): error TS2322: Type '(Tariffa | { ... })[]' is not assignable to type 'TariffaLocale[]'.
+src/contexts/MasterDataProvider.tsx(57,66): error TS2339: Property 'costo' does not exist on type 'Tariffa'.
+src/contexts/MasterDataProvider.tsx(57,91): error TS2339: Property 'unita' does not exist on type 'Tariffa'.
+src/contexts/MasterDataProvider.tsx(81,11): error TS2741: Property 'id' is missing in type '{ tariffe: TariffaLocale[]; }' but required in type 'Impostazioni'.
+...
+(lista completa degli errori)
+```
