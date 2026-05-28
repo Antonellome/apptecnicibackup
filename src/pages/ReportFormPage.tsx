@@ -4,7 +4,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Autocomplete, Button, CircularProgress, Alert, Box, Chip, IconButton, Switch, FormControlLabel,
-    Dialog, DialogTitle, DialogContent, DialogActions, AlertColor, Grid
+    Dialog, DialogTitle, DialogContent, DialogActions, Grid
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -19,7 +19,8 @@ import { useLocalData } from '@/hooks/useLocalData';
 import { db as firestoreDb } from '@/firebase';
 import { db } from '@/db/local-db';
 import { aggiungiAllaCoda } from '@/services/offlineSync';
-import { doc, getDoc, addDoc, collection, Timestamp, runTransaction, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, runTransaction, writeBatch } from 'firebase/firestore';
+import { rapportinoConverter } from '@/utils/converters';
 import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData } from '@/models/definitions'; 
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
@@ -103,7 +104,8 @@ const ReportFormPage: React.FC = () => {
     const [isConfirmSaveDialogOpen, setIsConfirmSaveDialogOpen] = useState(false);
 
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
-
+    
+    const [originalReport, setOriginalReport] = useState<Rapportino | null>(null);
     const [dataInizio, setDataInizio] = useState<Date | null>(new Date());
     const [dataFine, setDataFine] = useState<Date | null>(new Date());
     const [isMultiDay, setIsMultiDay] = useState(false);
@@ -202,21 +204,28 @@ const ReportFormPage: React.FC = () => {
                     if (isOfflineMode) {
                         const syncEvent = await db.syncQueue.where('entityId').equals(reportId).first();
                         if(syncEvent) {
-                            report = syncEvent.payload as Rapportino;
+                            const rawPayload = syncEvent.payload as any;
+                            report = {
+                                ...rawPayload,
+                                id: reportId,
+                                data: new Date(rawPayload.data),
+                                createdAt: new Date(rawPayload.createdAt),
+                                updatedAt: new Date(rawPayload.updatedAt),
+                            } as Rapportino;
                             setIsReadOnly(true); 
                             setLockReason("Questo report è in attesa di sincronizzazione. Può solo essere visualizzato.");
                         } 
                     } else {
-                        const reportRef = doc(firestoreDb, 'rapportini', reportId);
+                        const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
                         const reportSnap = await getDoc(reportRef);
                         if (reportSnap.exists()) {
-                            report = { id: reportSnap.id, ...reportSnap.data() } as Rapportino;
+                            report = reportSnap.data();
                         }
                     }
                     
                     if (report) {
-                        const dataToLoad = report.data instanceof Timestamp ? report.data.toDate() : new Date(report.data);
-                        setDataInizio(dataToLoad);
+                        setOriginalReport(report);
+                        setDataInizio(report.data);
                         setTipoGiornataId(report.tipoGiornataId);
                         setVeicoloId(report.veicoloId || '');
                         setNaveId(report.naveId || '');
@@ -247,7 +256,7 @@ const ReportFormPage: React.FC = () => {
                         });
                         setDettaglioOre(allTecnicoDetails);
 
-                        if (!isOfflineMode && !isSameMonth(dataToLoad, new Date()) && !userProfile?.isAdmin) {
+                        if (!isOfflineMode && !isSameMonth(report.data, new Date()) && !userProfile?.isAdmin) {
                             setIsReadOnly(true);
                             setLockReason("Questo rapportino è bloccato perché appartiene a un mese precedente e non può più essere modificato.");
                         }
@@ -362,7 +371,7 @@ const ReportFormPage: React.FC = () => {
 
         return {
             nome: nomeReport,
-            data: Timestamp.fromDate(dataPerReport),
+            data: dataPerReport,
             tecnicoId: loggedInTecnicoId!,
             tipoGiornataId,
             isTrasferta: mainTecnicoDetail.isManual,
@@ -380,8 +389,8 @@ const ReportFormPage: React.FC = () => {
             firmaFirmatarioNome: firmaFirmatarioNome || '',
             firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
             firmaVettoriale: firmaVettoriale || null,
-            createdAt: isEditMode && reportId ? Timestamp.now() : Timestamp.now(),
-            updatedAt: Timestamp.now(),
+            createdAt: originalReport ? originalReport.createdAt : new Date(),
+            updatedAt: new Date(),
         };
     };
 
@@ -412,28 +421,31 @@ const ReportFormPage: React.FC = () => {
 
         setIsSaving(true);
         try {
-            const reportData = getFullReportData();
-
             if (navigator.onLine) {
                 let finalId = reportId;
+                const reportData = getFullReportData();
+
                 if (isEditMode && reportId) {
                      if(isOfflineMode) throw new Error("La modifica offline non è permessa.");
 
                     await runTransaction(firestoreDb, async (transaction) => {
-                        const reportRef = doc(firestoreDb, 'rapportini', reportId);
+                        const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
                         const sfDoc = await transaction.get(reportRef);
                         if (!sfDoc.exists()) {
                             throw new Error(`Documento con ID ${reportId} non trovato.`);
                         }
-                        transaction.update(reportRef, { ...reportData, updatedAt: Timestamp.now() });
+                        const { createdAt, ...updateData } = reportData; // Non aggiornare mai createdAt
+                        transaction.update(reportRef, updateData);
                     });
                 } else {
-                    const docRef = await addDoc(collection(firestoreDb, 'rapportini'), { ...reportData, createdAt: Timestamp.now() });
+                    const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
+                    const docRef = await addDoc(collectionRef, reportData);
                     finalId = docRef.id;
                 }
                 showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
                 return finalId ?? null;
             } else {
+                const reportData = getFullReportData();
                 const queuedId = await aggiungiAllaCoda(reportData, reportId);
                 showSnackbar("Offline. Il rapportino è stato salvato localmente.", "info");
                 return queuedId;
@@ -476,14 +488,22 @@ const ReportFormPage: React.FC = () => {
 
             const createReportObject = (giorno: Date): Omit<Rapportino, 'id'> => ({
                 nome: `Rapportino del ${format(giorno, 'dd/MM/yyyy')} - ${nomeTipoGiornata}`,
-                data: Timestamp.fromDate(giorno),
+                data: giorno,
                 tecnicoId: loggedInTecnicoId,
                 tipoGiornataId,
                 isTrasferta: false,
                 oraInizio: '',
                 oraFine: '',
                 pausa: 0,
-                dettaglioOreTecnici: [{ tecnicoId: loggedInTecnicoId, ore: 8, isManual: true, nome: tecnicoScrivente?.nome || '' }],
+                dettaglioOreTecnici: [{
+                    tecnicoId: loggedInTecnicoId, 
+                    ore: 8, 
+                    isManual: true, 
+                    nome: tecnicoScrivente?.nome || '', 
+                    oraInizio: '', 
+                    oraFine: '', 
+                    pausa: 0
+                }],
                 presenze: [loggedInTecnicoId],
                 veicoloId: 'Nessuno',
                 naveId: 'Nessuna',
@@ -494,14 +514,15 @@ const ReportFormPage: React.FC = () => {
                 firmaFirmatarioNome: '',
                 firmaFirmatarioSocieta: '',
                 firmaVettoriale: null,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
             });
 
+            const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
             if (navigator.onLine) {
                 const batch = writeBatch(firestoreDb);
                 giorniDaCreare.forEach(giorno => {
-                    const reportRef = doc(collection(firestoreDb, 'rapportini'));
+                    const reportRef = doc(collectionRef);
                     const reportData = createReportObject(giorno);
                     batch.set(reportRef, reportData);
                 });

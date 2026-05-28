@@ -27,7 +27,7 @@ export interface DettaglioOreData {
 
 export interface Rapportino extends FirebaseDoc {
   nome: string;
-  data: Date | Timestamp;
+  data: Date;
   tecnicoId: string; // ID del tecnico che ha creato il report
   tipoGiornataId: string;
   isTrasferta: boolean;
@@ -45,8 +45,8 @@ export interface Rapportino extends FirebaseDoc {
   firmaFirmatarioNome?: string;
   firmaFirmatarioSocieta?: string;
   firmaVettoriale?: string | null;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: Date;
+  updatedAt: Date;
   isMultiDay?: boolean;
   oreLavoro?: number; // Campo legacy per retrocompatibilità
 }
@@ -159,8 +159,8 @@ export interface Notifica extends FirebaseDoc {
     message: string;
     target: { type: 'user' | 'category' | 'all'; id: string; };
     senderId: string;
-    createdAt: Timestamp;
-    readBy: Record<string, { readAt: Timestamp; tecnicoName: string; }>;
+    createdAt: Date;
+    readBy: Record<string, { readAt: Date; tecnicoName: string; }>;
 }
 
 export interface AppNotification extends Notifica {}

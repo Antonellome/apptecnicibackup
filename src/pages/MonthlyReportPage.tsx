@@ -70,18 +70,15 @@ const MonthlyReportPage = () => {
     const rapportiniArricchiti = useMemo(() => {
         if (!rapportiniLocali || !masterData || !userProfile) return [];
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
-        const tecniciMap = new Map(masterData.tecnici.map((t) => [t.id, t]));
-
+        
         return rapportiniLocali.map(report => {
             const oreLavoro = report.dettaglioOreTecnici?.find(d => d.tecnicoId === userProfile.tecnicoId)?.ore ?? report.oreLavoro ?? 0;
-            const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId) || { id: '', nome: 'Sconosciuto', colore: '#808080', sigla: '' };
-            const presenzeArricchite = (report.presenze || []).map(id => tecniciMap.get(id)).filter((t): t is Tecnico => !!t);
+            const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId);
 
             return {
                 ...report,
                 data: new Date(report.data),
-                tipoGiornata,
-                presenze: presenzeArricchite,
+                tipoGiornata: tipoGiornata,
                 oreGiorno: oreLavoro,
             } as EnrichedRapportino;
         });
@@ -98,6 +95,7 @@ const MonthlyReportPage = () => {
         const riepilogo: RiepilogoMese = { oreTotali: 0, costoTotale: 0, dettaglio: new Map() };
 
         for (const report of rapportiniArricchiti) {
+            if (!report.tipoGiornata) continue;
             const oreGiorno = report.oreGiorno ?? 0;
             const tariffaCorrente = tariffeMap.get(report.tipoGiornata.id);
             if (!tariffaCorrente || (oreGiorno === 0 && tariffaCorrente.unita !== 'g')) continue;

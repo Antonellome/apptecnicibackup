@@ -1,7 +1,7 @@
-
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getMessaging } from 'firebase/messaging';
 
 const firebaseConfig = {
@@ -11,11 +11,15 @@ const firebaseConfig = {
   projectId: "riso-project-app",
   storageBucket: "riso-project-app.firebasestorage.app",
   messagingSenderId: "157316892209",
-  appId: "1:157316892209:web:c591c034fa132e549bb710"
+  appId: "1:157316892209:web:c591c034fa132e549bb710",
 };
 
 const app = initializeApp(firebaseConfig);
 
-export const db = getFirestore(app);
-export const auth = getAuth(app);
-export const messaging = getMessaging(app);
+// Inizializza e esporta i servizi Firebase
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+const messaging = getMessaging(app);
+
+export { app, auth, db, storage, messaging };

@@ -15,7 +15,7 @@ function sortByName<T extends { nome?: string }>(data: T[]): T[] {
 }
 
 // --- STATE, ACTIONS, REDUCER ---
-interface GlobalDataState { /* ... same as before ... */
+interface GlobalDataState { 
   rapportini: Rapportino[];
   tecnici: Tecnico[];
   ditte: Ditta[];
@@ -31,7 +31,7 @@ interface GlobalDataState { /* ... same as before ... */
 type CollectionName = keyof Omit<GlobalDataState, 'loading' | 'error' | '_loadedCollections'>;
 type Action = | { type: 'RESET_STATE' } | { type: 'FETCH_INIT' } | { type: 'SET_DATA'; payload: { name: CollectionName; data: any[] } } | { type: 'SET_ERROR'; payload: Error };
 const TOTAL_COLLECTIONS = 8;
-const initialState: GlobalDataState = { /* ... same as before ... */
+const initialState: GlobalDataState = {
   rapportini: [],
   tecnici: [],
   ditte: [],
@@ -44,12 +44,12 @@ const initialState: GlobalDataState = { /* ... same as before ... */
   error: null,
   _loadedCollections: new Set(),
 };
-function globalDataReducer(state: GlobalDataState, action: Action): GlobalDataState { /* ... same as before ... */ 
+function globalDataReducer(state: GlobalDataState, action: Action): GlobalDataState {
     switch (action.type) {
     case 'RESET_STATE':
-      return { ...initialState, loading: false }; // Not loading if no user
+      return { ...initialState, loading: false };
     case 'FETCH_INIT':
-      return { ...initialState, loading: true }; // Reset and start loading
+      return { ...initialState, loading: true }; 
     case 'SET_DATA': {
       const newLoaded = new Set(state._loadedCollections).add(action.payload.name);
       const allLoaded = newLoaded.size >= TOTAL_COLLECTIONS;
@@ -68,7 +68,7 @@ function globalDataReducer(state: GlobalDataState, action: Action): GlobalDataSt
 }
 
 // --- SUBSCRIBER FUNCTIONS (CLASSIC FUNCTION SYNTAX) ---
-function subscribeToCollectionWithConverter<T>(
+function subscribeToCollectionWithConverter<T extends { nome?: string }>(
   dispatch: React.Dispatch<Action>,
   collectionName: CollectionName,
   sortData: boolean,
@@ -80,7 +80,7 @@ function subscribeToCollectionWithConverter<T>(
       ...doc.data(),
       id: doc.id
     }) as T));
-    if (sortData) data = sortByName(data as any);
+    if (sortData) data = sortByName(data);
     dispatch({ type: 'SET_DATA', payload: { name: collectionName, data } });
   }, error => {
     console.error(`Errore in ${collectionName}:`, error);
@@ -88,7 +88,7 @@ function subscribeToCollectionWithConverter<T>(
   });
 }
 
-function subscribeToCollection<T>(
+function subscribeToCollection<T extends { nome?: string }>(
   dispatch: React.Dispatch<Action>,
   collectionName: CollectionName,
   sortData: boolean
@@ -99,7 +99,7 @@ function subscribeToCollection<T>(
       ...doc.data(),
       id: doc.id
     }) as T));
-    if (sortData) data = sortByName(data as any);
+    if (sortData) data = sortByName(data);
     dispatch({ type: 'SET_DATA', payload: { name: collectionName, data } });
   }, error => {
     console.error(`Errore in ${collectionName}:`, error);

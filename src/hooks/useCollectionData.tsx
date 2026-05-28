@@ -32,7 +32,7 @@ function collectionDataReducer<T>(state: State<T>, action: Action<T>): State<T> 
 }
 
 export const useCollectionData = <T extends DocumentData>(q: Query<DocumentData> | null) => {
-  const [state, dispatch] = useReducer(collectionDataReducer, {
+  const [state, dispatch] = useReducer(collectionDataReducer<T>, {
     data: [],
     loading: true,
     error: null,

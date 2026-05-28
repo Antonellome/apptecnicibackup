@@ -1,79 +1,66 @@
 
-import { Timestamp } from 'firebase/firestore';
-// Corretto l'import: Report -> Rapportino
+import { 
+    Timestamp, 
+    WithFieldValue, 
+    serverTimestamp, 
+    DocumentData, 
+    FirestoreDataConverter, 
+    QueryDocumentSnapshot 
+} from 'firebase/firestore';
 import { GenericItem, Tecnico, Veicolo, Rapportino, Ditta, Categoria, Documento } from '@/models/definitions';
 
-const createConverter = <T extends GenericItem>(defaultValues: Omit<T, 'id'>) => ({
-    toFirestore: (data: Partial<T>): T => {
-        const firestoreData: any = {};
-        for (const key in defaultValues) {
-            if (Object.prototype.hasOwnProperty.call(defaultValues, key)) {
+const createConverter = <T extends GenericItem>(): FirestoreDataConverter<T> => ({
+    toFirestore: (data: WithFieldValue<T>): DocumentData => {
+        const firestoreData: { [key: string]: any } = {};
+
+        // Assegna un timestamp del server per la data di aggiornamento
+        firestoreData.updatedAt = serverTimestamp();
+
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
                 const value = (data as any)[key];
-                if (value !== undefined) {
+                
+                // Se il valore è una Date, convertilo in Timestamp
+                if (value instanceof Date) {
+                    firestoreData[key] = Timestamp.fromDate(value);
+                } else {
                     firestoreData[key] = value;
-                } else if (defaultValues[key] !== undefined) {
-                    firestoreData[key] = defaultValues[key];
                 }
             }
         }
-        return firestoreData as T;
+
+        // Non sovrascrivere createdAt se è già un valore (es. in modifica)
+        if (!firestoreData.createdAt) {
+            firestoreData.createdAt = serverTimestamp();
+        }
+
+        return firestoreData;
     },
-    fromFirestore: (snapshot: any, options: any): T => {
+    fromFirestore: (snapshot: QueryDocumentSnapshot, options: any): T => {
         const data = snapshot.data(options);
-        const result = { ...defaultValues, ...data, id: snapshot.id } as T;
-        
-        // Conversione specifica per campi Timestamp, se necessario
-        if ('data' in result && result.data instanceof Timestamp) {
-            (result as any).data = result.data.toDate();
+        const result: { [key: string]: any } = { id: snapshot.id };
+
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                const value = data[key];
+                
+                // Se il valore è un Timestamp, convertilo in Date
+                if (value instanceof Timestamp) {
+                    result[key] = value.toDate();
+                } else {
+                    result[key] = value;
+                }
+            }
         }
-        if ('dataInizio' in result && result.dataInizio instanceof Timestamp) {
-            (result as any).dataInizio = result.dataInizio.toDate();
-        }
-        if ('dataFine' in result && result.dataFine instanceof Timestamp) {
-            (result as any).dataFine = result.dataFine.toDate();
-        }
-        
-        return result;
+        return result as T;
     }
 });
 
-export const tecnicoConverter = createConverter<Tecnico>({
-    nome: '',
-    cognome: '',
-    email: '',
-    attivo: true,
-    sincronizzazioneAttiva: false,
-});
+// --- ISTANZE DEI CONVERTER ---
 
-export const veicoloConverter = createConverter<Veicolo>({
-    nome: '',
-});
-
-// Rinominato per coerenza e corretto il tipo generico
-export const rapportinoConverter = createConverter<Rapportino>({
-    nome: '', // La prop 'nome' è ereditata da GenericItem, ma non usata. La lascio per compatibilità con createConverter.
-    data: Timestamp.now(),
-    tecnicoId: '',
-    tipoGiornataId: '', 
-    oreLavoro: 8,
-    isTrasferta: false,
-    presenze: [],
-    dettaglioOreTecnici: [],
-    veicoliUtilizzati: [],
-    completed: false,
-    // I campi opzionali possono essere omessi se il loro valore di default è `undefined`
-});
-
-export const dittaConverter = createConverter<Ditta>({
-    nome: ''
-});
-
-export const categoriaConverter = createConverter<Categoria>({
-    nome: ''
-});
-
-export const documentoConverter = createConverter<Documento>({
-    nome: '',
-    url: '',
-    tecnicoId: ''
-});
+export const tecnicoConverter = createConverter<Tecnico>();
+export const veicoloConverter = createConverter<Veicolo>();
+export const rapportinoConverter = createConverter<Rapportino>();
+export const dittaConverter = createConverter<Ditta>();
+export const categoriaConverter = createConverter<Categoria>();
+export const documentoConverter = createConverter<Documento>();

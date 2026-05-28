@@ -7,14 +7,15 @@ import {
 import {
     DataGrid, GridColDef, GridToolbarContainer
 } from '@mui/x-data-grid';
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/firebase';
+import { rapportinoConverter } from '@/utils/converters';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { EnrichedRapportino, Rapportino, Tecnico } from '@/models/definitions';
+import { EnrichedRapportino, Rapportino } from '@/models/definitions';
 import ReportMensileDialog from '@/components/ReportMensileDialog';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useMasterData } from '@/hooks/useMasterData';
@@ -55,7 +56,8 @@ const TecniciPage: React.FC = () => {
                     queryConstraints.push(where("presenze", "array-contains", selectedTecnicoId));
                 }
                 
-                const q = query(collection(db, "rapportini"), ...queryConstraints);
+                const rapportiniRef = collection(db, "rapportini").withConverter(rapportinoConverter);
+                const q = query(rapportiniRef, ...queryConstraints);
                 
                 const querySnapshot = await getDocs(q);
 
@@ -63,13 +65,12 @@ const TecniciPage: React.FC = () => {
                 const tecniciMap = new Map(masterData.tecnici.map(doc => [doc.id, doc]));
 
                 const rapportiniData = querySnapshot.docs.map(doc => {
-                    const report = { ...doc.data() as Rapportino, id: doc.id };
+                    const report = doc.data();
                     const oreGiorno = calculateOreLavoro(report);
+                    
                     return {
                         ...report,
-                        data: (report.data as Timestamp).toDate(),
-                        tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId) || { id: 'non-definito', nome: 'Non definito', colore: '#808080', lavorativo: false, icona: 'help_outline', sigla: 'ND' },
-                        presenze: report.presenze?.map(id => tecniciMap.get(id)).filter(Boolean) as Tecnico[],
+                        tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId),
                         tecnicoScrivente: tecniciMap.get(report.tecnicoId),
                         oreGiorno: oreGiorno, 
                     } as EnrichedRapportino;
@@ -104,7 +105,7 @@ const TecniciPage: React.FC = () => {
             ...r,
             id: r.id!,
             tecnicoNome: r.tecnicoScrivente ? `${r.tecnicoScrivente.cognome} ${r.tecnicoScrivente.nome}` : 'N/A',
-            tipoGiornataNome: r.tipoGiornata.nome,
+            tipoGiornataNome: r.tipoGiornata?.nome ?? 'N/D',
             dataFormatted: format(r.data, 'dd/MM/yyyy'),
         }));
     }, [rapportini]);
@@ -160,7 +161,7 @@ const TecniciPage: React.FC = () => {
                     <ReportMensileDialog
                         open={dialogOpen}
                         onClose={() => setDialogOpen(false)}
-                        reports={rapportini.filter(r => r.presenze.some(p => p.id === selectedTecnicoId))}
+                        reports={rapportini.filter(r => r.presenze.some(p => p === selectedTecnicoId))}
                         currentMonth={mese}
                     />
                 )}
