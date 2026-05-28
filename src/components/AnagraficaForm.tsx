@@ -1,7 +1,7 @@
 import { TextField, Button, Box, Autocomplete } from '@mui/material';
-import { FormField, BaseEntity } from '@/models/definitions';
+import { FormField } from '@/models/definitions';
 
-interface AnagraficaFormProps<T extends BaseEntity> {
+interface AnagraficaFormProps<T extends { id: string }> {
     fields: FormField[];
     formData: T;
     onFormChange: (name: string, value: any) => void;
@@ -12,7 +12,7 @@ interface AnagraficaFormProps<T extends BaseEntity> {
     getAutocompleteLabel?: (option: any) => string;
 }
 
-const AnagraficaForm = <T extends BaseEntity>({
+const AnagraficaForm = <T extends { id: string }>({
     fields,
     formData,
     onFormChange,

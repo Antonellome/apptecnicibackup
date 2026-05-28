@@ -15,10 +15,9 @@ import type {
     UpdateData,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
-import type { BaseEntity } from '@/models/definitions';
 
 // The generic FirestoreDataConverter for reading data
-export const converter = <T extends BaseEntity>(): FirestoreDataConverter<T> => ({
+export const converter = <T extends { id: string } >(): FirestoreDataConverter<T> => ({
     toFirestore: (data: WithFieldValue<T>): DocumentData => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id, ...rest } = data;
@@ -34,7 +33,7 @@ export const useFirestore = () => {
     const [isMutating, setIsMutating] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
-    const addData = useCallback(async <T extends BaseEntity>(collectionName: string, data: Omit<T, 'id'>) => {
+    const addData = useCallback(async <T extends { id: string }>(collectionName: string, data: Omit<T, 'id'>) => {
         setIsMutating(true);
         setError(null);
         try {
@@ -51,7 +50,7 @@ export const useFirestore = () => {
         }
     }, []);
 
-    const updateData = useCallback(async <T extends BaseEntity>(collectionName: string, id: string, data: Partial<T>) => {
+    const updateData = useCallback(async <T extends { id: string }>(collectionName: string, id: string, data: Partial<T>) => {
         setIsMutating(true);
         setError(null);
         try {

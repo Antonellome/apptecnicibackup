@@ -374,7 +374,7 @@ const ReportFormPage: React.FC = () => {
             oraInizio: mainTecnicoDetail.oraInizio,
             oraFine: mainTecnicoDetail.oraFine,
             pausa: mainTecnicoDetail.pausa,
-            dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => rest),
+            dettaglioOreTecnici: dettaglioOre.map(({ ...rest }) => rest),
             presenze: dettaglioOre.map(d => d.tecnicoId),
             veicoloId: veicoloId || 'Nessuno',
             naveId: naveId || 'Nessuna',

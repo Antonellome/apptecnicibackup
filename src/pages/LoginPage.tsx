@@ -12,7 +12,7 @@ import {
     Grid,
     Link as MuiLink
 } from '@mui/material';
-import { auth } from '@/firebase'; // CORREZIONE: importa direttamente auth dall'unica fonte corretta
+import { auth } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 
 const LoginPage = () => {
@@ -23,11 +23,8 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const navigate = useNavigate();
-  // L'istanza auth viene importata direttamente, non è più necessario getAuth(app)
 
   useEffect(() => {
-    // Questo listener attende che l'AuthContext confermi l'autenticazione
-    // e solo allora naviga alla pagina principale.
     if (!authLoading && user) {
       navigate('/', { replace: true });
     }
@@ -35,14 +32,12 @@ const LoginPage = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setLoading(true); // Attiva lo spinner sul pulsante
+    setLoading(true);
     setError('');
     setResetSent(false);
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Il login ha successo. Non navighiamo da qui,
-      // lasciamo che sia l'useEffect a farlo.
     } catch (err: any) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError('Email o password non validi.');
@@ -72,7 +67,6 @@ const LoginPage = () => {
     }
   };
 
-  // Mostra uno spinner a tutta pagina mentre l'AuthContext si inizializza o se l'utente è già loggato
   if (authLoading || user) {
       return (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -133,7 +127,7 @@ const LoginPage = () => {
           </Button>
           
           <Grid container justifyContent="flex-end">
-            <Grid>
+            <Grid size={12}>
               <MuiLink href="#" variant="body2" onClick={handlePasswordReset}>
                 Hai dimenticato la password?
               </MuiLink>

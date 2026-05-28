@@ -96,12 +96,12 @@ const enrichRapportino = (rapportino: Rapportino, masterData: any, userProfile: 
 };
 
 const cleanEnrichedRapportino = (enriched: EnrichedRapportino): Rapportino => {
-    const { 
-        isEditable, 
-        tipoGiornata, 
-        destinazione, 
-        isOffline, 
-        ...rapportinoBase 
+    const {
+        isEditable: _isEditable,
+        tipoGiornata: _tipoGiornata,
+        destinazione: _destinazione,
+        isOffline: _isOffline,
+        ...rapportinoBase
     } = enriched;
     
     return {
