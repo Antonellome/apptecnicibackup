@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import FullScreenLoader from '@/components/layout/FullScreenLoader';
 import MainLayout from '@/components/layout/MainLayout';

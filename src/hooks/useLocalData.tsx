@@ -19,32 +19,35 @@ export const useLocalData = () => {
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
-        if (anagraficheData.length > 0) {
-            setLoading(true);
-            try {
-                const masterDataResult: any = {};
-                anagraficheData.forEach((record, index) => {
-                    const key = ANAGRAFICA_IDS[index];
-                    masterDataResult[key] = record ? record.data : [];
-                });
+        const processData = () => {
+            if (anagraficheData.length > 0) {
+                setLoading(true);
+                try {
+                    const masterDataResult: any = {};
+                    anagraficheData.forEach((record, index) => {
+                        const key = ANAGRAFICA_IDS[index];
+                        masterDataResult[key] = record ? record.data : [];
+                    });
 
-                // Le impostazioni sono gestite separatamente, quindi le omettiamo qui
-                // o le carichiamo se necessario per questo hook specifico.
-                setData(masterDataResult as MasterData);
-                setError(null);
-            } catch (err) {
-                console.error("Failed to process local data:", err);
-                setError(err as Error);
-            }
-            finally {
+                    // Le impostazioni sono gestite separatamente, quindi le omettiamo qui
+                    // o le carichiamo se necessario per questo hook specifico.
+                    setData(masterDataResult as MasterData);
+                    setError(null);
+                } catch (err) {
+                    console.error("Failed to process local data:", err);
+                    setError(err as Error);
+                }
+                finally {
+                    setLoading(false);
+                }
+            } else if (!loading) {
+                // Se non ci sono dati dopo il caricamento iniziale, potrebbe essere un errore
+                // o semplicemente il DB è vuoto. Per ora, impostiamo lo stato di caricamento su false.
                 setLoading(false);
             }
-        } else if (!loading) {
-            // Se non ci sono dati dopo il caricamento iniziale, potrebbe essere un errore
-            // o semplicemente il DB è vuoto. Per ora, impostiamo lo stato di caricamento su false.
-            setLoading(false);
         }
-    }, [anagraficheData]); // L'effetto dipende dai dati live da Dexie
+        processData()
+    }, [anagraficheData, loading]); // L'effetto dipende dai dati live da Dexie
 
     return { data, loading, error };
 };

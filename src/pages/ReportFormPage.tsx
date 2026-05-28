@@ -20,7 +20,7 @@ import { db as firestoreDb } from '@/firebase';
 import { db } from '@/db/local-db';
 import { aggiungiAllaCoda } from '@/services/offlineSync';
 import { doc, getDoc, addDoc, collection, Timestamp, runTransaction, writeBatch } from 'firebase/firestore';
-import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData, SyncEvent } from '@/models/definitions'; 
+import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData } from '@/models/definitions'; 
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
 import SignatureDialog from '@/components/form/SignatureDialog';

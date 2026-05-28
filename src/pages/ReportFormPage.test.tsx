@@ -77,7 +77,7 @@ vi.mock('@/contexts/SnackbarContext', async (importOriginal) => {
 });
 
 // 5. Firebase / Offline Sync
-vi.mock('@/firebase', () => ({ db: {} }));
+vi.mock('@/firebase', () => ({}));
 vi.mock('firebase/firestore', async (importOriginal) => {
     const actual = await importOriginal() as any;
     return {

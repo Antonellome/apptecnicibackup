@@ -54,8 +54,6 @@ async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): P
         const lookupName = tipoGiornata.nome?.toLowerCase() || '';
         const blueprintDefault = blueprintMapByName.get(lookupName) || blueprintMapByName.get(lookupName === '104' ? 'legge 104' : '');
 
-        // PATCH SPECIFICA: Se troviamo il valore vecchio e sbagliato di "Malattia", lo ignoriamo
-        // e forziamo l'uso del valore corretto dal blueprint. Questo corregge il DB locale avvelenato.
         if (existing && existing.nome === 'Malattia' && existing.costo === 10 && existing.unita === 'h') {
             console.log('Found and correcting poisoned "Malattia" tariff.');
             return {
@@ -67,12 +65,10 @@ async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): P
             };
         }
 
-        // Logica standard: se esiste una tariffa locale (personalizzata), usa quella.
         if (existing) {
             return existing;
         }
 
-        // Altrimenti, crea la tariffa dal blueprint (per nuovi utenti o nuove tariffe).
         return {
             id: tipoGiornata.id,
             tipoGiornataId: tipoGiornata.id,
@@ -108,7 +104,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any | null>(null);
 
-    const loadData = useCallback(async (isForcedRefresh = false) => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
 
@@ -124,11 +120,11 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 if (cachedData) {
                     setMasterData(cachedData);
                 } else {
-                    throw onlineError; // Re-throw original error if cache is also empty
+                    throw onlineError; 
                 }
-            } catch (cacheError) {
+            } catch {
                 console.error("CRITICAL: Online and Cache data loading failed.", onlineError);
-                setError(onlineError); // Set the original online error for debugging
+                setError(onlineError); 
             }
         } finally {
             setLoading(false);
@@ -158,7 +154,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         masterData, 
         loading, 
         error, 
-        refetchData: () => loadData(true) 
+        refetchData: loadData 
     }), [masterData, loading, error, loadData]);
 
     if (loading && !masterData) return <FullScreenLoader message="Sincronizzazione dati maestri..." />;
@@ -169,7 +165,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 <Alert severity="error" sx={{ mb: 2 }}>
                     <Typography variant="h6">Errore Critico di Sincronizzazione</Typography>
                 </Alert>
-                <Typography variant="body1" color="text.secondary">Impossibile avviare l'applicazione. Non è stato possibile scaricare i dati dal server e la cache locale è vuota o corrotta.</Typography>
+                <Typography variant="body1" color="text.secondary">Impossibile avviare l&apos;applicazione. Non è stato possibile scaricare i dati dal server e la cache locale è vuota o corrotta.</Typography>
                 <Button variant="contained" color="error" onClick={forceClearAndReload} sx={{ mt: 2, mb: 2 }}>
                     Tenta di nuovo (Svuota la cache e ricarica)
                 </Button>

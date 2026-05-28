@@ -13,7 +13,6 @@ import {
   Paper,
   ListItemButton,
   Divider,
-  IconButton,
   Chip
 } from '@mui/material';
 import { Lock as LockIcon, CloudQueue } from '@mui/icons-material';
@@ -80,55 +79,65 @@ const ReportListPage = () => {
   ) as SyncEvent[];
 
   useEffect(() => {
-    if (masterDataLoading || !masterData || !userProfile) return;
+    let unsubscribe: (() => void) | undefined;
 
-    setRapportiniLoading(true);
-    setRapportiniError(null);
+    const fetchData = () => {
+        if (masterDataLoading || !masterData || !userProfile) return;
 
-    const start = startOfMonth(currentMonth);
-    const end = endOfMonth(currentMonth);
+        setRapportiniLoading(true);
+        setRapportiniError(null);
 
-    const q = query(
-      collection(firestoreDb, "rapportini"), 
-      where("presenze", "array-contains", userProfile.tecnicoId),
-      where("data", ">=", Timestamp.fromDate(start)),
-      where("data", "<=", Timestamp.fromDate(end)),
-      orderBy("data", "desc")
-    );
+        const start = startOfMonth(currentMonth);
+        const end = endOfMonth(currentMonth);
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      try {
-        const firestoreData = querySnapshot.docs.map(doc => {
-            const data = doc.data();
-            // Normalizza i dati per Dexie: assicurati che `data` sia un oggetto Date
-            return { 
-                ...data,
-                id: doc.id,
-                data: (data.data as Timestamp).toDate(),
-            } as Rapportino;
-        });
-        setRapportini(firestoreData);
+        const q = query(
+        collection(firestoreDb, "rapportini"), 
+        where("presenze", "array-contains", userProfile.tecnicoId),
+        where("data", ">=", Timestamp.fromDate(start)),
+        where("data", "<=", Timestamp.fromDate(end)),
+        orderBy("data", "desc")
+        );
 
-        // <<< SINCRONIZZAZIONE PASSIVA NEL DATABASE LOCALE >>>
-        if (firestoreData.length > 0) {
-            console.log(`Syncing ${firestoreData.length} reports to local DB...`);
-            localDb.rapportini.bulkPut(firestoreData).catch(err => {
-                console.error("Errore durante la sincronizzazione passiva dei rapportini:", err);
+        unsubscribe = onSnapshot(q, (querySnapshot) => {
+        try {
+            const firestoreData = querySnapshot.docs.map(doc => {
+                const data = doc.data();
+                // Normalizza i dati per Dexie: assicurati che `data` sia un oggetto Date
+                return { 
+                    ...data,
+                    id: doc.id,
+                    data: (data.data as Timestamp).toDate(),
+                } as Rapportino;
             });
+            setRapportini(firestoreData);
+
+            // <<< SINCRONIZZAZIONE PASSIVA NEL DATABASE LOCALE >>>
+            if (firestoreData.length > 0) {
+                console.log(`Syncing ${firestoreData.length} reports to local DB...`);
+                localDb.rapportini.bulkPut(firestoreData).catch(err => {
+                    console.error("Errore durante la sincronizzazione passiva dei rapportini:", err);
+                });
+            }
+
+        } catch(e) {
+            console.error("Errore durante l'elaborazione dei rapportini: ", e);
+            setRapportiniError("Impossibile elaborare i dati dei rapportini.");
         }
+        setRapportiniLoading(false);
+        }, (err) => {
+        console.error("Errore nel listener di Firestore: ", err);
+        setRapportiniError("Impossibile caricare i rapportini in tempo reale.");
+        setRapportiniLoading(false);
+        });
+    }
 
-      } catch(e) {
-          console.error("Errore durante l'elaborazione dei rapportini: ", e);
-          setRapportiniError("Impossibile elaborare i dati dei rapportini.");
-      }
-      setRapportiniLoading(false);
-    }, (err) => {
-      console.error("Errore nel listener di Firestore: ", err);
-      setRapportiniError("Impossibile caricare i rapportini in tempo reale.");
-      setRapportiniLoading(false);
-    });
+    fetchData()
 
-    return () => unsubscribe();
+    return () => {
+        if(unsubscribe){
+            unsubscribe();
+        }
+    };
   }, [userProfile, masterData, masterDataLoading, currentMonth]);
 
   const enrichedRapportini = useMemo(() => {

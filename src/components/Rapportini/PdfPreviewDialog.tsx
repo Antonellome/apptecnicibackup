@@ -69,7 +69,8 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
             pdf.text('T.I.N. srl - Report di Lavoro', pageWidth / 2, y, { align: 'center' });
             y += 15;
 
-            y = drawField('Data:', data.data ? format(data.data.toDate(), 'dd/MM/yyyy') : 'N/D', y);
+            const reportDate = data.data ? ((data.data as any).toDate ? (data.data as any).toDate() : data.data) : null;
+            y = drawField('Data:', reportDate ? format(reportDate, 'dd/MM/yyyy') : 'N/D', y);
             const mainTecnico = tecnici.find(t => t.id === data.tecnicoId);
             const mainTecnicoName = mainTecnico ? `${mainTecnico.cognome} ${mainTecnico.nome}` : 'N/D';
             y = drawField('Tecnico Resp.:', mainTecnicoName, y);

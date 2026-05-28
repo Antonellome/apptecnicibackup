@@ -6,9 +6,9 @@ export interface FirebaseDoc {
   id: string;
 }
 
-export interface BaseEntity extends FirebaseDoc {}
+// BaseEntity removed, use FirebaseDoc directly
 
-export type GenericItem = BaseEntity & { nome: string; [key: string]: any };
+export type GenericItem = FirebaseDoc & { nome: string; [key: string]: any };
 
 // Main Data Models
 export interface Rapportino extends FirebaseDoc {
@@ -117,7 +117,7 @@ export interface Tariffa {
     tariffa: number;
 }
 
-export interface TariffaLocale extends Tariffa {} // Re-added
+export interface TariffaLocale extends Tariffa {nome: string;}
 
 // User & Profile
 export interface UserProfile {
@@ -133,7 +133,7 @@ export interface UserProfile {
     categoria?: string; // Re-added
 }
 
-export interface WebAppUser extends UserProfile {} // Re-added
+export interface WebAppUser extends UserProfile {nome: string;}
 
 // Offline Sync & System
 export interface SyncEvent {
@@ -161,7 +161,7 @@ export interface Notifica extends FirebaseDoc { // Re-added as Notifica
     createdAt: Timestamp;
     readBy: Record<string, { readAt: Timestamp; tecnicoName: string; }>;
 }
-export interface AppNotification extends Notifica {} // Keep for compatibility if used
+export interface AppNotification extends Notifica {nome: string;}
 
 // Enriched & Calculated Models (for client-side use)
 export interface EnrichedRapportino extends Rapportino {
@@ -199,12 +199,12 @@ export interface FormField {
   options?: { value: string; label: string }[];
 }
 
-export interface Anagrafica extends BaseEntity {
-  // Common fields for anagrafiche
+export interface Anagrafica extends FirebaseDoc {
+  nome: string;
 }
 
 export interface Documento extends FirebaseDoc {
-  // Document-related fields
+  nome: string;
 }
 
 export interface Qualifica extends FirebaseDoc {

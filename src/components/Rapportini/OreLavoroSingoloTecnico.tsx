@@ -1,7 +1,7 @@
 
 import React from 'react';
 import {
-    Box, Typography, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem, TextField
+    Box, Typography, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { DettaglioOreData } from '@/models/definitions';
@@ -63,12 +63,12 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                         <FormControl fullWidth disabled={isReadOnly}>
                             <InputLabel>Ore Lavorate</InputLabel>
                             <Select
-                                value={datiOre.ore || ''}
-                                onChange={e => handleGenericChange('ore', parseFloat(e.target.value as string) || 0)}
+                                value={(datiOre.ore ?? '').toString()}
+                                onChange={e => handleGenericChange('ore', parseFloat(e.target.value) || 0)}
                                 label="Ore Lavorate"
                             >
                                 {ORE_MANUALI_OPTIONS.map(option => (
-                                    <MenuItem key={option.value} value={option.value}>
+                                    <MenuItem key={option.value} value={option.value.toString()}>
                                         {option.label}
                                     </MenuItem>
                                 ))}

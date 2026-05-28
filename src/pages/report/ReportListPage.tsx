@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useReducer, useMemo, useCallback } from 'react';
+import { useState, useEffect, useReducer, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -25,7 +25,7 @@ import { db as localDb } from '@/db/local-db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
-import { Rapportino, EnrichedRapportino, Tecnico, SyncEvent } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, SyncEvent } from '@/models/definitions';
 
 
 // --- STATE MANAGEMENT CON useReducer ---

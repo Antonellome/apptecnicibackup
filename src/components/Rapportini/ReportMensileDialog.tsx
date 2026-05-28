@@ -17,13 +17,14 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
   if (!report) return null;
 
   const oreTotali = (report.dettaglioOreTecnici || []).reduce((acc, curr) => acc + (curr.ore || 0), 0);
+  const reportDate = (report.data as any).toDate ? (report.data as any).toDate() : report.data;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6">Dettaglio Report</Typography>
-          <Chip label={format(report.data, 'eeee dd/MM/yyyy', { locale: it })} />
+          <Chip label={format(reportDate, 'eeee dd/MM/yyyy', { locale: it })} />
         </Box>
       </DialogTitle>
       <DialogContent dividers>

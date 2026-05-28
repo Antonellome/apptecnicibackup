@@ -20,10 +20,16 @@ const MonthlyReportGrid: React.FC<MonthlyReportGridProps> = ({ rapportini, tipiG
   const firstDayOfMonth = startOfMonth(currentMonth);
 
   const renderCellContent = (day: number) => {
-    const reportForDay = rapportini.find(r => r.data.getDate() === day);
+    const reportForDay = rapportini.find(r => {
+        const date = (r.data as any).toDate ? (r.data as any).toDate() : r.data;
+        return date.getDate() === day;
+    });
 
     if (reportForDay) {
-      const tipo = tipiGiornataMap.get(reportForDay.tipoGiornata.id);
+      let tipo;
+      if (reportForDay.tipoGiornata) {
+        tipo = tipiGiornataMap.get(reportForDay.tipoGiornata.id);
+      }
       const oreTotali = (reportForDay.dettaglioOreTecnici || []).reduce((acc, curr) => acc + (curr.ore || 0), 0);
 
       return (

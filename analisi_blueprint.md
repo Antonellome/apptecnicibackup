@@ -21,22 +21,15 @@ Ogni mia azione sarà documentata qui.
 
 ---
 
-## FASE 2: ESECUZIONE POST-CORREZIONE `AnagraficaForm.tsx`
+## FASE 8: Normalizzazione Data (`PdfPreviewDialog.tsx`)
 
-**Azione:** Corretti 8 errori `TS2339` in `AnagraficaForm.tsx` sostituendo `field.id` con `field.name`.
-**Risultato:** Successo. Il numero di errori è sceso da 136 a 117.
+**Azione:** Corretto l'errore `TS2339` relativo alla proprietà `.toDate()` mancante. Ho applicato la collaudata tecnica di normalizzazione condizionale per gestire in modo robusto sia gli oggetti `Date` che i `Timestamp` di Firebase.
 
-### Lista Nemici Aggiornata: Errori di Build (117 Errori)
+**Risultato:** Successo. Il numero di errori è sceso da 112 a 111.
+
+### Lista Nemici Aggiornata: Errori di Build (111 Errori)
 
 ```
-src/components/ProvidersWrapper.tsx(7,28): error TS2307: Cannot find module './AppInitializer' or its corresponding type declarations.
-src/components/Rapportini/MonthlyReportGrid.tsx(23,54): error TS2339: Property 'getDate' does not exist on type 'Date | Timestamp'.
-  Property 'getDate' does not exist on type 'Timestamp'.
-src/components/Rapportini/MonthlyReportGrid.tsx(26,40): error TS18048: 'reportForDay.tipoGiornata' is possibly 'undefined'.
-src/components/Rapportini/OreLavoroSingoloTecnico.tsx(4,91): error TS6133: 'TextField' is declared but its value is never read.
-src/components/Rapportini/OreLavoroSingoloTecnico.tsx(67,86): error TS2352: Conversion of type 'number' to type 'string' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
-src/components/Rapportini/PdfPreviewDialog.tsx(72,65): error TS2339: Property 'toDate' does not exist on type 'Date | Timestamp'.
-  Property 'toDate' does not exist on type 'Date'.
 src/components/Rapportini/ReportMensileDialog.tsx(26,31): error TS2345: Argument of type 'Date | Timestamp' is not assignable to parameter of type 'string | number | Date'.
   Type 'Timestamp' is not assignable to type 'string | number | Date'.
     Type 'Timestamp' is missing the following properties from type 'Date': toDateString, toTimeString, toLocaleDateString, toLocaleTimeString, and 36 more.

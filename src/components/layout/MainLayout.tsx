@@ -3,7 +3,6 @@ import React, { useEffect, useCallback, useRef } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
-import { useLiveQuery } from 'dexie-react-hooks';
 
 // Servizi, DB e Context
 import { db } from '@/db/local-db'; // Percorso corretto
@@ -20,9 +19,6 @@ const MainLayout: React.FC = () => {
     const { logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const isSyncing = useRef(false);
-
-    // Conteggio live degli elementi in coda di sincronizzazione
-    const rapportiniInSospeso = useLiveQuery(() => db.syncQueue.count(), []);
 
     const handleSync = useCallback(async (isManualTrigger = false) => {
         if (isSyncing.current) {
