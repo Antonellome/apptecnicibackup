@@ -40,16 +40,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                       }
                   }
 
+                  // CORREZIONE: Aggiunte le proprietà mancanti per conformarsi a UserProfile
+                  const nome = tecnicoData.nome || '';
+                  const cognome = tecnicoData.cognome || '';
                   const profile: UserProfile = {
-                      id: currentUser.uid,
                       uid: currentUser.uid,
                       email: currentUser.email || '',
                       tecnicoId: tecnicoDocSnap.id,
-                      nome: tecnicoData.nome || '',
-                      cognome: tecnicoData.cognome || '',
-                      attivo: tecnicoData.attivo || false,
+                      nome: nome,
+                      cognome: cognome,
                       isAdmin: isAdmin,
                       categoria: categoriaObj,
+                      displayName: `${nome} ${cognome}`.trim(),
+                      theme: 'light', // Default theme
                   };
                   setUserProfile(profile);
 

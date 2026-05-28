@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { AppNotification } from '@/models/definitions'; // <-- Usa la nuova interfaccia
+import { AppNotification } from '@/models/definitions'; // <-- Usa la new interfaccia
 import { NotificationContext, NotificationContextType } from './NotificationContextDefinition';
 
 interface FirebaseNotification {
@@ -81,7 +81,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const isLoading = authLoading || state.internalLoading;
 
   const userUid = user?.uid;
-  const userCategoryId = userProfile?.categoria?.id;
+  const userCategoryId = typeof userProfile?.categoria === 'string' 
+    ? userProfile.categoria 
+    : userProfile?.categoria?.id;
 
   useEffect(() => {
     if (authLoading) return;

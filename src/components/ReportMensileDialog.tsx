@@ -51,16 +51,14 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
 
       const { tecnici, impostazioni, tipiGiornata } = masterData;
       
-      // Creiamo una mappa per cercare il tipo di giornata in modo efficiente
       const tipiGiornataMap = new Map<string, TipoGiornata>(tipiGiornata.map(tg => [tg.id, tg]));
       
-      // CORREZIONE: Trasformiamo Tariffa in TariffaLocale
       const tariffeLocali: TariffaLocale[] = impostazioni.tariffe.map((t: Tariffa) => {
           const tipoGiornata = tipiGiornataMap.get(t.tipoGiornataId);
           return {
               ...t,
-              costo: t.tariffa, // Aggiungiamo 'costo'
-              unita: tipoGiornata?.tipo === 'giornaliera' ? 'g' : 'h' // Aggiungiamo 'unita'
+              costo: t.tariffa,
+              unita: tipoGiornata?.tipo === 'giornaliera' ? 'g' : 'h'
           };
       });
       
@@ -68,11 +66,9 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
 
       const calculatedReports = reports.map(report => {
           const oreTotaliGiorno = report.oreGiorno ?? 0;
-          // CORREZIONE: Usiamo optional chaining per sicurezza
           const tariffa = tariffeMap.get(report.tipoGiornata?.id ?? '');
           const nomeTariffa = tariffa?.nome.toLowerCase() || '';
 
-          // --- FASE 1: CALCOLO ORE PER VISUALIZZAZIONE (SEMPRE ESPLICITO) ---
           let oreOrdinarie: number;
           let oreStraordinario: number;
 
@@ -89,7 +85,6 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
               oreStraordinario = 0;
           }
 
-          // --- FASE 2: CALCOLO GUADAGNO (BASATO SULLE REGOLE) ---
           let guadagno = 0;
           if (tariffa) {
               if (tariffa.unita === 'g') {
@@ -137,7 +132,7 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
     }
 
     if (error) {
-        return <Alert severity="error">Errore nel caricamento dei dati master: {error}</Alert>;
+        return <Alert severity="error">Errore nel caricamento dei dati master: {(error as any).message || String(error)}</Alert>;
     }
 
     if (!selectedTecnico) {

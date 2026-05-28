@@ -111,7 +111,7 @@ export interface TariffaLocale extends Tariffa {
 }
 
 export interface Impostazioni extends FirebaseDoc {
-    tariffe: Tariffa[];
+    tariffe: TariffaLocale[];
 }
 
 // =================================================================

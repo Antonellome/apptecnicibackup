@@ -180,10 +180,6 @@ const ReportFormPage: React.FC = () => {
       [tipiGiornata]
     );
 
-    const memoizedShowSnackbar = useCallback((message: string, severity: AlertColor) => {
-        showSnackbar(message, severity, { autoHideDuration: 6000 });
-    }, [showSnackbar]);
-
     const otherTecnicos = useMemo(() => sortedTecnici.filter(t => t.id !== loggedInTecnicoId), [sortedTecnici, loggedInTecnicoId]);
     const altriTecniciIds = useMemo(() => dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId), [dettaglioOre, loggedInTecnicoId]);
     const selectedTecnicos = useMemo(() => otherTecnicos.filter(t => altriTecniciIds.includes(t.id)), [altriTecniciIds, otherTecnicos]);
@@ -256,13 +252,12 @@ const ReportFormPage: React.FC = () => {
                             setLockReason("Questo rapportino è bloccato perché appartiene a un mese precedente e non può più essere modificato.");
                         }
                     } else {
-                        // *** THIS IS THE CORRECTED LINE ***
-                        memoizedShowSnackbar("Rapportino non trovato (o la coda è vuota).", "error");
+                        showSnackbar("Rapportino non trovato (o la coda è vuota).", "error");
                         navigate('/lista-report');
                     }
                 } catch (error) {
                     console.error("Errore caricamento dati rapportino: ", error);
-                    memoizedShowSnackbar("Errore nel caricamento del rapportino.", "error");
+                    showSnackbar("Errore nel caricamento del rapportino.", "error");
                 } finally {
                     setPageLoading(false);
                 }
@@ -279,7 +274,7 @@ const ReportFormPage: React.FC = () => {
         if (!collectionsLoading) {
             loadData();
         }
-    }, [reportId, isEditMode, isOfflineMode, collectionsLoading, userProfile, memoizedShowSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]);
+    }, [reportId, isEditMode, isOfflineMode, collectionsLoading, userProfile, showSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]);
 
     useEffect(() => {
         return () => { if (pdfUrl) { URL.revokeObjectURL(pdfUrl); } };
@@ -392,25 +387,25 @@ const ReportFormPage: React.FC = () => {
 
     const salvaOAccodaRapportino = async (): Promise<string | null> => {
         if (!loggedInTecnicoId || !dataInizio) {
-            memoizedShowSnackbar("Errore: Utente non autenticato o data mancante.", "error");
+            showSnackbar("Errore: Utente non autenticato o data mancante.", "error");
             return null;
         }
         if (!tipoGiornataId) {
-            memoizedShowSnackbar("Il campo 'Tipo Giornata' è obbligatorio.", "warning");
+            showSnackbar("Il campo 'Tipo Giornata' è obbligatorio.", "warning");
             return null;
         }
 
         if (isLavorativo) {
             if (!lavoroEseguito.trim()) {
-                memoizedShowSnackbar("Il campo 'Lavoro Eseguito' è obbligatorio.", "warning");
+                showSnackbar("Il campo 'Lavoro Eseguito' è obbligatorio.", "warning");
                 return null;
             }
             if (!naveId) {
-                memoizedShowSnackbar("Il campo 'Nave' è obbligatorio. Selezionare un'opzione.", "warning");
+                showSnackbar("Il campo 'Nave' è obbligatorio. Selezionare un'opzione.", "warning");
                 return null;
             }
             if (!luogoId) {
-                memoizedShowSnackbar("Il campo 'Luogo' è obbligatorio. Selezionare un'opzione.", "warning");
+                showSnackbar("Il campo 'Luogo' è obbligatorio. Selezionare un'opzione.", "warning");
                 return null;
             }
         }
@@ -436,27 +431,27 @@ const ReportFormPage: React.FC = () => {
                     const docRef = await addDoc(collection(firestoreDb, 'rapportini'), { ...reportData, createdAt: Timestamp.now() });
                     finalId = docRef.id;
                 }
-                memoizedShowSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
+                showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
                 return finalId ?? null;
             } else {
                 const queuedId = await aggiungiAllaCoda(reportData, reportId);
-                memoizedShowSnackbar("Offline. Il rapportino è stato salvato localmente.", "info");
+                showSnackbar("Offline. Il rapportino è stato salvato localmente.", "info");
                 return queuedId;
             }
         } catch (error) {
             console.error("Errore durante il salvataggio: ", error);
             const errorMessage = (error instanceof Error) ? error.message : "Errore di salvataggio.";
-            memoizedShowSnackbar(`Errore: ${errorMessage}`, "error");
+            showSnackbar(`Errore: ${errorMessage}`, "error");
 
             try {
                 console.log("Fallback: tentativo di accodare il rapportino localmente.");
                 const reportData = getFullReportData();
                 const queuedId = await aggiungiAllaCoda(reportData, reportId);
-                memoizedShowSnackbar("Il salvataggio online è fallito. Le modifiche sono state salvate nella coda locale.", "warning");
+                showSnackbar("Il salvataggio online è fallito. Le modifiche sono state salvate nella coda locale.", "warning");
                 return queuedId;
             } catch (queueError) {
                 console.error("ERRORE CRITICO: Fallito anche l'accodamento locale. ", queueError);
-                memoizedShowSnackbar("Errore critico: impossibile salvare i dati.", "error");
+                showSnackbar("Errore critico: impossibile salvare i dati.", "error");
                 return null;
             }
         } finally {
@@ -466,7 +461,7 @@ const ReportFormPage: React.FC = () => {
     
     const handleMultiDaySave = async () => {
         if (!dataInizio || !dataFine || !tipoGiornataId || !loggedInTecnicoId) {
-            memoizedShowSnackbar("Per la creazione multipla, sono necessarie le date di inizio e fine e il tipo di giornata.", "warning");
+            showSnackbar("Per la creazione multipla, sono necessarie le date di inizio e fine e il tipo di giornata.", "warning");
             return;
         }
     
@@ -518,12 +513,12 @@ const ReportFormPage: React.FC = () => {
                 }
             }
     
-            memoizedShowSnackbar(`Creati ${giorniDaCreare.length} rapportini con successo!`, "success");
+            showSnackbar(`Creati ${giorniDaCreare.length} rapportini con successo!`, "success");
             navigate('/lista-report');
     
         } catch (error) {
             console.error("Errore creazione multipla: ", error);
-            memoizedShowSnackbar("Si è verificato un errore durante la creazione dei rapportini.", "error");
+            showSnackbar("Si è verificato un errore durante la creazione dei rapportini.", "error");
         } finally {
             setIsSaving(false);
         }

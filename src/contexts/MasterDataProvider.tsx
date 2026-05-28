@@ -54,31 +54,31 @@ async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): P
         const lookupName = tipoGiornata.nome?.toLowerCase() || '';
         const blueprintDefault = blueprintMapByName.get(lookupName) || blueprintMapByName.get(lookupName === '104' ? 'legge 104' : '');
 
-        if (existing && existing.nome === 'Malattia' && existing.costo === 10 && existing.unita === 'h') {
-            console.log('Found and correcting poisoned "Malattia" tariff.');
-            return {
-                id: tipoGiornata.id,
-                tipoGiornataId: tipoGiornata.id,
-                nome: tipoGiornata.nome,
-                costo: blueprintDefault?.costo ?? 80, // Valore corretto
-                unita: blueprintDefault?.unita ?? 'g',   // Valore corretto
-            };
-        }
+        let costo = blueprintDefault?.costo ?? 0;
+        let unita = blueprintDefault?.unita ?? 'h';
 
         if (existing) {
-            return existing;
+            costo = existing.costo;
+            unita = existing.unita;
+        }
+
+        if (tipoGiornata.nome === 'Malattia' && costo === 10 && unita === 'h') {
+            console.log('Found and correcting poisoned "Malattia" tariff.');
+            costo = 80;
+            unita = 'g';
         }
 
         return {
             id: tipoGiornata.id,
             tipoGiornataId: tipoGiornata.id,
             nome: tipoGiornata.nome,
-            costo: blueprintDefault?.costo ?? 0,
-            unita: blueprintDefault?.unita ?? 'h',
+            costo: costo,
+            tariffa: costo, // CORREZIONE: Aggiunta la proprietà `tariffa` richiesta
+            unita: unita,
         };
     });
 
-    const finalImpostazioni: Impostazioni = { tariffe: finalTariffe };
+    const finalImpostazioni: Impostazioni = { id: 'main', tariffe: finalTariffe };
     await db.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
     console.log("Local database and tariffs populated correctly.");
 
@@ -157,7 +157,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         refetchData: loadData 
     }), [masterData, loading, error, loadData]);
 
-    if (loading && !masterData) return <FullScreenLoader message="Sincronizzazione dati maestri..." />;
+    if (loading && !masterData) return <FullScreenLoader />;
     
     if (error) {
         return (
@@ -180,7 +180,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         );
     }
 
-    if (!masterData) return <FullScreenLoader message="Inizializzazione dati..." />;
+    if (!masterData) return <FullScreenLoader />;
 
     return (
         <MasterDataContext.Provider value={contextValue}>

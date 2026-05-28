@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from 'react';
-import { collection, onSnapshot, DocumentData, QueryConverter } from 'firebase/firestore';
+import { collection, onSnapshot, DocumentData, FirestoreDataConverter } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Rapportino, Tecnico, Ditta, Categoria, Nave, Luogo, Veicolo, TipoGiornata } from '@/models/definitions';
 import { rapportinoConverter, tecnicoConverter, dittaConverter, categoriaConverter, veicoloConverter } from '@/utils/converters';
@@ -72,7 +72,7 @@ function subscribeToCollectionWithConverter<T>(
   dispatch: React.Dispatch<Action>,
   collectionName: CollectionName,
   sortData: boolean,
-  converter: QueryConverter<T, DocumentData>
+  converter: FirestoreDataConverter<T, DocumentData>
 ) {
   const collRef = collection(db, collectionName).withConverter(converter);
   return onSnapshot(collRef, snapshot => {
