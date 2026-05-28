@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
-import type { EnrichedRapportino, Tecnico, TariffaLocale } from '@/models/definitions';
+import type { EnrichedRapportino, Tecnico, Tariffa, TariffaLocale, TipoGiornata } from '@/models/definitions';
 import GeneratedReportView from './GeneratedReportView';
 import { useMasterData } from '@/hooks/useMasterData';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,7 +23,7 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
 const ORE_ORDINARIE_MAX = 8;
-const TARIFFA_ORDINARIA = 10; 
+const TARIFFA_ORDINARIA = 10;
 const TARIFFA_STRAORDINARIO = 15;
 
 const Transition = React.forwardRef(function Transition(
@@ -49,12 +49,27 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
           return { enrichedReportsWithGuadagno: [], totalGuadagno: 0, selectedTecnico: null };
       }
 
-      const { tecnici, impostazioni } = masterData;
-      const tariffeMap = new Map<string, TariffaLocale>(impostazioni.tariffe.map(t => [t.id, t]));
+      const { tecnici, impostazioni, tipiGiornata } = masterData;
+      
+      // Creiamo una mappa per cercare il tipo di giornata in modo efficiente
+      const tipiGiornataMap = new Map<string, TipoGiornata>(tipiGiornata.map(tg => [tg.id, tg]));
+      
+      // CORREZIONE: Trasformiamo Tariffa in TariffaLocale
+      const tariffeLocali: TariffaLocale[] = impostazioni.tariffe.map((t: Tariffa) => {
+          const tipoGiornata = tipiGiornataMap.get(t.tipoGiornataId);
+          return {
+              ...t,
+              costo: t.tariffa, // Aggiungiamo 'costo'
+              unita: tipoGiornata?.tipo === 'giornaliera' ? 'g' : 'h' // Aggiungiamo 'unita'
+          };
+      });
+      
+      const tariffeMap = new Map<string, TariffaLocale>(tariffeLocali.map(t => [t.id, t]));
 
       const calculatedReports = reports.map(report => {
           const oreTotaliGiorno = report.oreGiorno ?? 0;
-          const tariffa = tariffeMap.get(report.tipoGiornata.id);
+          // CORREZIONE: Usiamo optional chaining per sicurezza
+          const tariffa = tariffeMap.get(report.tipoGiornata?.id ?? '');
           const nomeTariffa = tariffa?.nome.toLowerCase() || '';
 
           // --- FASE 1: CALCOLO ORE PER VISUALIZZAZIONE (SEMPRE ESPLICITO) ---
@@ -70,7 +85,6 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
               oreOrdinarie = 0;
               oreStraordinario = oreTotaliGiorno;
           } else {
-              // Per tutti gli altri casi (Ferie, 104, Malattia, etc.)
               oreOrdinarie = oreTotaliGiorno;
               oreStraordinario = 0;
           }
@@ -79,19 +93,16 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
           let guadagno = 0;
           if (tariffa) {
               if (tariffa.unita === 'g') {
-                  // Calcolo a giornata (es. Ferie, Festivo, bonus trasferta)
                   guadagno = tariffa.costo;
               } else { // 'h'
-                  // Calcolo a ore, usando le ore calcolate nella Fase 1
                   const costoBase = (nomeTariffa === 'ordinaria' || nomeTariffa.startsWith('trasferta'))
                       ? TARIFFA_ORDINARIA
                       : tariffa.costo;
                   
                   guadagno = (oreOrdinarie * costoBase) + (oreStraordinario * TARIFFA_STRAORDINARIO);
 
-                  // Logica speciale per bonus trasferta giornaliero
                   if (nomeTariffa.startsWith('trasferta')) {
-                      const tariffaBonus = Array.from(tariffeMap.values()).find(t => t.nome.toLowerCase() === nomeTariffa && t.unita === 'g');
+                      const tariffaBonus = tariffeLocali.find(t => t.nome.toLowerCase() === nomeTariffa && t.unita === 'g');
                       if (tariffaBonus) {
                           guadagno += tariffaBonus.costo;
                       }
