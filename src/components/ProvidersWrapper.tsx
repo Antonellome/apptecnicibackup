@@ -4,7 +4,6 @@ import { useAuth } from '@/hooks/useAuth'; // Corretto: Importa dal percorso cor
 import { MasterDataProvider } from '../contexts/MasterDataProvider';
 import { GlobalDataProvider } from '../contexts/GlobalDataProvider';
 import { NotificationProvider } from '../contexts/NotificationContext';
-import AppInitializer from './AppInitializer';
 
 interface ProvidersWrapperProps {
     children: React.ReactNode;
@@ -22,9 +21,7 @@ const ProvidersWrapper: React.FC<ProvidersWrapperProps> = ({ children }) => {
         <MasterDataProvider key={`master-${user?.uid || 'logged-out'}`}>
             <GlobalDataProvider>
                 <NotificationProvider>
-                    <AppInitializer>
-                        {children}
-                    </AppInitializer>
+                    {children}
                 </NotificationProvider>
             </GlobalDataProvider>
         </MasterDataProvider>

@@ -24,6 +24,7 @@ interface RapportinoConCalcoli extends EnrichedRapportino {
   guadagno?: number;
   oreOrdinarie?: number;
   oreStraordinario?: number;
+  oreGiorno?: number;
 }
 
 interface GeneratedReportViewProps {
@@ -78,6 +79,9 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
         const aggregation: { [key: string]: AggregatedActivity } = {};
 
         rapportini.forEach(r => {
+            if (!r.tipoGiornata) {
+                return;
+            }
             const tipoId = r.tipoGiornata.id;
             if (!aggregation[tipoId]) {
                 aggregation[tipoId] = {
@@ -184,7 +188,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                         <TableBody>
                             {rapportini.map((r) => (
                                 <TableRow key={r.id}>
-                                    <TableCell>{dayjs(r.data).format('DD/MM/YY')}</TableCell>
+                                    <TableCell>{dayjs('toDate' in r.data ? r.data.toDate() : r.data).format('DD/MM/YY')}</TableCell>
                                     <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
                                     <TableCell>{r.descrizioneBreve}</TableCell>
                                     <TableCell align="right">{r.oreGiorno?.toFixed(2) ?? '-'}</TableCell>

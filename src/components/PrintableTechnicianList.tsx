@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { Box, Typography, Divider } from '@mui/material';
 import type { Tecnico, FormField, Ditta, Categoria } from '@/models/definitions';
-import { useMasterData } from '@/hooks/useMasterData'; // AGGIORNATO
+import { useMasterData } from '@/hooks/useMasterData';
 import { safeGetDayjs } from '@/utils/dateUtils';
 import logo from '@/assets/react.svg';
 
@@ -11,7 +11,6 @@ interface PrintableTechnicianListProps {
     fields: FormField[];
 }
 
-// Oggetto per abbreviazioni, più manutenibile
 const abbreviations: Record<string, string> = {
     'Ditta Appartenenza': 'Ditta',
     'Categoria': 'Cat.',
@@ -29,10 +28,8 @@ const abbreviations: Record<string, string> = {
 };
 
 const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps) => {
-    // USARE L'HOOK CORRETTO
     const { masterData } = useMasterData();
 
-    // Creare mappe solo una volta
     const ditteMap = useMemo(() => 
         masterData?.ditte.reduce((acc, d) => {
             acc.set(d.id, d);
@@ -47,36 +44,24 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
         }, new Map<string, Categoria>()) 
     , [masterData?.categorie]);
 
-
-    // Funzione robusta per ottenere il valore da visualizzare
     const getDisplayValue = (field: FormField, value: any): string | null => {
         if (value === null || typeof value === 'undefined' || value === '') return null;
 
-        // Gestione booleani
         if (typeof value === 'boolean') {
             return value ? 'Sì' : 'No';
         }
 
-        // Gestione date
         if (field.type === 'date') {
             const date = safeGetDayjs(value as string);
             return date ? date.format('DD/MM/YYYY') : null;
         }
         
-        // Gestione FK
         if (field.name === 'dittaId') return ditteMap?.get(value as string)?.nome || null;
         if (field.name === 'categoriaId') return categorieMap?.get(value as string)?.nome || null;
         
-        // Gestione select generiche
         if (field.type === 'select' && field.options && field.options.length > 0) {
-            // Controlla se le opzioni sono oggetti o stringhe
-            if (typeof field.options[0] === 'object' && field.options[0] !== null) {
-                const foundOption = (field.options as unknown as { id: string; nome: string }[]).find(opt => opt.id === value);
-                return foundOption?.nome || String(value);
-            } else {
-                const stringValue = String(value);
-                return (field.options as string[]).includes(stringValue) ? stringValue : null;
-            }
+            const foundOption = field.options.find(opt => opt.value === String(value));
+            return foundOption?.label || String(value);
         }
 
         const stringValue = String(value);
@@ -84,7 +69,7 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
     };
 
     const nameFields = ['nome', 'cognome'];
-    const noteField = fields.find(f => f.name === 'noteInterne'); // Assumiamo si chiami così
+    const noteField = fields.find(f => f.name === 'noteInterne');
     const otherFields = fields.filter(f => !nameFields.includes(f.name) && f.name !== 'noteInterne');
 
     return (
@@ -98,7 +83,7 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
             </Box>
             {data.map((tecnico, index) => {
                 const fullName = `${tecnico.cognome || ''}, ${tecnico.nome || ''}`.replace(/^,|,$/g, '').trim();
-                const noteValue = tecnico.noteInterne as string; // Cast per sicurezza
+                const noteValue = tecnico.noteInterne as string;
 
                 return (
                     <Box key={tecnico.id} sx={{ pageBreakInside: 'avoid', pt: 1, pb: 1 }}>

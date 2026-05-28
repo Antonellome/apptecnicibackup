@@ -44,7 +44,7 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
             const dayOfMonth = reportDate.getDate();
             // Il rapportino è associato al tecnico che lo ha scritto E a tutti i presenti
             r.presenze.forEach(tecnicoPresente => {
-                const tecnicoId = tecnicoPresente.id;
+                const tecnicoId = tecnicoPresente;
                 const technicianMap = rapportiniMatrix.get(tecnicoId);
                 if (technicianMap) {
                     // Se c'è già un rapportino per quel giorno, non sovrascriverlo
@@ -79,7 +79,8 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
             return <TableCell key={day} sx={{ backgroundColor: isWeekend(dayOfWeek) ? '#f5f5f5' : 'inherit', border: '1px solid #e0e0e0' }} />;
         }
 
-        const tipoGiornata = tipiGiornataMap.get(rapportino.tipoGiornata.id);
+        const tipoGiornataId = rapportino.tipoGiornata?.id;
+        const tipoGiornata = tipoGiornataId ? tipiGiornataMap.get(tipoGiornataId) : undefined;
         const cellColor = tipoGiornata?.colore || '#ffffff';
         const textColor = 'white'; 
         const sigla = tipoGiornata?.sigla || '?';

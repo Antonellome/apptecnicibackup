@@ -24,16 +24,16 @@ const AnagraficaForm = <T extends BaseEntity>({
 }: AnagraficaFormProps<T>) => {
 
     const renderField = (field: FormField) => {
-        const fieldId = field.id as keyof T;
-        if (autocompleteOptions[field.id]) {
+        const fieldName = field.name as keyof T;
+        if (autocompleteOptions[field.name]) {
             return (
                 <Autocomplete
-                    key={field.id}
-                    options={autocompleteOptions[field.id]}
+                    key={field.name}
+                    options={autocompleteOptions[field.name]}
                     getOptionLabel={getAutocompleteLabel}
-                    value={autocompleteOptions[field.id].find(opt => opt.id === formData[fieldId]) || null}
+                    value={autocompleteOptions[field.name].find(opt => opt.id === formData[fieldName]) || null}
                     onChange={(_, newValue) => {
-                        onFormChange(field.id, newValue ? newValue.id : '');
+                        onFormChange(field.name, newValue ? newValue.id : '');
                     }}
                     renderInput={(params) => (
                         <TextField
@@ -49,10 +49,10 @@ const AnagraficaForm = <T extends BaseEntity>({
 
         return (
             <TextField
-                key={field.id}
-                name={field.id}
+                key={field.name}
+                name={field.name}
                 label={field.label}
-                value={formData[fieldId] || ''}
+                value={formData[fieldName] || ''}
                 onChange={(e) => onFormChange(e.target.name, e.target.value)}
                 fullWidth
                 margin="normal"

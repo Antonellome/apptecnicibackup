@@ -171,6 +171,7 @@ export interface EnrichedRapportino extends Rapportino {
     nave?: Nave;
     luogo?: Luogo;
     isOffline?: boolean;
+    oreGiorno?: number; // Added to fix multiple errors
 }
 
 export interface RapportinoConCalcoli extends EnrichedRapportino {
@@ -191,9 +192,10 @@ export interface DayInfo {
 
 // Generic & Utility Types
 export interface FormField {
+  id: string;
   name: string;
   label: string;
-  type: 'text' | 'number' | 'email' | 'password' | 'select' | 'boolean';
+  type: 'text' | 'number' | 'email' | 'password' | 'select' | 'boolean' | 'date';
   options?: { value: string; label: string }[];
 }
 
