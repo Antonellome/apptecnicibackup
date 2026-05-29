@@ -1,3 +1,4 @@
+
 import { useState, useMemo } from 'react';
 import {
   Box,
@@ -14,7 +15,7 @@ import {
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, Tecnico, TariffaLocale, MasterData } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
@@ -130,7 +131,7 @@ const MonthlyReportPage = () => {
             }
             
             riepilogo.costoTotale += costoGiorno;
-            const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || { nome: report.tipoGiornata.nome, colore: report.tipoGiornata.colore, oreOrdinarie: 0, oreStraordinario: 0, costo: 0, unita: tariffaCorrente.unita, giorni: 0 };
+            const dettaglioGiorno = riepilogo.dettaglio.get(report.tipoGiornata.id) || { nome: report.tipoGiornata.nome, colore: report.tipoGiornata.colore || '#808080', oreOrdinarie: 0, oreStraordinario: 0, costo: 0, unita: tariffaCorrente.unita, giorni: 0 };
             dettaglioGiorno.oreOrdinarie += oreOrdinarieLoop;
             dettaglioGiorno.oreStraordinario += oreStraordinarieLoop;
             dettaglioGiorno.costo += costoGiorno;
@@ -169,7 +170,7 @@ const MonthlyReportPage = () => {
             )}
             {riepilogoMese && (
                  <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, md: 5, lg: 4 }}>
+                    <Grid item xs={12} md={5} lg={4}>
                         <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                             <Typography variant="h5" gutterBottom>Riepilogo</Typography>
                             <TableContainer component={Paper} variant="outlined">
@@ -188,10 +189,10 @@ const MonthlyReportPage = () => {
                             </TableContainer>
                         </Paper>
                     </Grid>
-                    <Grid size={{ xs: 12, md: 7, lg: 8 }}>
+                    <Grid item xs={12} md={7} lg={8}>
                         <DettaglioCostiTipoGiornata dettaglio={riepilogoMese.dettaglio} />
                     </Grid>
-                    <Grid sx={{ mt: 2 }} size={12}>
+                    <Grid item sx={{ mt: 2 }} xs={12}>
                         <ActivityBreakdown riepilogo={riepilogoMese} />
                     </Grid>
                 </Grid>

@@ -1,6 +1,4 @@
 
-import { Timestamp } from 'firebase/firestore';
-
 // =================================================================
 // INTERFACCE DI BASE E UTILITY
 // =================================================================
@@ -62,6 +60,10 @@ export interface Tecnico extends FirebaseDoc {
   categoriaId?: string;
   nomeCompleto?: string;
   attivo?: boolean;
+  // Campi per sistema notifiche come da architettura
+  fcmTokens: string[];
+  abilitato: boolean;
+  categoria: string;
   [key: string]: any; // Per altre proprietà non strettamente definite
 }
 
@@ -153,14 +155,17 @@ export interface CondivisioneInSospeso {
     fileName: string;
 }
 
+// --- NUOVA ARCHITETTURA NOTIFICHE ---
 export interface Notifica extends FirebaseDoc {
     title: string;
-    body: string;
-    message: string;
-    target: { type: 'user' | 'category' | 'all'; id: string; };
-    senderId: string;
+    message: string; // Corpo del messaggio
     createdAt: Date;
-    readBy: Record<string, { readAt: Date; tecnicoName: string; }>;
+    sent: boolean; // Flag per la Cloud Function
+    target: {
+        type: 'user' | 'category' | 'all';
+        id: string; // ID del tecnico, nome categoria, o 'all'
+        name: string; // Nome descrittivo (es: "Mario Rossi", "Elettricisti")
+    };
 }
 
 export interface AppNotification extends Notifica {}
@@ -175,7 +180,8 @@ export interface EnrichedRapportino extends Rapportino {
     veicolo?: Veicolo;
     nave?: Nave;
     luogo?: Luogo;
-    isOffline?: boolean;
+    isOffline: boolean;
+    isEditable: boolean;
     oreGiorno?: number;
     destinazione?: string;
     tecnicoScrivente?: Tecnico;

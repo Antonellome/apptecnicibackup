@@ -19,13 +19,14 @@ import {
 import { Lock as LockIcon, SyncProblem as SyncProblemIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
 import { db as localDb } from '@/db/local-db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
-import { Rapportino, EnrichedRapportino, SyncEvent } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, SyncEvent, MasterData, UserProfile } from '@/models/definitions';
+import { rapportinoConverter } from '@/utils/converters';
 
 
 // --- STATE MANAGEMENT CON useReducer ---
@@ -63,13 +64,18 @@ function reportListReducer(state: ReportListState, action: Action): ReportListSt
 }
 
 // Funzione per arricchire i rapportini (sia online che offline)
-const enrichRapportino = (rapportino: Rapportino, masterData: any, userProfile: any): EnrichedRapportino => {
-    const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t: any) => [t.id, t]));
-    const naviMap = new Map(masterData.navi.map((n: any) => [n.id, n.nome]));
-    const luoghiMap = new Map(masterData.luoghi.map((l: any) => [l.id, l.nome]));
+const enrichRapportino = (
+    rapportino: Rapportino, 
+    masterData: MasterData, 
+    userProfile: UserProfile, 
+    isOffline: boolean
+): EnrichedRapportino => {
+    const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
+    const naviMap = new Map(masterData.navi.map((n) => [n.id, n.nome]));
+    const luoghiMap = new Map(masterData.luoghi.map((l) => [l.id, l.nome]));
 
-    const reportDate = rapportino.data instanceof Timestamp ? rapportino.data.toDate() : new Date(rapportino.data);
-    const tipoGiornata = tipiGiornataMap.get(rapportino.tipoGiornataId) || { id: '', nome: 'Non Definito', colore: '', sigla: '' };
+    const reportDate = rapportino.data; // Già un oggetto Date grazie al converter
+    const tipoGiornata = tipiGiornataMap.get(rapportino.tipoGiornataId);
     const destinazione = rapportino.naveId ? naviMap.get(rapportino.naveId) : (rapportino.luogoId ? luoghiMap.get(rapportino.luogoId) : 'Nessuna');
 
     let isEditable = false;
@@ -86,13 +92,11 @@ const enrichRapportino = (rapportino: Rapportino, masterData: any, userProfile: 
     
     return {
         ...rapportino,
-        id: rapportino.id,
-        data: reportDate,
-        isEditable: isEditable,
-        tipoGiornata: tipoGiornata,
+        isEditable,
+        tipoGiornata,
         destinazione: destinazione || 'Non trovato',
-        isOffline: (rapportino as any).isOffline || false, // Aggiungiamo il flag
-    } as EnrichedRapportino;
+        isOffline,
+    };
 };
 
 const cleanEnrichedRapportino = (enriched: EnrichedRapportino): Rapportino => {
@@ -101,19 +105,23 @@ const cleanEnrichedRapportino = (enriched: EnrichedRapportino): Rapportino => {
         tipoGiornata: _tipoGiornata,
         destinazione: _destinazione,
         isOffline: _isOffline,
+        oreGiorno: _oreGiorno,
+        tecnicoScrivente: _tecnicoScrivente,
+        isClickable: _isClickable,
+        tecnico: _tecnico,
+        veicolo: _veicolo,
+        nave: _nave,
+        luogo: _luogo,
         ...rapportinoBase
     } = enriched;
     
-    return {
-        ...rapportinoBase,
-        id: enriched.id // Assicuriamoci che l'ID sia sempre presente
-    };
+    return rapportinoBase;
 };
 
 const ReportListPage = () => {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
-  const { data: masterData, loading: masterDataLoading, error: masterDataError } = useMasterData();
+  const { masterData, loading: masterDataLoading, error: masterDataError } = useMasterData();
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [state, dispatch] = useReducer(reportListReducer, initialState);
@@ -137,10 +145,10 @@ const ReportListPage = () => {
       return offlineSyncEvents
           .map(event => event.payload as Rapportino)
           .filter(rapportino => {
-              const reportDate = rapportino.data instanceof Timestamp ? rapportino.data.toDate() : new Date(rapportino.data);
+              const reportDate = new Date(rapportino.data);
               return reportDate >= start && reportDate <= end && rapportino.tecnicoId === userProfile.tecnicoId;
           })
-          .map(rapportino => enrichRapportino({ ...rapportino, isOffline: true }, masterData, userProfile));
+          .map(rapportino => enrichRapportino(rapportino, masterData, userProfile, true));
   }, [offlineSyncEvents, masterData, userProfile, currentMonth]);
 
   useEffect(() => {
@@ -159,19 +167,21 @@ const ReportListPage = () => {
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
 
+    const rapportiniRef = collection(firestoreDb, "rapportini").withConverter(rapportinoConverter);
+
     const q = query(
-      collection(firestoreDb, "rapportini"), 
+      rapportiniRef, 
       where("tecnicoId", "==", userProfile.tecnicoId),
-      where("data", ">=", Timestamp.fromDate(start)),
-      where("data", "<=", Timestamp.fromDate(end)),
+      where("data", ">=", start),
+      where("data", "<=", end),
       orderBy("data", "desc")
     );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       try {
         const enrichedData = querySnapshot.docs.map(doc => {
-            const data = doc.data() as Rapportino;
-            return enrichRapportino({ ...data, id: doc.id }, masterData, userProfile);
+            const data = doc.data();
+            return enrichRapportino(data, masterData, userProfile, false);
         });
         dispatch({ type: 'FETCH_SUCCESS', payload: enrichedData });
       } catch(e) {
@@ -191,13 +201,13 @@ const ReportListPage = () => {
     const uniqueOffline = offlineRapportini.filter(r => !onlineIds.has(r.id));
     
     const all = [...onlineRapportini, ...uniqueOffline];
-    all.sort((a, b) => (b.data as Date).getTime() - (a.data as Date).getTime());
+    all.sort((a, b) => b.data.getTime() - a.data.getTime());
     return all;
   }, [onlineRapportini, offlineRapportini]);
 
   useEffect(() => {
     const syncToLocalDB = async () => {
-        if (onlineRapportini.length > 0) { // Usiamo solo i rapportini online per la sincronizzazione
+        if (onlineRapportini.length > 0) {
             try {
                 const cleanedRapportini = onlineRapportini.map(cleanEnrichedRapportino);
                 await localDb.rapportini.bulkPut(cleanedRapportini);
@@ -209,7 +219,7 @@ const ReportListPage = () => {
     };
 
     syncToLocalDB();
-  }, [onlineRapportini]); // L'effetto ora dipende solo dai rapportini online
+  }, [onlineRapportini]);
   
   const handleMonthChange = (increment: number) => {
       setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + increment, 1));
@@ -274,7 +284,7 @@ const ReportListPage = () => {
                                 {report.isOffline && <Chip label="In coda" size="small" color="info" />}
                                 {report.isEditable ? (
                                     <Typography variant="body2" color="text.secondary">
-                                        {report.tipoGiornata.nome}
+                                        {report.tipoGiornata?.nome}
                                     </Typography>
                                 ) : (
                                     <IconButton edge="end" aria-label="locked" disabled>
