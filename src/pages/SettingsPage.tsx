@@ -1,5 +1,5 @@
 
-import React, { useEffect, useReducer } from 'react';
+import React, { useEffect, useState, useReducer } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
@@ -22,7 +22,7 @@ interface SettingsState {
 
 type SettingsAction =
     | { type: 'SYNC_TARIFFE'; payload: TariffaLocale[] }
-    | { type: 'UPDATE_TARIFFA_COSTO'; payload: { id: string; value: string } }
+    | { type: 'UPDATE_TARIFFA_COSTO'; payload: { id: string; costo: number } }
     | { type: 'SET_SAVING'; payload: boolean }
     | { type: 'SAVE_SUCCESS' };
 
@@ -35,21 +35,18 @@ const initialState: SettingsState = {
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
     switch (action.type) {
         case 'SYNC_TARIFFE':
-            return { ...state, tariffe: action.payload, isDirty: false };
+            // Ordina sempre le tariffe quando vengono sincronizzate
+            const sortedTariffe = [...action.payload].sort((a, b) => a.nome.localeCompare(b.nome));
+            return { ...state, tariffe: sortedTariffe, isDirty: false };
         
         case 'UPDATE_TARIFFA_COSTO': {
-            const { id, value } = action.payload;
-            const valueWithDot = value.replace(',', '.');
-            if (valueWithDot === '' || /^[0-9]*\.?[0-9]*$/.test(valueWithDot)) {
-                return {
-                    ...state,
-                    isDirty: true,
-                    tariffe: state.tariffe.map(t =>
-                        t.id === id ? { ...t, costo: Number(valueWithDot) } : t
-                    ),
-                };
-            }
-            return state;
+            return {
+                ...state,
+                isDirty: true,
+                tariffe: state.tariffe.map(t =>
+                    t.id === action.payload.id ? { ...t, costo: action.payload.costo } : t
+                ),
+            };
         }
 
         case 'SET_SAVING':
@@ -61,6 +58,76 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
     }
 }
 
+// --- Componente per una singola tariffa ---
+interface TariffaRowProps {
+    tariffa: TariffaLocale;
+    isSaving: boolean;
+    onCostoChange: (id: string, costo: number) => void;
+}
+
+const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChange }) => {
+    const [inputValue, setInputValue] = useState(tariffa.costo.toFixed(2));
+    const [isEditing, setIsEditing] = useState(false);
+
+    useEffect(() => {
+        // Aggiorna l'input solo se non si sta modificando, per non interferire con l'utente
+        if (!isEditing) {
+            setInputValue(tariffa.costo.toFixed(2));
+        }
+    }, [tariffa.costo, isEditing]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const rawValue = e.target.value;
+        // Permetti l'input di numeri, virgole e punti
+        if (/^[0-9,.]*$/.test(rawValue)) {
+            setInputValue(rawValue);
+        }
+    };
+
+    const handleBlur = () => {
+        setIsEditing(false);
+        let numericValue = parseFloat(inputValue.replace(',', '.'));
+        if (isNaN(numericValue)) {
+            numericValue = 0;
+        }
+        // Formatta il valore a due decimali e aggiorna lo stato parent
+        setInputValue(numericValue.toFixed(2));
+        if (numericValue !== tariffa.costo) {
+             onCostoChange(tariffa.id, numericValue);
+        }
+    };
+
+    const handleFocus = () => {
+        setIsEditing(true);
+    };
+
+    return (
+         <ListItem sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <ListItemText primary={tariffa.nome} sx={{ flex: '1 1 150px' }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '1 1 250px', justifyContent: 'flex-end' }}>
+                <TextField
+                    type="text" // Usa text per permettere input flessibile (virgola/punto)
+                    size="small"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
+                    sx={{ width: '100px' }}
+                    inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
+                    disabled={isSaving}
+                />
+                <Box sx={{ width: 100, textAlign: 'left' }}>
+                   <Typography variant="body1" color="text.secondary">
+                       {tariffa.unita === 'h' ? '€ / ora' : '€ / giorno'}
+                   </Typography>
+               </Box>
+            </Box>
+        </ListItem>
+    );
+};
+
+
+// --- Pagina principale ---
 const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
@@ -73,74 +140,55 @@ const SettingsPage: React.FC = () => {
     const { tariffe, isSaving, isDirty } = state;
 
     useEffect(() => {
-        if (impostazioniLive?.data?.tariffe) {
-            const tariffeOrdinate = [...impostazioniLive.data.tariffe].sort((a,b) => a.nome.localeCompare(b.nome));
-            if (!isDirty) {
-                 dispatch({ type: 'SYNC_TARIFFE', payload: tariffeOrdinate });
-            }
+        // Sincronizza lo stato del reducer con i dati da Dexie solo se non ci sono modifiche pendenti
+        if (impostazioniLive?.data?.tariffe && !isDirty) {
+             dispatch({ type: 'SYNC_TARIFFE', payload: impostazioniLive.data.tariffe });
         }
     }, [impostazioniLive, isDirty]);
 
-    // PATCH per adeguare la tariffa malattia come richiesto
+    // PATCH una tantum per adeguare la tariffa malattia
     useEffect(() => {
         const fixMalattiaTariff = async () => {
-            const impostazioni = await db.tariffe_locali.get('main');
-            if (impostazioni) {
-                const malattiaTariff = impostazioni.data.tariffe.find(t => t.nome.toLowerCase() === 'malattia');
+            const settings = await db.tariffe_locali.get('main');
+            if (settings) {
+                const malattiaTariff = settings.data.tariffe.find(t => t.nome.toLowerCase() === 'malattia');
+                // Esegui la patch solo se la tariffa malattia non è già corretta
                 if (malattiaTariff && (malattiaTariff.unita !== 'h' || malattiaTariff.costo !== 10)) {
-                    console.log("Adeguamento tariffa 'Malattia' a 10 €/h come richiesto.");
-                    const nuoveTariffe = impostazioni.data.tariffe.map(t => 
+                    console.log("Applicazione patch una tantum: Adeguamento tariffa 'Malattia' a 10 €/h.");
+                    const updatedTariffe = settings.data.tariffe.map(t => 
                         t.nome.toLowerCase() === 'malattia' 
                             ? { ...t, costo: 10, unita: 'h' } 
                             : t
                     );
-                    
-                    const dataToSave: TariffaLocaleCache = {
-                        ...impostazioni,
-                        data: {
-                            ...impostazioni.data,
-                            tariffe: nuoveTariffe,
-                        }
-                    };
-                    await db.tariffe_locali.put(dataToSave);
+                    await db.tariffe_locali.update('main', { 'data.tariffe': updatedTariffe });
                 }
             }
         };
         fixMalattiaTariff();
     }, []);
 
-    const handleTariffaCostoChange = (id: string, value: string) => {
-        dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { id, value } });
+    const handleTariffaCostoChange = (id: string, costo: number) => {
+        dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { id, costo } });
     };
     
     const handleSalva = async () => {
         if (!impostazioniLive) {
-            showSnackbar('Dati originali non trovati.', 'error');
+            showSnackbar('Impossibile trovare la configurazione delle tariffe da aggiornare.', 'error');
             return;
         }
         dispatch({ type: 'SET_SAVING', payload: true });
 
-        const updatedTariffeMap = new Map(tariffe.map(t => [t.id, t]));
-
-        const finalTariffeToSave = impostazioniLive.data.tariffe.map(
-            originalTariffa => updatedTariffeMap.get(originalTariffa.id) || originalTariffa
-        );
-
-        const dataToSave: TariffaLocaleCache = {
-            id: 'main',
-            timestamp: new Date(),
-            data: {
-                ...impostazioniLive.data,
-                tariffe: finalTariffeToSave, 
-            }
-        };
-
         try {
-            await db.tariffe_locali.put(dataToSave);
+            // La logica è più semplice: aggiorna direttamente il campo tariffe nell'oggetto esistente.
+            await db.tariffe_locali.update('main', {
+                'data.tariffe': tariffe, // `tariffe` proviene dallo stato del reducer e contiene le modifiche
+                'timestamp': new Date()
+            });
+
             showSnackbar('Tariffe salvate con successo in locale!', 'success');
             dispatch({ type: 'SAVE_SUCCESS' });
         } catch (error) {
-            console.error("Errore durante il salvataggio in locale:", error);
+            console.error("Errore durante il salvataggio delle tariffe:", error);
             showSnackbar('Errore durante il salvataggio delle tariffe.', 'error');
             dispatch({ type: 'SET_SAVING', payload: false });
         }
@@ -185,25 +233,11 @@ const SettingsPage: React.FC = () => {
                     {tariffe.map((tariffa, index) => (
                         <React.Fragment key={tariffa.id}>
                             {index > 0 && <Divider component="li" />}
-                            <ListItem sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                                <ListItemText primary={tariffa.nome} sx={{ flex: '1 1 150px' }} />
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '1 1 250px', justifyContent: 'flex-end' }}>
-                                    <TextField
-                                        type="text"
-                                        size="small"
-                                        value={tariffa.costo.toFixed(2)}
-                                        onChange={(e) => handleTariffaCostoChange(tariffa.id, e.target.value)}
-                                        sx={{ width: '100px' }}
-                                        inputProps={{ inputMode: 'decimal', style: { textAlign: 'right' } }}
-                                        disabled={isSaving}
-                                    />
-                                    <Box sx={{ width: 100, textAlign: 'left' }}>
-                                       <Typography variant="body1" color="text.secondary">
-                                           {tariffa.unita === 'h' ? '€ / ora' : '€ / giorno'}
-                                       </Typography>
-                                   </Box>
-                                </Box>
-                            </ListItem>
+                            <TariffaRow
+                                tariffa={tariffa}
+                                isSaving={isSaving}
+                                onCostoChange={handleTariffaCostoChange}
+                            />
                         </React.Fragment>
                     ))}
                 </List>
@@ -217,7 +251,7 @@ const SettingsPage: React.FC = () => {
                     <Typography>Guida e Gestione Account</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                    <Typography paragraph>Qui puoi gestire le impostazioni del tuo account.</Typography>
+                     <Typography paragraph>Qui puoi gestire le impostazioni del tuo account.</Typography>
                     <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
                         <Typography variant="h5" gutterBottom>Gestione Account</Typography>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
@@ -228,7 +262,7 @@ const SettingsPage: React.FC = () => {
                 </AccordionDetails>
             </Accordion>
 
-            <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
+             <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
                 <Typography variant="h6" gutterBottom>Manutenzione App</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Se riscontri problemi o l&apos;app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente.
