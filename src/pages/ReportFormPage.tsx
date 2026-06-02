@@ -42,16 +42,18 @@ const isGiornataLavorativa = (tipo: TipoGiornata | undefined): boolean => {
 
 const calculateOre = (dettaglio: Partial<DettaglioOreData>): number => {
     if (dettaglio.isManual) {
-        return dettaglio.ore || 0;
+        return parseFloat(String(dettaglio.ore)) || 0;
     }
-    const inizio = dayjs(`1970-01-01T${dettaglio.oraInizio || '00:00'}`);
-    const fine = dayjs(`1970-01-01T${dettaglio.oraFine || '00:00'}`);
-    if (fine.isAfter(inizio)) {
-        const diff = fine.diff(inizio, 'minute');
-        const oreCalcolate = (diff - (dettaglio.pausa || 0)) / 60;
-        return Math.max(0, parseFloat(oreCalcolate.toFixed(2)));
+    let inizio = dayjs(`1970-01-01T${dettaglio.oraInizio || '00:00'}`);
+    let fine = dayjs(`1970-01-01T${dettaglio.oraFine || '00:00'}`);
+
+    if (fine.isBefore(inizio) || fine.isSame(inizio)) {
+        fine = fine.add(1, 'day');
     }
-    return 0;
+
+    const diff = fine.diff(inizio, 'minute');
+    const oreCalcolate = (diff - (dettaglio.pausa || 0)) / 60;
+    return Math.max(0, parseFloat(oreCalcolate.toFixed(2)));
 };
 
 const createInitialDettaglio = (
@@ -207,8 +209,6 @@ const ReportFormPage: React.FC = () => {
         const populateFormWithData = (report: Rapportino) => {
             if (!report) return;
     
-            // Converte il Timestamp di Firestore in un oggetto Date di JavaScript.
-            // Se il campo `data` non esiste o è invalido, usa la data corrente come fallback.
             const reportDate = report.data ? (report.data instanceof Timestamp ? report.data.toDate() : new Date(report.data)) : new Date();
     
             setOriginalReport(report);
@@ -227,7 +227,6 @@ const ReportFormPage: React.FC = () => {
             const tipo = tipiGiornata.find(t => t.id === report.tipoGiornataId);
             setIsLavorativo(isGiornataLavorativa(tipo));
     
-            // Popola i dettagli delle ore, garantendo che ci sia un nome per ogni tecnico.
             const allTecnicoDetails = (report.dettaglioOreTecnici || []).map(savedDetail => {
                 const tecnicoInfo = tecnici.find(t => t.id === savedDetail.tecnicoId);
                 const nomeTecnico = tecnicoInfo ? `${tecnicoInfo.cognome} ${tecnicoInfo.nome}`.trim() : 'Tecnico non trovato';
@@ -246,22 +245,18 @@ const ReportFormPage: React.FC = () => {
             try {
                 let reportData: Rapportino | null = null;
 
-                // Flusso Offline-First come da blueprint: prima cerca in locale, poi in remoto.
                 if (isOfflineMode) {
                      const syncEvent = await db.syncQueue.where('entityId').equals(reportId).first();
                      if (syncEvent) reportData = syncEvent.payload as Rapportino;
                 } else {
-                    // 1. Cerca in IndexedDB (cache locale)
                     const localReport = await db.rapportini.get(reportId);
                     if (localReport) {
                         reportData = localReport as Rapportino;
                     } else {
-                        // 2. Se non trovato, scarica da Firestore
                         const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
                         const reportSnap = await getDoc(reportRef);
                         if (reportSnap.exists()) {
                             reportData = reportSnap.data();
-                            // Salva nella cache locale per accessi futuri
                             await db.rapportini.put(reportData);
                         }
                     }
@@ -270,7 +265,6 @@ const ReportFormPage: React.FC = () => {
                 if (reportData) {
                     populateFormWithData(reportData);
                     
-                    // Logica di sola lettura
                     const today = new Date();
                     const reportDate = reportData.data instanceof Timestamp ? reportData.data.toDate() : new Date(reportData.data);
                     const isCreator = reportData.tecnicoId === loggedInTecnicoId;
@@ -384,6 +378,7 @@ const ReportFormPage: React.FC = () => {
 
     const getFullReportData = (dataPerReport: Date = dataInizio || new Date()): Omit<Rapportino, 'id'> => {
         const mainTecnicoDetail = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId)!;
+        const oreLavoroTotali = dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0);
 
         const naveSelezionata = navi.find(n => n.id === naveId);
         const luogoSelezionato = luoghi.find(l => l.id === luogoId);
@@ -393,14 +388,12 @@ const ReportFormPage: React.FC = () => {
 
         return {
             nome: nomeReport,
-            data: dataPerReport,
+            data: Timestamp.fromDate(dataPerReport),
+            oreLavoro: oreLavoroTotali,
             tecnicoId: loggedInTecnicoId!,
             tipoGiornataId,
-            isTrasferta: mainTecnicoDetail.isManual,
-            oraInizio: mainTecnicoDetail.oraInizio,
-            oraFine: mainTecnicoDetail.oraFine,
-            pausa: mainTecnicoDetail.pausa,
-            dettaglioOreTecnici: dettaglioOre.map(({ ...rest }) => rest),
+            isTrasferta: mainTecnicoDetail.isManual, // Questo potrebbe essere riconsiderato
+            dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => ({...rest, ore: parseFloat(String(rest.ore)) || 0 })),
             presenze: dettaglioOre.map(d => d.tecnicoId),
             veicoloId: veicoloId || 'Nessuno',
             naveId: naveId || 'Nessuna',
@@ -411,12 +404,12 @@ const ReportFormPage: React.FC = () => {
             firmaFirmatarioNome: firmaFirmatarioNome || '',
             firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
             firmaVettoriale: firmaVettoriale || null,
-            createdAt: originalReport ? originalReport.createdAt : new Date(),
-            updatedAt: new Date(),
+            createdAt: originalReport?.createdAt ? (originalReport.createdAt instanceof Timestamp ? originalReport.createdAt : Timestamp.fromDate(new Date(originalReport.createdAt))) : Timestamp.now(),
+            updatedAt: Timestamp.now(),
         };
     };
 
-    const salvaOAccodaRapportino = async (): Promise<string | null> => {
+    const salvaOAccodaRapportino = async (options: { navigateOnSuccess: boolean } = { navigateOnSuccess: true }): Promise<string | null> => {
         if (!loggedInTecnicoId || !dataInizio) {
             showSnackbar("Errore: Utente non autenticato o data mancante.", "error");
             return null;
@@ -443,33 +436,31 @@ const ReportFormPage: React.FC = () => {
 
         setIsSaving(true);
         try {
-            if (navigator.onLine && !isOfflineMode) {
-                let finalId = reportId;
-                const reportData = getFullReportData();
+            let finalId: string | undefined | null = reportId;
 
+            if (navigator.onLine && !isOfflineMode) {
+                const reportData = getFullReportData();
                 if (isEditMode && reportId) {
                     await runTransaction(firestoreDb, async (transaction) => {
                         const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
-                        const sfDoc = await transaction.get(reportRef);
-                        if (!sfDoc.exists()) {
-                            throw new Error(`Documento con ID ${reportId} non trovato.`);
-                        }
-                        const { createdAt, ...updateData } = reportData;
-                        transaction.update(reportRef, updateData);
+                        transaction.update(reportRef, reportData);
                     });
                 } else {
                     const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
                     const docRef = await addDoc(collectionRef, reportData);
                     finalId = docRef.id;
                 }
-                showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
-                return finalId ?? null;
             } else {
                 const reportData = getFullReportData();
-                const queuedId = await aggiungiAllaCoda(reportData, reportId);
-                showSnackbar("Offline. Il rapportino è stato salvato localmente.", "info");
-                return queuedId;
+                finalId = await aggiungiAllaCoda(reportData, reportId);
             }
+
+            showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
+            if (options.navigateOnSuccess) {
+                navigate('/lista-report');
+            }
+            return finalId ?? null;
+
         } catch (error) {
             console.error("Errore durante il salvataggio: ", error);
             const errorMessage = (error instanceof Error) ? error.message : "Errore di salvataggio.";
@@ -488,30 +479,21 @@ const ReportFormPage: React.FC = () => {
 
         setIsSaving(true);
         try {
-            const giorniDaCreare = eachDayOfInterval({
-                start: startOfDay(dataInizio),
-                end: startOfDay(dataFine)
-            });
-
+            const giorniDaCreare = eachDayOfInterval({ start: startOfDay(dataInizio), end: startOfDay(dataFine) });
             const nomeTipoGiornata = tipiGiornata.find(t => t.id === tipoGiornataId)?.nome || 'Evento';
 
             const createReportObject = (giorno: Date): Omit<Rapportino, 'id'> => ({
                 nome: `Rapportino del ${format(giorno, 'dd/MM/yyyy')} - ${nomeTipoGiornata}`,
-                data: giorno,
+                data: Timestamp.fromDate(giorno),
+                oreLavoro: 8,
                 tecnicoId: loggedInTecnicoId,
                 tipoGiornataId,
                 isTrasferta: false,
-                oraInizio: '',
-                oraFine: '',
-                pausa: 0,
                 dettaglioOreTecnici: [{
                     tecnicoId: loggedInTecnicoId,
                     ore: 8,
                     isManual: true,
-                    nome: tecnicoScrivente?.nome || '',
-                    oraInizio: '',
-                    oraFine: '',
-                    pausa: 0
+                    nome: `${tecnicoScrivente?.cognome || ''} ${tecnicoScrivente?.nome || ''}`.trim(),
                 }],
                 presenze: [loggedInTecnicoId],
                 veicoloId: 'Nessuno',
@@ -523,8 +505,8 @@ const ReportFormPage: React.FC = () => {
                 firmaFirmatarioNome: '',
                 firmaFirmatarioSocieta: '',
                 firmaVettoriale: null,
-                createdAt: new Date(),
-                updatedAt: new Date(),
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
             });
 
             if (navigator.onLine) {
@@ -532,14 +514,12 @@ const ReportFormPage: React.FC = () => {
                 const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
                 giorniDaCreare.forEach(giorno => {
                     const reportRef = doc(collectionRef);
-                    const reportData = createReportObject(giorno);
-                    batch.set(reportRef, reportData);
+                    batch.set(reportRef, createReportObject(giorno));
                 });
                 await batch.commit();
             } else {
                 for (const giorno of giorniDaCreare) {
-                    const reportData = createReportObject(giorno);
-                    await aggiungiAllaCoda(reportData);
+                    await aggiungiAllaCoda(createReportObject(giorno));
                 }
             }
 
@@ -554,6 +534,14 @@ const ReportFormPage: React.FC = () => {
         }
     };
 
+    const proceedToSave = async () => {
+        if (isMultiDay) {
+            await handleMultiDaySave();
+        } else {
+            await salvaOAccodaRapportino({ navigateOnSuccess: true });
+        }
+    };
+
     const handleSave = async () => {
         if (!isEditMode && firmaVettoriale) {
             setIsConfirmSaveDialogOpen(true);
@@ -562,23 +550,12 @@ const ReportFormPage: React.FC = () => {
         await proceedToSave();
     };
 
-    const proceedToSave = async () => {
-        if (isMultiDay) {
-            await handleMultiDaySave();
-        } else {
-            const savedId = await salvaOAccodaRapportino();
-            if (savedId) {
-                navigate('/lista-report');
-            }
-        }
-    };
-
     const handleConfirmSave = async () => {
         setIsConfirmSaveDialogOpen(false);
         await proceedToSave();
     };
 
-    const handleShare = async () => {
+    const handleShare = async (idToUse?: string) => {
         setIsSharing(true);
         setIsPdfPreviewOpen(true);
         if (pdfUrl) URL.revokeObjectURL(pdfUrl);
@@ -586,7 +563,7 @@ const ReportFormPage: React.FC = () => {
         try {
             const reportDataForPdf = getFullReportData();
             const finalReportData = {
-                 id: reportId || 'N/D (Offline)',
+                 id: idToUse || reportId || 'N/D (Offline)',
                  ...reportDataForPdf
             } as Rapportino;
 
@@ -601,6 +578,19 @@ const ReportFormPage: React.FC = () => {
         } finally {
             setIsGeneratingPdf(false);
             setIsSharing(false);
+        }
+    };
+    
+    const handleSaveAndShare = async () => {
+        if (isMultiDay) {
+            showSnackbar("La funzione 'Salva e Condividi' non è disponibile per la creazione di più giorni.", "warning");
+            return;
+        }
+    
+        const savedId = await salvaOAccodaRapportino({ navigateOnSuccess: false });
+    
+        if (savedId) {
+            await handleShare(savedId);
         }
     };
 
@@ -859,11 +849,11 @@ const ReportFormPage: React.FC = () => {
                             <Button
                                 variant="contained"
                                 color="secondary"
-                                onClick={handleShare}
-                                disabled={isSaving || isSharing}
+                                onClick={handleSaveAndShare}
+                                disabled={disableActions || isMultiDay}
                                 startIcon={(isGeneratingPdf || isSharing) ? <CircularProgress size={24} /> : <ShareIcon />}
                             >
-                                Condividi
+                                Salva e Condividi
                             </Button>
                         </Box>
                     </Box>

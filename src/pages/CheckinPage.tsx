@@ -107,7 +107,7 @@ const CheckinPage: React.FC = () => {
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
-                        <Grid item xs={12}>  {/* <-- CORREZIONE: Usato 'item' e 'xs' come richiesto da MUI Grid */}
+                        <Grid size={12}>  {/* <-- CORREZIONE: Usato 'item' e 'xs' come richiesto da MUI Grid */}
                             <FormControl fullWidth>
                                 <InputLabel id="nave-label">Nave</InputLabel>
                                 <Select
@@ -120,7 +120,7 @@ const CheckinPage: React.FC = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12}> {/* <-- CORREZIONE: Usato 'item' e 'xs' */}
+                        <Grid size={12}> {/* <-- CORREZIONE: Usato 'item' e 'xs' */}
                             <FormControl fullWidth>
                                 <InputLabel id="luogo-label">Luogo</InputLabel>
                                 <Select
@@ -134,9 +134,9 @@ const CheckinPage: React.FC = () => {
                             </FormControl>
                         </Grid>
 
-                        {error && <Grid item xs={12}><Alert severity="error">{error}</Alert></Grid>}
+                        {error && <Grid size={12}><Alert severity="error">{error}</Alert></Grid>}
                         
-                        <Grid item sx={{ mt: 2 }} xs={12}> {/* <-- CORREZIONE: Usato 'item' e 'xs' */}
+                        <Grid sx={{ mt: 2 }} size={12}> {/* <-- CORREZIONE: Usato 'item' e 'xs' */}
                             <Button 
                                 type="submit" 
                                 variant="contained" 
