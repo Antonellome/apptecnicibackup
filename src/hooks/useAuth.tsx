@@ -1,9 +1,7 @@
 
 // src/hooks/useAuth.tsx
 import { useState, useEffect, createContext, useContext } from 'react';
-// Tentativo di correzione: se questo hook usa 'db' direttamente da firebase.js,
-// dovrebbe essere corretto qui. Usiamo 'auth' e 'firestore' che sono esportati.
-import { auth, firestore } from '../firebase'; // Assumendo che './firebase' sia il percorso corretto
+import { auth, firestore } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -34,14 +32,18 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
             setCurrentUser(user);
             if (user) {
                 try {
-                    const userDocRef = doc(firestore, 'users', user.uid);
+                    // THIS IS THE FIX: Changed 'users' to the correct collection name 'utenti'
+                    const userDocRef = doc(firestore, 'utenti', user.uid);
                     const userDocSnap = await getDoc(userDocRef);
+
                     if (userDocSnap.exists()) {
                         const profile = userDocSnap.data();
                         setUserProfile(profile);
                         setIsAdmin(profile?.role === 'admin');
+                        console.log("User profile loaded:", profile);
                     } else {
-                        setUserProfile(null); // Utente esiste in auth ma non ha un profilo in firestore
+                        console.warn(`No profile document found for user ${user.uid} in 'utenti' collection.`);
+                        setUserProfile(null); 
                         setIsAdmin(false);
                     }
                 } catch (error) {

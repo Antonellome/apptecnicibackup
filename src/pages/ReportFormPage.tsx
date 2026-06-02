@@ -4,8 +4,9 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Autocomplete, Button, CircularProgress, Alert, Box, Chip, IconButton, Switch, FormControlLabel,
-    Dialog, DialogTitle, DialogContent, DialogActions, Grid
+    Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShareIcon from '@mui/icons-material/Share';
@@ -13,15 +14,15 @@ import BorderColorIcon from '@mui/icons-material/BorderColor';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { it } from 'date-fns/locale';
-import { isSameMonth, format, eachDayOfInterval, startOfDay } from 'date-fns';
+import { isSameMonth, subMonths, format, eachDayOfInterval, startOfDay } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalData } from '@/hooks/useLocalData';
 import { db as firestoreDb } from '@/firebase';
 import { db } from '@/db/local-db';
 import { aggiungiAllaCoda } from '@/services/offlineSync';
-import { doc, getDoc, addDoc, collection, runTransaction, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, runTransaction, writeBatch, Timestamp } from 'firebase/firestore';
 import { rapportinoConverter } from '@/utils/converters';
-import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData } from '@/models/definitions'; 
+import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, MasterData } from '@/models/definitions';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
 import SignatureDialog from '@/components/form/SignatureDialog';
@@ -54,8 +55,8 @@ const calculateOre = (dettaglio: Partial<DettaglioOreData>): number => {
 };
 
 const createInitialDettaglio = (
-    tecnicoId: string, 
-    nome: string, 
+    tecnicoId: string,
+    nome: string,
     baseDetail?: DettaglioOreData
 ): DettaglioOreData => {
     if (baseDetail) {
@@ -92,7 +93,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 const ReportFormPage: React.FC = () => {
     const navigate = useNavigate();
     const { userProfile } = useAuth();
-    const { reportId } = useParams<{ reportId: string }>();
+    const { id: reportId } = useParams<{ id: string }>();
     const location = useLocation();
     const isOfflineMode = location.pathname.includes('edit-offline');
     const { data: masterData, loading: collectionsLoading } = useLocalData();
@@ -104,7 +105,7 @@ const ReportFormPage: React.FC = () => {
     const [isConfirmSaveDialogOpen, setIsConfirmSaveDialogOpen] = useState(false);
 
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
-    
+
     const [originalReport, setOriginalReport] = useState<Rapportino | null>(null);
     const [dataInizio, setDataInizio] = useState<Date | null>(new Date());
     const [dataFine, setDataFine] = useState<Date | null>(new Date());
@@ -129,7 +130,7 @@ const ReportFormPage: React.FC = () => {
     const [lockReason, setLockReason] = useState<string | null>(null);
     const [pageLoading, setPageLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    
+
     const [isSharing, setIsSharing] = useState(false);
     const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -176,7 +177,7 @@ const ReportFormPage: React.FC = () => {
         }),
       [tecnici]
     );
-    
+
     const sortedTipiGiornata = useMemo(() =>
         [...tipiGiornata].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')),
       [tipiGiornata]
@@ -195,95 +196,116 @@ const ReportFormPage: React.FC = () => {
     }, [isMultiDay, sortedTipiGiornata]);
 
     useEffect(() => {
-        const loadData = async () => {
-             if (isEditMode && reportId) {
-                setPageLoading(true);
-                try {
-                    let report: Rapportino | undefined;
-                    
-                    if (isOfflineMode) {
-                        const syncEvent = await db.syncQueue.where('entityId').equals(reportId).first();
-                        if(syncEvent) {
-                            const rawPayload = syncEvent.payload as any;
-                            report = {
-                                ...rawPayload,
-                                id: reportId,
-                                data: new Date(rawPayload.data),
-                                createdAt: new Date(rawPayload.createdAt),
-                                updatedAt: new Date(rawPayload.updatedAt),
-                            } as Rapportino;
-                            setIsReadOnly(true); 
-                            setLockReason("Questo report è in attesa di sincronizzazione. Può solo essere visualizzato.");
-                        } 
+        if (!isEditMode && tecnicoScrivente) {
+            const nomeTecnico = `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim();
+            setDettaglioOre([createInitialDettaglio(tecnicoScrivente.id, nomeTecnico)]);
+            setPageLoading(false);
+        }
+    }, [isEditMode, tecnicoScrivente]);
+
+    useEffect(() => {
+        const populateFormWithData = (report: Rapportino) => {
+            if (!report) return;
+    
+            // Converte il Timestamp di Firestore in un oggetto Date di JavaScript.
+            // Se il campo `data` non esiste o è invalido, usa la data corrente come fallback.
+            const reportDate = report.data ? (report.data instanceof Timestamp ? report.data.toDate() : new Date(report.data)) : new Date();
+    
+            setOriginalReport(report);
+            setDataInizio(reportDate);
+            setTipoGiornataId(report.tipoGiornataId || '');
+            setVeicoloId(report.veicoloId || '');
+            setNaveId(report.naveId || '');
+            setLuogoId(report.luogoId || '');
+            setDescrizioneBreve(report.descrizioneBreve || '');
+            setLavoroEseguito(report.lavoroEseguito || '');
+            setMaterialiImpiegati(report.materialiImpiegati || '');
+            setFirmaFirmatarioNome(report.firmaFirmatarioNome || '');
+            setFirmaFirmatarioSocieta(report.firmaFirmatarioSocieta || '');
+            setFirmaVettoriale(report.firmaVettoriale || null);
+
+            const tipo = tipiGiornata.find(t => t.id === report.tipoGiornataId);
+            setIsLavorativo(isGiornataLavorativa(tipo));
+    
+            // Popola i dettagli delle ore, garantendo che ci sia un nome per ogni tecnico.
+            const allTecnicoDetails = (report.dettaglioOreTecnici || []).map(savedDetail => {
+                const tecnicoInfo = tecnici.find(t => t.id === savedDetail.tecnicoId);
+                const nomeTecnico = tecnicoInfo ? `${tecnicoInfo.cognome} ${tecnicoInfo.nome}`.trim() : 'Tecnico non trovato';
+                return {
+                    ...createInitialDettaglio(savedDetail.tecnicoId, nomeTecnico),
+                    ...savedDetail,
+                };
+            });
+            setDettaglioOre(allTecnicoDetails);
+        };
+
+        const loadReportData = async () => {
+            if (!isEditMode || !reportId || collectionsLoading) return;
+            
+            setPageLoading(true);
+            try {
+                let reportData: Rapportino | null = null;
+
+                // Flusso Offline-First come da blueprint: prima cerca in locale, poi in remoto.
+                if (isOfflineMode) {
+                     const syncEvent = await db.syncQueue.where('entityId').equals(reportId).first();
+                     if (syncEvent) reportData = syncEvent.payload as Rapportino;
+                } else {
+                    // 1. Cerca in IndexedDB (cache locale)
+                    const localReport = await db.rapportini.get(reportId);
+                    if (localReport) {
+                        reportData = localReport as Rapportino;
                     } else {
+                        // 2. Se non trovato, scarica da Firestore
                         const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
                         const reportSnap = await getDoc(reportRef);
                         if (reportSnap.exists()) {
-                            report = reportSnap.data();
+                            reportData = reportSnap.data();
+                            // Salva nella cache locale per accessi futuri
+                            await db.rapportini.put(reportData);
                         }
                     }
-                    
-                    if (report) {
-                        setOriginalReport(report);
-                        setDataInizio(report.data);
-                        setTipoGiornataId(report.tipoGiornataId);
-                        setVeicoloId(report.veicoloId || '');
-                        setNaveId(report.naveId || '');
-                        setLuogoId(report.luogoId || '');
-                        setDescrizioneBreve(report.descrizioneBreve || '');
-                        setLavoroEseguito(report.lavoroEseguito || '');
-                        setMaterialiImpiegati(report.materialiImpiegati || '');
-                        setFirmaFirmatarioNome(report.firmaFirmatarioNome || '');
-                        setFirmaFirmatarioSocieta(report.firmaFirmatarioSocieta || '');
-                        setFirmaVettoriale(report.firmaVettoriale || null);
-
-                        const tipo = tipiGiornata.find(t => t.id === report.tipoGiornataId);
-                        setIsLavorativo(isGiornataLavorativa(tipo));
-
-                        const allTecnicoDetails = (report.dettaglioOreTecnici || []).map(savedDetail => {
-                            const tecnicoInfo = tecnici.find(t => t.id === savedDetail.tecnicoId);
-                            const detailWithDefaults = {
-                                isManual: (savedDetail.isManual ?? report.isTrasferta) || false,
-                                oraInizio: savedDetail.oraInizio || report.oraInizio || '07:30',
-                                oraFine: savedDetail.oraFine || report.oraFine || '16:30',
-                                pausa: savedDetail.pausa ?? report.pausa ?? 60,
-                                ore: savedDetail.ore,
-                                tecnicoId: savedDetail.tecnicoId,
-                                nome: tecnicoInfo ? `${tecnicoInfo.cognome} ${tecnicoInfo.nome}`.trim() : 'Sconosciuto',
-                            }
-                            detailWithDefaults.ore = calculateOre(detailWithDefaults);
-                            return detailWithDefaults;
-                        });
-                        setDettaglioOre(allTecnicoDetails);
-
-                        if (!isOfflineMode && !isSameMonth(report.data, new Date()) && !userProfile?.isAdmin) {
-                            setIsReadOnly(true);
-                            setLockReason("Questo rapportino è bloccato perché appartiene a un mese precedente e non può più essere modificato.");
-                        }
-                    } else {
-                        showSnackbar("Rapportino non trovato (o la coda è vuota).", "error");
-                        navigate('/lista-report');
-                    }
-                } catch (error) {
-                    console.error("Errore caricamento dati rapportino: ", error);
-                    showSnackbar("Errore nel caricamento del rapportino.", "error");
-                } finally {
-                    setPageLoading(false);
                 }
-            } else if (tecnicoScrivente) {
-                setDettaglioOre(prev => prev.map(d => 
-                    d.tecnicoId === loggedInTecnicoId 
-                    ? { ...d, nome: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim() } 
-                    : d
-                ));
+
+                if (reportData) {
+                    populateFormWithData(reportData);
+                    
+                    // Logica di sola lettura
+                    const today = new Date();
+                    const reportDate = reportData.data instanceof Timestamp ? reportData.data.toDate() : new Date(reportData.data);
+                    const isCreator = reportData.tecnicoId === loggedInTecnicoId;
+                    const isCurrentMonth = isSameMonth(reportDate, today);
+                    const isPreviousMonth = isSameMonth(reportDate, subMonths(today, 1));
+                    const isWithinGracePeriod = today.getDate() <= 3;
+
+                    if (isOfflineMode) {
+                        setIsReadOnly(true);
+                        setLockReason("Questo report è in attesa di sincronizzazione e non può essere modificato.");
+                    } else if (!isCreator) {
+                        setIsReadOnly(true);
+                        setLockReason("Questo report non può essere modificato perché non sei il tecnico creatore.");
+                    } else if (!isCurrentMonth && !(isPreviousMonth && isWithinGracePeriod)) {
+                        setIsReadOnly(true);
+                        setLockReason("Questo report non è modificabile perché appartiene a un mese precedente.");
+                    }
+                } else {
+                    showSnackbar("Rapportino non trovato.", "error");
+                    navigate('/reports');
+                }
+            } catch (error) {
+                console.error("Errore durante il caricamento del rapportino: ", error);
+                showSnackbar("Si è verificato un errore critico nel caricamento dei dati.", "error");
+            } finally {
                 setPageLoading(false);
             }
         };
 
-        if (!collectionsLoading) {
-            loadData();
+        if (isEditMode) {
+            loadReportData();
+        } else {
+            setPageLoading(false);
         }
-    }, [reportId, isEditMode, isOfflineMode, collectionsLoading, userProfile, showSnackbar, navigate, tecnici, tipiGiornata, loggedInTecnicoId, tecnicoScrivente]);
+    }, [reportId, isEditMode, isOfflineMode, collectionsLoading, loggedInTecnicoId, navigate, showSnackbar, tecnici, tipiGiornata]);
 
     useEffect(() => {
         return () => { if (pdfUrl) { URL.revokeObjectURL(pdfUrl); } };
@@ -322,8 +344,8 @@ const ReportFormPage: React.FC = () => {
         const tipo = tipiGiornata.find(t => t.id === id);
         if (!isMultiDay) { setIsLavorativo(isGiornataLavorativa(tipo)); }
     };
-    
-    const handleCancel = () => navigate(isEditMode ? '/lista-report' : '/');
+
+    const handleCancel = () => navigate('/reports');
 
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
         const newData = { ...updatedData, ore: calculateOre(updatedData) };
@@ -362,7 +384,7 @@ const ReportFormPage: React.FC = () => {
 
     const getFullReportData = (dataPerReport: Date = dataInizio || new Date()): Omit<Rapportino, 'id'> => {
         const mainTecnicoDetail = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId)!;
-        
+
         const naveSelezionata = navi.find(n => n.id === naveId);
         const luogoSelezionato = luoghi.find(l => l.id === luogoId);
 
@@ -421,20 +443,18 @@ const ReportFormPage: React.FC = () => {
 
         setIsSaving(true);
         try {
-            if (navigator.onLine) {
+            if (navigator.onLine && !isOfflineMode) {
                 let finalId = reportId;
                 const reportData = getFullReportData();
 
                 if (isEditMode && reportId) {
-                     if(isOfflineMode) throw new Error("La modifica offline non è permessa.");
-
                     await runTransaction(firestoreDb, async (transaction) => {
                         const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
                         const sfDoc = await transaction.get(reportRef);
                         if (!sfDoc.exists()) {
                             throw new Error(`Documento con ID ${reportId} non trovato.`);
                         }
-                        const { createdAt, ...updateData } = reportData; // Non aggiornare mai createdAt
+                        const { createdAt, ...updateData } = reportData;
                         transaction.update(reportRef, updateData);
                     });
                 } else {
@@ -454,36 +474,25 @@ const ReportFormPage: React.FC = () => {
             console.error("Errore durante il salvataggio: ", error);
             const errorMessage = (error instanceof Error) ? error.message : "Errore di salvataggio.";
             showSnackbar(`Errore: ${errorMessage}`, "error");
-
-            try {
-                console.log("Fallback: tentativo di accodare il rapportino localmente.");
-                const reportData = getFullReportData();
-                const queuedId = await aggiungiAllaCoda(reportData, reportId);
-                showSnackbar("Il salvataggio online è fallito. Le modifiche sono state salvate nella coda locale.", "warning");
-                return queuedId;
-            } catch (queueError) {
-                console.error("ERRORE CRITICO: Fallito anche l'accodamento locale. ", queueError);
-                showSnackbar("Errore critico: impossibile salvare i dati.", "error");
-                return null;
-            }
+            return null;
         } finally {
             setIsSaving(false);
         }
     };
-    
+
     const handleMultiDaySave = async () => {
         if (!dataInizio || !dataFine || !tipoGiornataId || !loggedInTecnicoId) {
             showSnackbar("Per la creazione multipla, sono necessarie le date di inizio e fine e il tipo di giornata.", "warning");
             return;
         }
-    
+
         setIsSaving(true);
         try {
             const giorniDaCreare = eachDayOfInterval({
                 start: startOfDay(dataInizio),
                 end: startOfDay(dataFine)
             });
-    
+
             const nomeTipoGiornata = tipiGiornata.find(t => t.id === tipoGiornataId)?.nome || 'Evento';
 
             const createReportObject = (giorno: Date): Omit<Rapportino, 'id'> => ({
@@ -496,12 +505,12 @@ const ReportFormPage: React.FC = () => {
                 oraFine: '',
                 pausa: 0,
                 dettaglioOreTecnici: [{
-                    tecnicoId: loggedInTecnicoId, 
-                    ore: 8, 
-                    isManual: true, 
-                    nome: tecnicoScrivente?.nome || '', 
-                    oraInizio: '', 
-                    oraFine: '', 
+                    tecnicoId: loggedInTecnicoId,
+                    ore: 8,
+                    isManual: true,
+                    nome: tecnicoScrivente?.nome || '',
+                    oraInizio: '',
+                    oraFine: '',
                     pausa: 0
                 }],
                 presenze: [loggedInTecnicoId],
@@ -518,9 +527,9 @@ const ReportFormPage: React.FC = () => {
                 updatedAt: new Date(),
             });
 
-            const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
             if (navigator.onLine) {
                 const batch = writeBatch(firestoreDb);
+                const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
                 giorniDaCreare.forEach(giorno => {
                     const reportRef = doc(collectionRef);
                     const reportData = createReportObject(giorno);
@@ -533,10 +542,10 @@ const ReportFormPage: React.FC = () => {
                     await aggiungiAllaCoda(reportData);
                 }
             }
-    
+
             showSnackbar(`Creati ${giorniDaCreare.length} rapportini con successo!`, "success");
-            navigate('/lista-report');
-    
+            navigate('/reports');
+
         } catch (error) {
             console.error("Errore creazione multipla: ", error);
             showSnackbar("Si è verificato un errore durante la creazione dei rapportini.", "error");
@@ -548,18 +557,18 @@ const ReportFormPage: React.FC = () => {
     const handleSave = async () => {
         if (!isEditMode && firmaVettoriale) {
             setIsConfirmSaveDialogOpen(true);
-            return; 
+            return;
         }
         await proceedToSave();
     };
-    
+
     const proceedToSave = async () => {
         if (isMultiDay) {
             await handleMultiDaySave();
         } else {
             const savedId = await salvaOAccodaRapportino();
             if (savedId) {
-                navigate('/lista-report');
+                navigate('/reports');
             }
         }
     };
@@ -570,20 +579,15 @@ const ReportFormPage: React.FC = () => {
     };
 
     const handleShare = async () => {
+        setIsSharing(true);
         setIsPdfPreviewOpen(true);
-        setIsGeneratingPdf(true);
         if (pdfUrl) URL.revokeObjectURL(pdfUrl);
 
         try {
-            const savedOrQueuedId = await salvaOAccodaRapportino();
-            if (!savedOrQueuedId) {
-                 showSnackbar("Attenzione: impossibile salvare. Il PDF potrebbe non essere aggiornato.", "warning");
-            }
-            
             const reportDataForPdf = getFullReportData();
             const finalReportData = {
-                 id: savedOrQueuedId && !savedOrQueuedId.startsWith('local-') ? savedOrQueuedId : reportId || 'N/D (Offline)', 
-                 ...reportDataForPdf 
+                 id: reportId || 'N/D (Offline)',
+                 ...reportDataForPdf
             } as Rapportino;
 
             if (!masterData) throw new Error("Dati anagrafici non disponibili per la generazione del PDF.");
@@ -591,11 +595,12 @@ const ReportFormPage: React.FC = () => {
             const newPdfUrl = URL.createObjectURL(pdfBlob);
             setPdfUrl(newPdfUrl);
         } catch (error) {
-            console.error("Errore durante la condivisione: ", error);
+            console.error("Errore durante la generazione PDF per condivisione: ", error);
             showSnackbar("Errore durante la generazione del PDF.", "error");
             setIsPdfPreviewOpen(false);
         } finally {
             setIsGeneratingPdf(false);
+            setIsSharing(false);
         }
     };
 
@@ -607,28 +612,24 @@ const ReportFormPage: React.FC = () => {
             const blob = await response.blob();
             const fileName = `Rapportino_${format(dataInizio, 'dd-MM-yyyy')}.pdf`;
 
-            if (navigator.onLine) {
-                await shareOrDownload(blob, fileName);
-                showSnackbar("File condiviso con successo.", "success");
-            } else {
-                await db.condivisioniInSospeso.add({ blob, fileName });
-                showSnackbar("Sei offline. Il file sarà condiviso appena torni online.", "info");
-            }
+            await shareOrDownload(blob, fileName);
             setIsPdfPreviewOpen(false);
         } catch (error) {
-            console.error("Errore di condivisione finale o accodamento: ", error);
+            console.error("Errore di condivisione finale: ", error);
             if (!(error instanceof DOMException && error.name === 'AbortError')) {
-                showSnackbar("Impossibile condividere o accodare il file.", "error");
+                showSnackbar("Impossibile condividere il file.", "error");
             }
         } finally {
             setIsSharing(false);
         }
     };
-    
+
     const handleOpenSignatureModal = () => {
-        if (isEditMode && firmaVettoriale) {
-            showSnackbar("La firma non può essere modificata dopo il primo salvataggio.", "warning");
-            return;
+        if (isEditMode && firmaVettoriale && !isReadOnly) {
+             if(originalReport && originalReport.firmaVettoriale) {
+                showSnackbar("La firma non può essere modificata dopo il primo salvataggio.", "warning");
+                return;
+             }
         }
         if (!firmaFirmatarioNome) {
             showSnackbar("Per favore, inserisci prima il Nome e Cognome del firmatario.", "warning");
@@ -644,7 +645,7 @@ const ReportFormPage: React.FC = () => {
     };
 
     if (pageLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
-    
+
     const scriventeDettaglio = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
     const disableActions = isSaving || isSharing || isReadOnly;
 
@@ -664,13 +665,13 @@ const ReportFormPage: React.FC = () => {
                         <Typography variant="h4" component="h1" fontWeight="bold">Tecnologie Industriali Navali</Typography>
                         <Typography variant="h6" component="h2">Report Intervento</Typography>
                     </Box>
-                    
-                    {isReadOnly && lockReason && <Alert severity="warning" sx={{ mb: 2 }}>{lockReason}</Alert>}
-                    
+
+                    {isReadOnly && lockReason && <Alert severity="info" sx={{ mb: 2 }}>{lockReason}</Alert>}
+
                     <Section title="Dati Principali">
                         <Grid size={12}>
                             {!isEditMode && (
-                                <FormControlLabel control={<Switch checked={isMultiDay} onChange={handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={isEditMode} />
+                                <FormControlLabel control={<Switch checked={isMultiDay} onChange={handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={isEditMode || disableActions} />
                             )}
                         </Grid>
                         <Grid
@@ -741,7 +742,7 @@ const ReportFormPage: React.FC = () => {
 
                                 {dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(dett => (
                                     <Grid key={dett.tecnicoId} size={12}>
-                                        <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                                        <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, width: '100%' }}>
                                             <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography>
                                                 {isLavorativo ? <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${(dett.ore || 0).toFixed(2)}h)`} size="small" /> : <Chip label={`8 ore di default`} size="small" />}
                                             </Box>
@@ -820,47 +821,49 @@ const ReportFormPage: React.FC = () => {
                                         </Grid>
                                         <Grid size={12}>
                                             {firmaVettoriale ? (
-                                                <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center', backgroundColor: '#616161' }}>
-                                                    <Typography variant="body2" gutterBottom sx={{ color: 'white' }}>Firma salvata:</Typography>
-                                                    <img 
+                                                <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center', backgroundColor: isReadOnly ? '#f5f5f5' : '#616161' }}>
+                                                    <Typography variant="body2" gutterBottom sx={{ color: isReadOnly ? 'black' : 'white' }}>Firma salvata:</Typography>
+                                                    <img
                                                         key={firmaVettoriale}
-                                                        src={firmaVettoriale} 
-                                                        alt="Firma" 
+                                                        src={firmaVettoriale}
+                                                        alt="Firma"
                                                         style={{
-                                                            maxWidth: '200px', 
-                                                            height: 'auto', 
+                                                            maxWidth: '200px',
+                                                            height: 'auto',
                                                             margin: 'auto',
-                                                            filter: 'invert(1)'
+                                                            filter: isReadOnly ? 'none' : 'invert(1)'
                                                         }}/>
                                                     <br />
-                                                    <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1, color: 'white' }} disabled={disableActions || (isEditMode && !!firmaVettoriale)}>Modifica Firma</Button>
+                                                    {!isReadOnly && <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1, color: isReadOnly ? 'black' : 'white' }} disabled={disableActions}>Modifica Firma</Button>}
                                                 </Box>
                                             ) : (
                                                 <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={disableActions} fullWidth>Aggiungi Firma Cliente</Button>
                                             )}
                                         </Grid>
                                     </Section>
-                                </>
+                                </> 
                             )}
                         </>
                     )}
 
 
                     <Box id="action-buttons" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4 }}>
-                        <Button variant="outlined" onClick={handleCancel} disabled={isSaving || isSharing}>Annulla</Button>
-                        
+                        <Button variant="outlined" color="secondary" onClick={handleCancel} disabled={isSaving || isSharing}>Chiudi</Button>
+
                         <Box sx={{ display: 'flex', gap: 2 }}>
-                            <Button variant="contained" onClick={handleSave} disabled={disableActions}>
-                                {isSaving ? <CircularProgress size={24} /> : (isEditMode ? 'Aggiorna' : 'Salva')}
-                            </Button>
-                            <Button 
-                                variant="contained" 
-                                color="secondary" 
-                                onClick={handleShare} 
-                                disabled={disableActions} 
-                                startIcon={(isGeneratingPdf) ? <CircularProgress size={24} /> : <ShareIcon />}
+                           {!isReadOnly && (
+                                <Button variant="contained" onClick={handleSave} disabled={disableActions}>
+                                    {isSaving ? <CircularProgress size={24} /> : (isEditMode ? 'Aggiorna' : 'Salva')}
+                                </Button>
+                           )}
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                onClick={handleShare}
+                                disabled={isSaving || isSharing}
+                                startIcon={(isGeneratingPdf || isSharing) ? <CircularProgress size={24} /> : <ShareIcon />}
                             >
-                                Salva e Condividi
+                                Condividi
                             </Button>
                         </Box>
                     </Box>
@@ -868,7 +871,7 @@ const ReportFormPage: React.FC = () => {
             </Box>
             <Dialog open={isModalOpen} onClose={handleCloseModal} maxWidth="sm" fullWidth>
                 <DialogTitle>Modifica orario di {editingTecnico?.nome}</DialogTitle>
-                <DialogContent>{tempDettaglioOre && <Box sx={{pt: 2}}><OreLavoroSingoloTecnico datiOre={tempDettaglioOre} onUpdate={setTempDettaglioOre} isReadOnly={false} /></Box>}</DialogContent>
+                <DialogContent>{tempDettaglioOre && <Box sx={{pt: 2}}><OreLavoroSingoloTecnico datiOre={tempDettaglioOre} onUpdate={setTempDettaglioOre} isReadOnly={isReadOnly} /></Box>}</DialogContent>
                 <DialogActions><Button onClick={handleCloseModal}>Annulla</Button><Button onClick={handleSaveFromModal} variant="contained">Salva Orario</Button></DialogActions>
             </Dialog>
             <SignatureDialog
@@ -876,7 +879,7 @@ const ReportFormPage: React.FC = () => {
                 onClose={() => setIsSignatureModalOpen(false)}
                 onSave={handleSaveSignature}
             />
-            <PdfPreviewDialog 
+            <PdfPreviewDialog
                 open={isPdfPreviewOpen}
                 onClose={() => setIsPdfPreviewOpen(false)}
                 onShare={handleFinalShare}

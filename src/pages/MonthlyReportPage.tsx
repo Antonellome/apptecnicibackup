@@ -170,7 +170,12 @@ const MonthlyReportPage = () => {
             )}
             {riepilogoMese && (
                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={5} lg={4}>
+                    <Grid
+                        size={{
+                            xs: 12,
+                            md: 5,
+                            lg: 4
+                        }}>
                         <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                             <Typography variant="h5" gutterBottom>Riepilogo</Typography>
                             <TableContainer component={Paper} variant="outlined">
@@ -189,10 +194,15 @@ const MonthlyReportPage = () => {
                             </TableContainer>
                         </Paper>
                     </Grid>
-                    <Grid item xs={12} md={7} lg={8}>
+                    <Grid
+                        size={{
+                            xs: 12,
+                            md: 7,
+                            lg: 8
+                        }}>
                         <DettaglioCostiTipoGiornata dettaglio={riepilogoMese.dettaglio} />
                     </Grid>
-                    <Grid item sx={{ mt: 2 }} xs={12}>
+                    <Grid sx={{ mt: 2 }} size={12}>
                         <ActivityBreakdown riepilogo={riepilogoMese} />
                     </Grid>
                 </Grid>
