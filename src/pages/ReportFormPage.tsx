@@ -93,7 +93,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 const ReportFormPage: React.FC = () => {
     const navigate = useNavigate();
     const { userProfile } = useAuth();
-    const { id: reportId } = useParams<{ id: string }>();
+    const { reportId } = useParams<{ reportId: string }>();
     const location = useLocation();
     const isOfflineMode = location.pathname.includes('edit-offline');
     const { data: masterData, loading: collectionsLoading } = useLocalData();
@@ -290,7 +290,7 @@ const ReportFormPage: React.FC = () => {
                     }
                 } else {
                     showSnackbar("Rapportino non trovato.", "error");
-                    navigate('/reports');
+                    navigate('/lista-report');
                 }
             } catch (error) {
                 console.error("Errore durante il caricamento del rapportino: ", error);
@@ -345,7 +345,7 @@ const ReportFormPage: React.FC = () => {
         if (!isMultiDay) { setIsLavorativo(isGiornataLavorativa(tipo)); }
     };
 
-    const handleCancel = () => navigate('/reports');
+    const handleCancel = () => navigate('/lista-report');
 
     const handleOreUpdate = useCallback((updatedData: DettaglioOreData) => {
         const newData = { ...updatedData, ore: calculateOre(updatedData) };
@@ -544,7 +544,7 @@ const ReportFormPage: React.FC = () => {
             }
 
             showSnackbar(`Creati ${giorniDaCreare.length} rapportini con successo!`, "success");
-            navigate('/reports');
+            navigate('/lista-report');
 
         } catch (error) {
             console.error("Errore creazione multipla: ", error);
@@ -568,7 +568,7 @@ const ReportFormPage: React.FC = () => {
         } else {
             const savedId = await salvaOAccodaRapportino();
             if (savedId) {
-                navigate('/reports');
+                navigate('/lista-report');
             }
         }
     };
