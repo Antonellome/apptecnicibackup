@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useReducer } from 'react';
+import React, { useEffect, useState, useReducer, useCallback } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
@@ -7,7 +7,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { db, TariffaLocaleCache } from '@/db/local-db';
+import { db } from '@/db/local-db';
 import { TariffaLocale } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMasterData } from '@/hooks/useMasterData';
@@ -24,7 +24,8 @@ type SettingsAction =
     | { type: 'SYNC_TARIFFE'; payload: TariffaLocale[] }
     | { type: 'UPDATE_TARIFFA_COSTO'; payload: { id: string; costo: number } }
     | { type: 'SET_SAVING'; payload: boolean }
-    | { type: 'SAVE_SUCCESS' };
+    | { type: 'SAVE_SUCCESS' }
+    | { type: 'SET_DIRTY' };
 
 const initialState: SettingsState = {
     tariffe: [],
@@ -35,24 +36,29 @@ const initialState: SettingsState = {
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
     switch (action.type) {
         case 'SYNC_TARIFFE':
-            // Ordina sempre le tariffe quando vengono sincronizzate
             const sortedTariffe = [...action.payload].sort((a, b) => a.nome.localeCompare(b.nome));
             return { ...state, tariffe: sortedTariffe, isDirty: false };
         
         case 'UPDATE_TARIFFA_COSTO': {
             return {
                 ...state,
-                isDirty: true,
+                isDirty: true, 
                 tariffe: state.tariffe.map(t =>
                     t.id === action.payload.id ? { ...t, costo: action.payload.costo } : t
                 ),
             };
         }
+        
+        case 'SET_DIRTY':
+            if (state.isDirty) return state; // Evita ri-render se è già dirty
+            return { ...state, isDirty: true };
 
         case 'SET_SAVING':
             return { ...state, isSaving: action.payload };
+
         case 'SAVE_SUCCESS':
             return { ...state, isDirty: false, isSaving: false };
+
         default:
             return state;
     }
@@ -63,14 +69,14 @@ interface TariffaRowProps {
     tariffa: TariffaLocale;
     isSaving: boolean;
     onCostoChange: (id: string, costo: number) => void;
+    onDirty: () => void;
 }
 
-const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChange }) => {
+const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChange, onDirty }) => {
     const [inputValue, setInputValue] = useState(tariffa.costo.toFixed(2));
     const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
-        // Aggiorna l'input solo se non si sta modificando, per non interferire con l'utente
         if (!isEditing) {
             setInputValue(tariffa.costo.toFixed(2));
         }
@@ -78,9 +84,9 @@ const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChang
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawValue = e.target.value;
-        // Permetti l'input di numeri, virgole e punti
         if (/^[0-9,.]*$/.test(rawValue)) {
             setInputValue(rawValue);
+            onDirty(); // Notifica il parent che il form è stato modificato
         }
     };
 
@@ -90,7 +96,6 @@ const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChang
         if (isNaN(numericValue)) {
             numericValue = 0;
         }
-        // Formatta il valore a due decimali e aggiorna lo stato parent
         setInputValue(numericValue.toFixed(2));
         if (numericValue !== tariffa.costo) {
              onCostoChange(tariffa.id, numericValue);
@@ -106,7 +111,7 @@ const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChang
             <ListItemText primary={tariffa.nome} sx={{ flex: '1 1 150px' }} />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '1 1 250px', justifyContent: 'flex-end' }}>
                 <TextField
-                    type="text" // Usa text per permettere input flessibile (virgola/punto)
+                    type="text"
                     size="small"
                     value={inputValue}
                     onChange={handleInputChange}
@@ -140,27 +145,21 @@ const SettingsPage: React.FC = () => {
     const { tariffe, isSaving, isDirty } = state;
 
     useEffect(() => {
-        // Sincronizza lo stato del reducer con i dati da Dexie solo se non ci sono modifiche pendenti
         if (impostazioniLive?.data?.tariffe && !isDirty) {
              dispatch({ type: 'SYNC_TARIFFE', payload: impostazioniLive.data.tariffe });
         }
     }, [impostazioniLive, isDirty]);
 
-    // PATCH una tantum per adeguare la tariffa malattia
     useEffect(() => {
         const fixMalattiaTariff = async () => {
             const settings = await db.tariffe_locali.get('main');
             if (settings) {
                 const malattiaTariff = settings.data.tariffe.find(t => t.nome.toLowerCase() === 'malattia');
-                // Esegui la patch solo se la tariffa malattia non è già corretta
                 if (malattiaTariff && (malattiaTariff.unita !== 'h' || malattiaTariff.costo !== 10)) {
                     console.log("Applicazione patch una tantum: Adeguamento tariffa 'Malattia' a 10 €/h.");
-                    const updatedTariffe = settings.data.tariffe.map(t => 
-                        t.nome.toLowerCase() === 'malattia' 
-                            ? { ...t, costo: 10, unita: 'h' } 
-                            : t
-                    );
-                    await db.tariffe_locali.update('main', { 'data.tariffe': updatedTariffe });
+                    await db.tariffe_locali.update('main', { 'data.tariffe': settings.data.tariffe.map(t => 
+                        t.nome.toLowerCase() === 'malattia' ? { ...t, costo: 10, unita: 'h' } : t
+                    )});
                 }
             }
         };
@@ -171,6 +170,10 @@ const SettingsPage: React.FC = () => {
         dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { id, costo } });
     };
     
+    const handleSetDirty = useCallback(() => {
+        dispatch({ type: 'SET_DIRTY' });
+    }, []);
+    
     const handleSalva = async () => {
         if (!impostazioniLive) {
             showSnackbar('Impossibile trovare la configurazione delle tariffe da aggiornare.', 'error');
@@ -179,9 +182,8 @@ const SettingsPage: React.FC = () => {
         dispatch({ type: 'SET_SAVING', payload: true });
 
         try {
-            // La logica è più semplice: aggiorna direttamente il campo tariffe nell'oggetto esistente.
             await db.tariffe_locali.update('main', {
-                'data.tariffe': tariffe, // `tariffe` proviene dallo stato del reducer e contiene le modifiche
+                'data.tariffe': tariffe,
                 'timestamp': new Date()
             });
 
@@ -237,6 +239,7 @@ const SettingsPage: React.FC = () => {
                                 tariffa={tariffa}
                                 isSaving={isSaving}
                                 onCostoChange={handleTariffaCostoChange}
+                                onDirty={handleSetDirty}
                             />
                         </React.Fragment>
                     ))}
