@@ -154,7 +154,9 @@ const ReportListPage = () => {
                   />
                   <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
                       {report.isOffline && <Chip label="Offline" size="small" color="info" variant="outlined" />}
-                      <Chip label={report.tipoGiornata.sigla} size="small" sx={{ bgcolor: report.tipoGiornata.colore, color: 'white'}} />
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        {report.tipoGiornata.nome}
+                      </Typography>
                   </Box>
                 </ListItem>
                 {index < displayedRapportini.length - 1 && <Divider component="li" />}
