@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, FormControl, InputLabel, Select, MenuItem, Button, CircularProgress, Alert } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import Grid from '@mui/material/Grid'; // <-- CORREZIONE: Ripristinato import corretto
 import { useNavigate } from 'react-router-dom';
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -56,13 +56,6 @@ const CheckinPage: React.FC = () => {
             return;
         }
 
-        if (alreadyCheckedIn) {
-            const confirmed = window.confirm("Sei sicuro di voler inviare un nuovo check-in? Hai già registrato la tua presenza per oggi.");
-            if (!confirmed) {
-                return;
-            }
-        }
-
         setLoading(true);
         setError('');
 
@@ -108,13 +101,13 @@ const CheckinPage: React.FC = () => {
 
                 {alreadyCheckedIn && (
                     <Alert severity="info" sx={{ mb: 3 }}>
-                        Hai già registrato un check-in oggi. Se hai cambiato posto di lavoro, puoi reinviarlo.
+                        Hai già registrato un check-in oggi. Puoi aggiornarlo selezionando una nuova postazione e confermando.
                     </Alert>
                 )}
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
-                        <Grid size={{ xs: 12 }}>
+                        <Grid item xs={12}>  {/* <-- CORREZIONE: Usato 'item' e 'xs' come richiesto da MUI Grid */}
                             <FormControl fullWidth>
                                 <InputLabel id="nave-label">Nave</InputLabel>
                                 <Select
@@ -127,7 +120,7 @@ const CheckinPage: React.FC = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid size={{ xs: 12 }}>
+                        <Grid item xs={12}> {/* <-- CORREZIONE: Usato 'item' e 'xs' */}
                             <FormControl fullWidth>
                                 <InputLabel id="luogo-label">Luogo</InputLabel>
                                 <Select
@@ -141,9 +134,9 @@ const CheckinPage: React.FC = () => {
                             </FormControl>
                         </Grid>
 
-                        {error && <Grid size={{ xs: 12 }}><Alert severity="error">{error}</Alert></Grid>}
+                        {error && <Grid item xs={12}><Alert severity="error">{error}</Alert></Grid>}
                         
-                        <Grid sx={{ mt: 2 }} size={{ xs: 12 }}>
+                        <Grid item sx={{ mt: 2 }} xs={12}> {/* <-- CORREZIONE: Usato 'item' e 'xs' */}
                             <Button 
                                 type="submit" 
                                 variant="contained" 
