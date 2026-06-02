@@ -6,46 +6,57 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
 // --- Funzione per processare l'immagine della firma per il PDF ---
-const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
+const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+        if (!whiteSignatureDataUrl || typeof whiteSignatureDataUrl !== 'string') {
+            console.error("Signature data is invalid or missing.");
+            return resolve(null);
+        }
+
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             if (!ctx) {
-                return reject(new Error('Failed to get canvas context'));
+                console.error('Failed to get canvas context');
+                return resolve(null);
             }
 
             canvas.width = img.width;
             canvas.height = img.height;
 
-            // 1. Colora la firma di nero
-            ctx.drawImage(img, 0, 0); // Disegna l'originale (bianco su trasparente)
-            ctx.globalCompositeOperation = 'source-in';
-            ctx.fillStyle = 'black';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            // Risultato: Firma nera su sfondo trasparente
+            try {
+                // 1. Colora la firma di nero
+                ctx.drawImage(img, 0, 0);
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. Rendi il tratto più spesso disegnando l'immagine nera sopra se stessa con piccoli scostamenti
-            const thickness = 0.5; // Controlla lo spessore aggiunto
-            ctx.globalCompositeOperation = 'source-over'; // Modalità di disegno normale
-            ctx.drawImage(canvas, thickness, 0);
-            ctx.drawImage(canvas, -thickness, 0);
-            ctx.drawImage(canvas, 0, thickness);
-            ctx.drawImage(canvas, 0, -thickness);
-            // Risultato: Firma nera e più spessa su sfondo trasparente
+                // 2. Rendi il tratto più spesso
+                const thickness = 0.5;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.drawImage(canvas, thickness, 0);
+                ctx.drawImage(canvas, -thickness, 0);
+                ctx.drawImage(canvas, 0, thickness);
+                ctx.drawImage(canvas, 0, -thickness);
 
-            // 3. Aggiungi uno sfondo bianco
-            ctx.globalCompositeOperation = 'destination-over'; // Disegna sotto il contenuto esistente
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            // Risultato: Firma nera e spessa su sfondo bianco
+                // 3. Aggiungi uno sfondo bianco
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 4. Ripristina e restituisci
-            ctx.globalCompositeOperation = 'source-over';
-            resolve(canvas.toDataURL('image/png'));
+                // 4. Ripristina e restituisci
+                ctx.globalCompositeOperation = 'source-over';
+                resolve(canvas.toDataURL('image/png'));
+            } catch (error) {
+                console.error("Error processing signature image:", error);
+                resolve(null);
+            }
         };
-        img.onerror = (err) => reject(err);
+        img.onerror = (err) => {
+            console.error("Failed to load signature image:", err);
+            resolve(null);
+        };
         img.src = whiteSignatureDataUrl;
     });
 };
@@ -108,8 +119,20 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     
     // --- 3. DATI INIZIALI ---
     const { navi = [], luoghi = [], veicoli = [] } = masterData;
-    const dataRapportino = rapportino.data ? format(rapportino.data.toDate(), 'dd MMMM yyyy', { locale: it }) : 'N/D';
     
+    let dateObject: Date | null = null;
+    if (rapportino.data) {
+        // Se è un Timestamp di Firestore, avrà un metodo toDate.
+        if (typeof (rapportino.data as any).toDate === 'function') {
+            dateObject = (rapportino.data as any).toDate();
+        } 
+        // Altrimenti, presumiamo sia un oggetto Date di JS o una stringa/numero convertibile.
+        else {
+            dateObject = new Date(rapportino.data as any);
+        }
+    }
+    const dataRapportino = dateObject ? format(dateObject, 'dd MMMM yyyy', { locale: it }) : 'N/D';
+
     const nave = rapportino.naveId === 'Nessuna' 
         ? 'Nessuna' 
         : navi.find(n => n.id === rapportino.naveId)?.nome || rapportino.naveId || '';
@@ -222,7 +245,9 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     col1Y += 5;
     if (rapportino.firmaVettoriale) {
         const processedSignature = await processSignatureForPdf(rapportino.firmaVettoriale);
-        doc.addImage(processedSignature, 'PNG', col1X, col1Y, 50, 20);
+        if (processedSignature) {
+            doc.addImage(processedSignature, 'PNG', col1X, col1Y, 50, 20);
+        }
     }
 
     // Colonna 2: Firma Tecnico

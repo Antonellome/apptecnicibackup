@@ -8,11 +8,13 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { MasterDataProvider } from './contexts/MasterDataProvider';
 import { GlobalDataProvider } from './contexts/GlobalDataProvider';
 import CssBaseline from '@mui/material/CssBaseline';
+import { GlobalStyles } from '@mui/material';
 
 function App() {
   return (
     <ThemeProvider>
       <CssBaseline />
+      <GlobalStyles styles={{ 'body::-webkit-scrollbar': { display: 'none' } }} />
       <AuthProvider>
         <SnackbarProvider>
           <MasterDataProvider>

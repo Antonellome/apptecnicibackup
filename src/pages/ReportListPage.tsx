@@ -90,31 +90,41 @@ const ReportListPage = () => {
     const userReports = reportsInMonth.filter(r => r.presenze && r.presenze.includes(userProfile.tecnicoId));
     userReports.sort((a, b) => b.data.getTime() - a.data.getTime());
     return userReports;
-  }, [currentMonth, userProfile], []) as Rapportino[];
+  }, [currentMonth, userProfile]);
 
-  const offlineSyncEvents = useLiveQuery(() => localDb.syncQueue.where('type').equals('rapportino').toArray(), [], []) as SyncEvent[];
+  const offlineSyncEvents = useLiveQuery(() => localDb.syncQueue.where('type').equals('rapportino').toArray(), []);
 
-  const displayedRapportini = useMemo(() => {
-      if (!masterData || !userProfile || !localRapportini) return [];
-      const enrichedLocal = localRapportini.map(r => enrichRapportino(r, masterData));
-      const localIds = new Set(localRapportini.map(r => r.id));
-      const offlineUnsynced = offlineSyncEvents
-          .map(event => {
-              const rapportinoPayload = event.payload as Rapportino;
-              const rapportinoDate = rapportinoPayload.data instanceof Timestamp ? rapportinoPayload.data.toDate() : new Date(rapportinoPayload.data as any);
-              if (isSameMonth(rapportinoDate, currentMonth) && !localIds.has(event.entityId)) {
-                 return enrichRapportino({ ...rapportinoPayload, id: event.entityId, isOffline: true }, masterData);
-              }
-              return null;
-          })
-          .filter((r): r is Omit<EnrichedRapportino, 'isClickable'> => r !== null);
-      const all = [...enrichedLocal, ...offlineUnsynced];
-      all.sort((a, b) => b.data.getTime() - a.data.getTime());
-      return all;
-  }, [localRapportini, offlineSyncEvents, masterData, userProfile, currentMonth]);
+ const displayedRapportini = useMemo(() => {
+    if (!masterData || !userProfile || !localRapportini || !offlineSyncEvents) return [];
 
-  if (masterDataLoading) return <FullScreenLoader message="Caricamento dati di base..." />;
-  if (masterDataError) return <Box sx={{ p: 4, textAlign: 'center' }}><Alert severity="error">Errore critico nei dati di base.</Alert></Box>;
+    const enrichedLocal = localRapportini.map(r => enrichRapportino(r, masterData));
+    const localIds = new Set(localRapportini.map(r => r.id));
+
+    const offlineUnsynced = offlineSyncEvents
+        .map(event => {
+            const rapportinoPayload = event.payload as Rapportino;
+            const rapportinoDate = rapportinoPayload.data instanceof Timestamp ? rapportinoPayload.data.toDate() : new Date(rapportinoPayload.data as any);
+            if (isSameMonth(rapportinoDate, currentMonth) && !localIds.has(event.entityId)) {
+                return enrichRapportino({ ...rapportinoPayload, id: event.entityId, isOffline: true }, masterData);
+            }
+            return null;
+        })
+        .filter((r): r is Omit<EnrichedRapportino, 'isClickable'> => r !== null);
+
+    const all = [...enrichedLocal, ...offlineUnsynced];
+    all.sort((a, b) => b.data.getTime() - a.data.getTime());
+    return all;
+}, [localRapportini, offlineSyncEvents, masterData, userProfile, currentMonth]);
+
+  const isLoading = masterDataLoading || !userProfile || localRapportini === undefined || offlineSyncEvents === undefined;
+
+  if (isLoading) {
+      return <FullScreenLoader message="Caricamento dei report..." />;
+  }
+
+  if (masterDataError) {
+      return <Box sx={{ p: 4, textAlign: 'center' }}><Alert severity="error">Errore nel caricamento dei dati. Riprova più tardi.</Alert></Box>;
+  }
 
   const handleMonthChange = (increment: number) => {
       setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + increment, 1));
@@ -134,7 +144,7 @@ const ReportListPage = () => {
 
       {syncState.loading && <Chip icon={<Sync />} label="Sincronizzazione in corso..." color="info" sx={{ mb: 2, width: '100%' }} />}
       {syncState.error && <Alert severity="warning" sx={{ mb: 2 }}>{syncState.error}</Alert>}
-      {offlineSyncEvents.length > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEvents.length} report non sincronizzati`} color="warning" sx={{ mb: 2, width: '100%' }}/>}
+      {offlineSyncEvents && offlineSyncEvents.length > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEvents.length} report non sincronizzati`} color="warning" sx={{ mb: 2, width: '100%' }}/>}
 
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
@@ -175,4 +185,4 @@ const ReportListPage = () => {
   );
 };
 
-export default ReportListPage;
+export default ReportListPage; 
