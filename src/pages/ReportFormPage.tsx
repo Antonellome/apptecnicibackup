@@ -848,7 +848,7 @@ const ReportFormPage: React.FC = () => {
 
 
                     <Box id="action-buttons" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4 }}>
-                        <Button variant="outlined" color="secondary" onClick={handleCancel} disabled={isSaving || isSharing}>Chiudi</Button>
+                        <Button variant="outlined" color="primary" onClick={handleCancel} disabled={isSaving || isSharing}>Chiudi</Button>
 
                         <Box sx={{ display: 'flex', gap: 2 }}>
                            {!isReadOnly && (
