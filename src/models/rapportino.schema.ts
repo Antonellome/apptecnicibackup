@@ -26,7 +26,7 @@ export const createRapportinoSchema = () => {
 
         attivitaSvolte: z.string().optional(),
 
-        stato: z.enum(['bozza', 'confermato'], { required_error: "Lo stato è obbligatorio." }),
+        stato: z.enum(['bozza', 'confermato'], { message: "Lo stato è obbligatorio." }),
 
         metadata: z.object({
             createdAt: z.date(),
