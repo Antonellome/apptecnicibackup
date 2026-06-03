@@ -1,5 +1,5 @@
 import { db } from '@/db/local-db';
-import { collection, doc, addDoc, Timestamp, runTransaction } from 'firebase/firestore';
+import { collection, doc, addDoc, runTransaction } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
 import { Rapportino, SyncEvent } from '@/models/definitions';
 
@@ -54,7 +54,7 @@ export const sincronizzaConFirebase = async () => {
       veicoloId: (payload as Rapportino).veicoloId || 'Nessuno',
       naveId: (payload as Rapportino).naveId || 'Nessuna',
       luogoId: (payload as Rapportino).luogoId || 'Nessuno',
-      updatedAt: Timestamp.now(),
+      updatedAt: new Date(),
     };
 
     try {
@@ -65,7 +65,7 @@ export const sincronizzaConFirebase = async () => {
         });
         console.log(`Rapportino con ID ${entityId} aggiornato con successo.`);
       } else {
-        const finalPayload = { ...rapportinoDaInviare, createdAt: Timestamp.now() };
+        const finalPayload = { ...rapportinoDaInviare, createdAt: new Date() };
         await addDoc(collection(firestoreDb, 'rapportini'), finalPayload);
         console.log(`Nuovo rapportino (da ${entityId}) creato con successo.`);
       }

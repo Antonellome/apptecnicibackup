@@ -165,7 +165,7 @@ const ReportListPage = () => {
                   <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
                       {report.isOffline && <Chip label="Offline" size="small" color="info" variant="outlined" />}
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        {report.tipoGiornata.nome}
+                        {report.tipoGiornata?.nome}
                       </Typography>
                   </Box>
                 </ListItem>

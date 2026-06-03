@@ -506,7 +506,7 @@ const ReportFormPage: React.FC = () => {
 
             const createReportObject = (giorno: Date): Omit<Rapportino, 'id'> => ({
                 nome: `Rapportino del ${format(giorno, 'dd/MM/yyyy')} - ${nomeTipoGiornata}`,
-                data: Timestamp.fromDate(giorno),
+                data: giorno,
                 oreLavoro: 8,
                 tecnicoId: loggedInTecnicoId,
                 tipoGiornataId,
@@ -527,8 +527,8 @@ const ReportFormPage: React.FC = () => {
                 firmaFirmatarioNome: '',
                 firmaFirmatarioSocieta: '',
                 firmaVettoriale: null,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
             });
 
             if (navigator.onLine) {
