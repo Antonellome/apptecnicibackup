@@ -19,6 +19,12 @@ import type { Tecnico, Nave, Luogo, EnrichedRapportino } from '@/models/definiti
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
 import { useMasterData } from '@/hooks/useMasterData';
+import { Timestamp } from 'firebase/firestore';
+
+// --- TYPE GUARD per Firestore Timestamp ---
+const isFirestoreTimestamp = (date: any): date is Timestamp => {
+    return date && typeof date.toDate === 'function';
+};
 
 interface RapportinoConCalcoli extends EnrichedRapportino {
   guadagno?: number;
@@ -39,7 +45,6 @@ interface GeneratedReportViewProps {
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(value);
 
-// --- STRUTTURA DATI FINALE PER IL RIEPILOGO DETTAGLIATO ---
 interface AggregatedActivity {
     tipoGiornataId: string;
     nomeAttivita: string;
@@ -71,7 +76,6 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
         }
     };
 
-    // --- LOGICA DI AGGREGAZIONE CON DETTAGLIO ORE ---
     const aggregatedData = useMemo(() => {
         if (!masterData) return [];
         const tipiGiornataMap = new Map<string, string>(masterData.tipiGiornata.map(t => [t.id, t.nome]));
@@ -134,7 +138,6 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                     <Typography variant="subtitle1" color="textSecondary">{dayjs(new Date(anno, mese - 1)).format('MMMM YYYY')}</Typography>
                 </Box>
 
-                {/* --- TABELLA DI RIEPILOGO: CON DETTAGLIO ORE --- */}
                 <Typography variant="h5" component="h3" sx={{ mt: 4, mb: 2 }}>Dettaglio Costi per Attività</Typography>
                 <TableContainer component={Paper} elevation={0} variant="outlined">
                     <Table size="small">
@@ -170,7 +173,6 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                     </Table>
                 </TableContainer>
 
-                {/* --- TABELLA DETTAGLIATA: COMPLETA E CORRETTA --- */}
                 <Typography variant="h5" component="h3" sx={{ mt: 4, mb: 2 }}>Dettaglio Giornaliero</Typography>
                 <TableContainer component={Paper} elevation={0} variant="outlined">
                     <Table size="small">
@@ -188,7 +190,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                         <TableBody>
                             {rapportini.map((r) => (
                                 <TableRow key={r.id}>
-                                    <TableCell>{dayjs('toDate' in r.data ? r.data.toDate() : r.data).format('DD/MM/YY')}</TableCell>
+                                    <TableCell>{dayjs(isFirestoreTimestamp(r.data) ? r.data.toDate() : r.data).format('DD/MM/YY')}</TableCell>
                                     <TableCell>{(r.naveId ? naviMap[r.naveId] : null) || (r.luogoId ? luoghiMap[r.luogoId] : null) || 'N/D'}</TableCell>
                                     <TableCell>{r.descrizioneBreve}</TableCell>
                                     <TableCell align="right">{r.oreGiorno?.toFixed(2) ?? '-'}</TableCell>

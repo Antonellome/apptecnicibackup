@@ -455,3 +455,13 @@ Ogni singola risposta dell'AI deve iniziare con la parola **"CIAO"**. Questa reg
 
 ***REGOLA DELLA SCRITTURA IN ITALIANO***
 L'IA DEVE SCRIVERE IN CHAT IN LINGUA ITALIANA.
+
+---
+
+## 5. Log di Lavoro AI
+
+### Sessione 1: Correzione Flusso Notifiche
+- **Obiettivo:** Risolvere l'errore `TS2339: Property 'addNotification' does not exist on type 'NotificationContextType'`.
+- **Analisi:** Il `NotificationProvider` è read-only da Firestore. `AppInitializer` non deve "aggiungere" notifiche manualmente. Il flusso corretto è che il listener `onSnapshot` del provider rilevi automaticamente le nuove notifiche.
+- **Azione 1 (Completata):** Modificato `src/utils/fcm.ts`. Semplificata `initializeForegroundMessageListener` rimuovendo il callback `addNotification`. Ora si limita a loggare il messaggio in arrivo, delegando l'aggiornamento dello stato al `NotificationProvider`.
+- **Azione 2 (In Corso):** Modificare `src/components/AppInitializer.tsx` per allinearlo alla nuova firma di `initializeForegroundMessageListener` e rimuovere la chiamata a `useNotifications` e `addNotification`, che causano l'errore di build.

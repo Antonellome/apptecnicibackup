@@ -8,25 +8,38 @@ import { useAuth } from '@/hooks/useAuth';
 import { format, isToday, isYesterday } from 'date-fns';
 import { it } from 'date-fns/locale/it';
 import { useTheme } from '@mui/material/styles';
+import { Timestamp } from 'firebase/firestore';
 
-interface NotificationItemProps {
-  notification: Notifica;
+// Usiamo Omit per ereditare da `Notifica` escludendo la proprietà `createdAt` che causa il conflitto,
+// per poi ridefinirla correttamente.
+interface EnrichedNotification extends Omit<Notifica, 'createdAt'> {
+  readBy?: Record<string, { readAt: Timestamp; tecnicoName: string }>;
+  createdAt: Timestamp | Date; // Ora possiamo definirla senza conflitti.
 }
 
-// Funzione formatDate resa più robusta
+interface NotificationItemProps {
+  notification: EnrichedNotification;
+}
+
 const formatDate = (timestamp: any) => {
-  // Controllo robusto: verifica che timestamp esista, sia un oggetto e abbia il metodo toDate.
-  if (!timestamp || typeof timestamp.toDate !== 'function') {
-    return 'Data non disponibile'; // Messaggio esplicito per dati mancanti o corrotti
+  if (!timestamp) return 'Data non disponibile';
+
+  let date: Date;
+  if (timestamp instanceof Timestamp) {
+    date = timestamp.toDate();
+  } else if (timestamp instanceof Date) {
+    date = timestamp;
+  } else {
+    return 'Data non valida';
   }
+
   try {
-    const date = timestamp.toDate();
     if (isToday(date)) return `Oggi alle ${format(date, 'HH:mm', { locale: it })}`;
     if (isYesterday(date)) return `Ieri alle ${format(date, 'HH:mm', { locale: it })}`;
     return format(date, 'd MMMM yyyy HH:mm', { locale: it });
   } catch (error) {
     console.error("Errore nella formattazione della data della notifica:", error);
-    return 'Data non valida'; // Fallback in caso di errore nella conversione
+    return 'Data non formattabile';
   }
 };
 
@@ -37,27 +50,24 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
   const theme = useTheme();
 
   const isUnread = useMemo(() => {
-    if (!user || !notification) return false; // Aggiunto controllo su notification
-    // L'architettura corretta (da implementare) userebbe una sottocollezione 'reads'.
-    // Per ora, ci atteniamo al modello esistente, gestendolo in modo sicuro.
+    if (!user?.uid || !notification) return false;
     return !notification.readBy || !notification.readBy[user.uid];
   }, [notification, user]);
 
   const handleAccordionChange = useCallback((_event: React.SyntheticEvent, isExpanded: boolean) => {
     setExpanded(isExpanded);
-    if (isExpanded && isUnread && notification?.id) { // Aggiunto controllo su notification.id
+    if (isExpanded && isUnread && notification?.id) {
       markAsRead(notification.id);
     }
   }, [isUnread, notification, markAsRead]);
 
   const handleHide = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (notification?.id) { // Aggiunto controllo su notification.id
+    if (notification?.id) {
         hideNotification(notification.id);
     }
   };
 
-  // Se la notifica è corrotta o non definita, non renderizzare nulla per sicurezza
   if (!notification) {
     return null;
   }

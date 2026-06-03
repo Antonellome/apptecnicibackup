@@ -1,7 +1,6 @@
 
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { app } from "@/firebase"; 
-import { AppNotification } from "@/models/definitions";
 
 const VAPID_KEY = "YOUR_VAPID_KEY_HERE"; // TODO: Replace with your VAPID key from Firebase Console
 
@@ -21,11 +20,11 @@ export const requestPermissionAndGetToken = async () => {
 
       if (currentToken) {
         console.log("FCM Token obtained:", currentToken);
-        // Logic to save the token to Firestore, associating it with the user, will go here
+        // In a real app, you would send this token to your server.
         return currentToken;
       } else {
         console.log(
-          "No registration token available. Request notification permission from the user."
+          "No registration token available. Request permission from the user."
         );
       }
     } else {
@@ -39,23 +38,12 @@ export const requestPermissionAndGetToken = async () => {
 
 /**
  * Initializes the listener for FCM messages received when the app is in the foreground.
- * @param addNotification Function to add the notification to the NotificationContext state.
  */
-export const initializeForegroundMessageListener = (addNotification: (notification: AppNotification) => void) => {
+export const initializeForegroundMessageListener = () => {
   const messaging = getMessaging(app);
   onMessage(messaging, (payload) => {
     console.log("Message received in foreground: ", payload);
-
-    const { notification, data } = payload;
-    if (notification && data && data.notificationId) {
-        const newNotification: AppNotification = {
-            id: data.notificationId as string,
-            title: notification.title || "New Notification",
-            message: notification.body || "",
-            createdAt: new Date(),
-            isRead: false,
-        };
-        addNotification(newNotification);
-    }
+    // The NotificationProvider, listening to Firestore, will handle the update.
+    // No direct client-side state manipulation is needed here.
   });
 };

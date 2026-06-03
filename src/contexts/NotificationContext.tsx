@@ -1,3 +1,4 @@
+
 import React, { useEffect, ReactNode, useMemo, useCallback, useReducer } from 'react';
 import {
   collection,
@@ -10,22 +11,22 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { AppNotification } from '@/models/definitions'; // <-- Usa la new interfaccia
+import { AppNotification } from '@/models/definitions'; // <-- UNICA FONTE DI VERITÀ
 import { NotificationContext, NotificationContextType } from './NotificationContextDefinition';
 
-interface FirebaseNotification {
-  id: string;
-  title: string;
-  body: string; // Allineato con AppNotification
-  createdAt: Timestamp;
-  target?: any;
-  readBy?: Record<string, { readAt: Timestamp; tecnicoName: string }>; // Oggetto/Mappa
+// --- Rimossa interfaccia locale FirebaseNotification ---
+
+// Aggiungiamo le proprietà che provengono da Firestore ma non sono in AppNotification
+type FirestoreNotification = AppNotification & {
+  readBy?: Record<string, { readAt: Timestamp; tecnicoName: string }>;
+  // createdAt potrebbe essere un Timestamp di Firestore
+  createdAt: Timestamp | Date;
 }
 
 // --- useReducer Implementation ---
 
 interface State {
-  allNotifications: FirebaseNotification[];
+  allNotifications: FirestoreNotification[];
   hiddenIds: string[];
   internalLoading: boolean;
   error: string | null;
@@ -33,7 +34,7 @@ interface State {
 
 type Action = 
   | { type: 'START_LOADING' }
-  | { type: 'SET_DATA', payload: FirebaseNotification[] }
+  | { type: 'SET_DATA', payload: FirestoreNotification[] }
   | { type: 'SET_ERROR', payload: string }
   | { type: 'RESET_STATE' }
   | { type: 'SET_HIDDEN_IDS', payload: string[] }
@@ -99,7 +100,16 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       try {
-        const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FirebaseNotification));
+        const allDocs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          // Normalizziamo il campo body a message per coerenza
+          const message = data.message || data.body || '';
+          return {
+            id: doc.id,
+            ...data,
+            message,
+          } as FirestoreNotification;
+        });
 
         const relevantNotifications = allDocs.filter(n => {
             if (!n.target) return false;
@@ -109,7 +119,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
             return false;
         });
 
-        relevantNotifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+        relevantNotifications.sort((a, b) => {
+          const timeA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : new Date(a.createdAt).getTime();
+          const timeB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : new Date(b.createdAt).getTime();
+          return timeB - timeA;
+        });
+
         dispatch({ type: 'SET_DATA', payload: relevantNotifications });
 
       } catch (err: any) {
@@ -129,7 +144,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const notificationRef = doc(db, "notifications", notificationId);
     
     try {
-      // Aggiorna usando la dot notation per non sovrascrivere
       await updateDoc(notificationRef, {
         [`readBy.${user.uid}`]: { 
           readAt: serverTimestamp(), 
@@ -150,16 +164,16 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const visibleNotifications = useMemo(() => {
     return state.allNotifications
       .filter(n => !state.hiddenIds.includes(n.id))
-      .map(n => ({
-        ...n,
-      } as AppNotification));
+      .map(n => ({ ...n } as AppNotification)); // Il cast ora è sicuro
   }, [state.allNotifications, state.hiddenIds]);
 
   const unreadCount = useMemo(() => {
     if (!userUid) return 0;
-    // Conta le notifiche dove l'ID dell'utente NON è una chiave in readBy
-    return visibleNotifications.filter(n => !n.readBy || !n.readBy[userUid]).length;
-  }, [visibleNotifications, userUid]);
+    // Ora usiamo il tipo corretto `FirestoreNotification` che ha `readBy`
+    return state.allNotifications
+        .filter(n => !state.hiddenIds.includes(n.id))
+        .filter(n => !n.readBy || !n.readBy[userUid]).length;
+  }, [state.allNotifications, state.hiddenIds, userUid]);
 
   const value: NotificationContextType = useMemo(() => ({
     notifications: visibleNotifications,
