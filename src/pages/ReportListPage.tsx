@@ -22,7 +22,7 @@ import { db as localDb } from '@/db/local-db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
-import { Rapportino, EnrichedRapportino, SyncEvent, MasterData } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, MasterData } from '@/models/definitions';
 import FullScreenLoader from '@/components/FullScreenLoader';
 
 const enrichRapportino = (rapportino: Partial<Rapportino> & { id: string, isOffline?: boolean }, masterData: MasterData): Omit<EnrichedRapportino, 'isClickable'> => {
@@ -119,7 +119,7 @@ const ReportListPage = () => {
   const isLoading = masterDataLoading || !userProfile || localRapportini === undefined || offlineSyncEvents === undefined;
 
   if (isLoading) {
-      return <FullScreenLoader message="Caricamento dei report..." />;
+      return <FullScreenLoader />;
   }
 
   if (masterDataError) {

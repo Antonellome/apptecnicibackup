@@ -68,7 +68,7 @@ function globalDataReducer(state: GlobalDataState, action: Action): GlobalDataSt
 }
 
 // --- SUBSCRIBER FUNCTIONS (CLASSIC FUNCTION SYNTAX) ---
-function subscribeToCollectionWithConverter<T extends { nome?: string }>(
+function subscribeToCollectionWithConverter<T extends { id: string; nome?: string }>(
   dispatch: React.Dispatch<Action>,
   collectionName: CollectionName,
   sortData: boolean,
@@ -88,7 +88,7 @@ function subscribeToCollectionWithConverter<T extends { nome?: string }>(
   });
 }
 
-function subscribeToCollection<T extends { nome?: string }>(
+function subscribeToCollection<T extends { id: string; nome?: string }>(
   dispatch: React.Dispatch<Action>,
   collectionName: CollectionName,
   sortData: boolean

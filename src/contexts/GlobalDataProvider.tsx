@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, DocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import type { 
@@ -17,6 +17,23 @@ import type {
     Qualifica, 
     Documento
 } from '@/models/definitions';
+
+// --- FUNZIONE DI CONVERSIONE SICURA ---
+const docToRapportino = (doc: DocumentSnapshot): Rapportino => {
+    const data = doc.data()!;
+    const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+    const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date();
+    const dataRapportino = data.data instanceof Timestamp ? data.data.toDate() : new Date();
+
+    return {
+        id: doc.id,
+        ...data,
+        data: dataRapportino,
+        createdAt,
+        updatedAt,
+    } as Rapportino;
+};
+
 
 // --- CONTEXT INTERFACE ---
 export interface IGlobalDataContext {
@@ -67,7 +84,6 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [documenti, setDocumenti] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // List of collections to sync automatically, excluding 'rapportini'
   const collectionsToSync = useMemo(() => [
     { name: 'tecnici', setter: setTecnici },
     { name: 'ditte', setter: setDitte },
@@ -82,80 +98,66 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     { name: 'documenti', setter: setDocumenti },
   ], []);
 
-  // --- DATA FETCHING EFFECTS ---
-
-  // Effect for general collections
   useEffect(() => {
     if (!user) {
       setLoading(false);
-      // Clear data on logout
       collectionsToSync.forEach(({ setter }) => setter([]));
-      setRapportini([]); // Also clear rapportini
+      setRapportini([]);
       return;
     }
 
     setLoading(true);
-    let pendingLoads = collectionsToSync.length + 1; // +1 for rapportini
+    const unsubscribes: (() => void)[] = [];
 
-    const handleLoadFinished = () => {
-      pendingLoads--;
-      if (pendingLoads === 0) {
-        setLoading(false);
+    // Generic listener for simple collections
+    collectionsToSync.forEach(({ name, setter }) => {
+      const collRef = collection(db, name as string);
+      const unsubscribe = onSnapshot(collRef, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setter(data as any[]); 
+      }, (error) => {
+        console.error(`Error fetching ${name}:`, error);
+      });
+      unsubscribes.push(unsubscribe);
+    });
+
+    // Specialized listeners for 'rapportini'
+    const queries = [
+      query(collection(db, 'rapportini'), where("tecnicoId", "==", user.uid)),
+      query(collection(db, 'rapportini'), where("presenze", "array-contains", user.uid))
+    ];
+
+    let rapportiniLoaded = false;
+    const handleRapportiniSnapshot = (snapshot: any) => {
+      const newRapportini = snapshot.docs.map(docToRapportino);
+      setRapportini(prevRapportini => {
+        const rapportiniMap = new Map(prevRapportini.map((r: Rapportino) => [r.id, r]));
+        newRapportini.forEach((r: Rapportino) => rapportiniMap.set(r.id, r));
+        return Array.from(rapportiniMap.values());
+      });
+      if (!rapportiniLoaded) {
+        rapportiniLoaded = true;
+        if (unsubscribes.length === collectionsToSync.length) setLoading(false);
       }
     };
 
-    // Subscribe to general collections
-    const unsubscribes = collectionsToSync.map(({ name, setter }) => {
-      const collRef = collection(db, name as string);
-      return onSnapshot(collRef, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setter(data as any[]);
-        handleLoadFinished();
-      }, (error) => {
-        console.error(`Error fetching ${name}:`, error);
-        handleLoadFinished();
-      });
+    queries.forEach(q => {
+        const unsubscribe = onSnapshot(q, handleRapportiniSnapshot, (error) => {
+            console.error("Error fetching rapportini:", error);
+        });
+        unsubscribes.push(unsubscribe);
     });
-
-    // Specialized effect for 'rapportini' based on user ID
-    const rapportiniRef = collection(db, 'rapportini');
-    const q_owner = query(rapportiniRef, where("userId", "==", user.uid));
-    const q_participant = query(rapportiniRef, where("partecipantiIds", "array-contains", user.uid));
-
-    const unsubOwner = onSnapshot(q_owner, (snapshot) => {
-        const ownerRapportini = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Rapportino[];
-        setRapportini(prev => {
-            const combined = new Map([...prev.map(r => [r.id, r]), ...ownerRapportini.map(r => [r.id, r])]);
-            return Array.from(combined.values());
-        });
-    }, error => console.error("Error fetching owner rapportini:", error));
-
-    const unsubParticipant = onSnapshot(q_participant, (snapshot) => {
-        const participantRapportini = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Rapportino[];
-        setRapportini(prev => {
-            const combined = new Map([...prev.map(r => [r.id, r]), ...participantRapportini.map(r => [r.id, r])]);
-            return Array.from(combined.values());
-        });
-    }, error => console.error("Error fetching participant rapportini:", error));
     
-    // Initial load for rapportini is tricky with two queries, we'll just mark it done once.
-    handleLoadFinished();
-
-    // Cleanup function
     return () => {
       unsubscribes.forEach(unsub => unsub());
-      unsubOwner();
-      unsubParticipant();
     };
 
   }, [user, collectionsToSync]);
 
-  // --- MEMOIZED MAPS ---
   const ditteMap = useMemo(() => new Map(ditte.map(d => [d.id, d])), [ditte]);
   const categorieMap = useMemo(() => new Map(categorie.map(c => [c.id, c])), [categorie]);
   const tecniciMap = useMemo(() => new Map(tecnici.map(t => [t.id, t])), [tecnici]);
 
-  // --- CONTEXT VALUE ---
   const value: IGlobalDataContext = {
     rapportini, tecnici, ditte, categorie, veicoli, clienti, tipiGiornata, navi, luoghi, webAppUsers, qualifiche, documenti,
     ditteMap, categorieMap, tecniciMap,

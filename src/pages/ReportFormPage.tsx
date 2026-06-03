@@ -577,7 +577,7 @@ const ReportFormPage: React.FC = () => {
         await proceedToSave();
     };
 
-    const handleShare = async (idToUse?: string) => {
+    const handleShare = async () => {
         setIsSharing(true);
         setIsPdfPreviewOpen(true);
         if (pdfUrl) URL.revokeObjectURL(pdfUrl);
@@ -609,7 +609,7 @@ const ReportFormPage: React.FC = () => {
         const savedId = await salvaOAccodaRapportino({ navigateOnSuccess: false });
     
         if (savedId) {
-            await handleShare(savedId);
+            await handleShare();
         }
     };
 
@@ -901,7 +901,7 @@ const ReportFormPage: React.FC = () => {
                 onClose={() => setIsConfirmSaveDialogOpen(false)}
                 onConfirm={handleConfirmSave}
                 title="Conferma Salvataggio Firma"
-                message="Sei sicuro di voler salvare? La firma non potrà più essere modificata dopo il primo salvataggio."
+                description="Sei sicuro di voler salvare? La firma non potrà più essere modificata dopo il primo salvataggio."
             />
         </LocalizationProvider>
     );

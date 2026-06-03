@@ -149,7 +149,7 @@ const MonthlyReportPage = () => {
     const isLoadingPage = !localAnagrafiche || !impostazioniLocali || !masterData;
 
     if (isLoadingPage) {
-        return <FullScreenLoader message="Caricamento dati dalla cache locale..." />;
+        return <FullScreenLoader />;
     }
 
     return (

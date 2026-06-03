@@ -87,7 +87,7 @@ vi.mock('firebase/firestore', async (importOriginal) => {
         addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })),
         updateDoc: vi.fn(), 
         collection: vi.fn(),
-        runTransaction: vi.fn((db, callback) => callback({})), // Mock transaction
+        runTransaction: vi.fn((_db, callback) => callback({})), // Corrected: unused _db
         Timestamp: { fromDate: (date: Date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 }), now: () => ({ seconds: Date.now() / 1000, nanoseconds: 0 })},
     }
 });
@@ -115,7 +115,6 @@ vi.mock('react-signature-canvas', () => {
 describe('ReportFormPage', () => {
   beforeEach(() => {
      vi.clearAllMocks();
-     (addDoc as any).mockClear();
   });
 
   it('dovrebbe corrispondere allo snapshot nello stato iniziale', async () => {
@@ -151,7 +150,7 @@ describe('ReportFormPage', () => {
     });
 
     // Verify the content of the submitted data
-    const submittedData = (addDoc as any).mock.calls[0][1];
+    const submittedData = (vi.mocked(addDoc)).mock.calls[0][1];
     expect(submittedData).toEqual(expect.objectContaining({
         tecnicoId: 'test-uid',
         tipoGiornataId: 'tg1',
