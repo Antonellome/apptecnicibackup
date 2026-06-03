@@ -1,55 +1,66 @@
-# Blueprint Operativo dell'Assistente AI
+# Blueprint Applicazione Tecnici & Contratto Dati Rapportini
 
-**Versione:** 1.1
-
-## 1. Introduzione e Scopo
-
-Questo documento definisce le capacità e le regole operative dell'AI, con l'obiettivo di garantire trasparenza, efficienza e allineamento con le esigenze dell'utente. L'AI deve attenersi scrupolosamente a questo blueprint.
-
-## 2. Regole Fondamentali
-
-- **Seguire il Blueprint:** Il blueprint è la fonte di verità. L'AI deve leggerlo all'inizio di ogni sessione e aggiornarlo costantemente per tracciare ogni modifica funzionale o tecnica.
-- **Codice Pulito e Funzionante:** L'AI è responsabile della qualità del codice che produce. Ogni modifica deve essere testata e non deve introdurre errori di compilazione o runtime.
-- **Comunicazione Chiara:** L'AI deve comunicare le sue azioni in modo chiaro e conciso, ammettendo immediatamente eventuali errori e proponendo un piano di remediation.
+**Versione:** 1.0
+**Data:** 24 Maggio 2024
 
 ---
 
-## Registro Attività e Piano di Lavoro
+## 1. Scopo dell'Applicazione
 
-### Attività Completate
+Questo documento serve come fonte unica di verità per l'architettura, le funzionalità e, soprattutto, il contratto dati dell'applicazione per i tecnici. L'obiettivo principale dell'app è permettere ai tecnici la creazione, gestione e consultazione dei loro rapportini di lavoro, con un'enfasi fondamentale sul supporto completo anche in modalità offline.
 
-1.  **Fix - Pagina Impostazioni (Tariffe):**
-    - **Problema:** Il pulsante "Salva" si attivava solo dopo aver perso il focus dal campo di input.
-    - **Soluzione:** Implementato un meccanismo (`onDirty`, `SET_DIRTY`) per abilitare immediatamente il pulsante non appena l'utente inizia a digitare nel campo, migliorando il feedback visivo.
+## 2. Contratto Dati Finale (Versione Accettata)
 
-2.  **Fix - Pagina Check-in (Multiplo):**
-    - **Problema:** Un blocco `window.confirm` non funzionante impediva di effettuare un secondo check-in nello stesso giorno.
-    - **Soluzione:** Rimosso il blocco di conferma. La logica di sovrascrittura è ora gestita correttamente dall'opzione `{ merge: true }` di Firestore, permettendo aggiornamenti fluidi della postazione di lavoro.
+Questa sezione definisce la struttura dati **ufficiale e non negoziabile** per i documenti `rapportini` scambiati tra l'App Tecnici e l'App Master.
 
-### In Corso - Debito Tecnico
+### Struttura JSON
 
-1.  **Migrazione da MUI Grid v1 a Grid v2:**
-    - **Obiettivo:** Allineare l'intero progetto alla versione più recente del componente `Grid` di Material-UI (v7), eliminando il `GridLegacy` deprecato per migliorare la stabilità e la manutenibilità.
-    - **Stato:** In esecuzione.
-    - **Azione Immediata:** Eseguire il codemod ufficiale fornito da MUI per automatizzare la migrazione su tutta la codebase.
-    - **Comando da Eseguire:**
-      ```sh
-      npx @mui/codemod@next v7.0.0/grid-props src/
-      ```
-    - **Riferimento:** Documentazione ufficiale MUI sulla migrazione a Grid v2.
+```json
+{
+  "id": "string",
+  "idTecnico": "string",
+  "nomeTecnico": "string",
+  "data": "Timestamp",
+  "idTipoGiornata": "string",
+  "descrizioneTipoGiornata": "string",
+  "oreLavorate": "number",
+  "sede": {
+    "idLuogo": "string | null",
+    "descrizioneLuogo": "string | null",
+    "idNave": "string | null",
+    "nomeNave": "string | null"
+  },
+  "attivitaSvolte": "string",
+  "stato": "string",
+  "metadata": {
+    "createdAt": "Timestamp",
+    "updatedAt": "Timestamp",
+    "createdBy": "string"
+  }
+}
+```
 
-### Prossimi Passi
+### Suddivisione delle Responsabilità
 
-- **Implementazione Coda di Condivisione:** Progettazione e sviluppo della funzionalità per la condivisione massiva di documenti (es. rapportini PDF).
-- **Ottimizzazione Performance:** Analisi e miglioramento delle performance generali dell'applicazione.
+*   **RESPONSABILITÀ APP TECNICI:**
+    *   Garantire che ogni rapportino inviato a Firestore segua scrupolosamente la struttura JSON definita sopra.
+    *   **NON includere** l'oggetto `cliente`.
+    *   **NON includere** l'oggetto `trasferta`.
+    *   Mantenere la nostra logica interna più ricca (es. `dettaglioOreTecnici`, `firma`, etc.) che non viene inviata se non mappata esplicitamente.
 
----
+*   **RESPONSABILITÀ APP MASTER:**
+    *   Ricevere il dato pulito dall'App Tecnici.
+    *   Arricchire il documento con le informazioni sul **cliente**, seguendo le proprie logiche di attribuzione basate su `idNave` o `idLuogo`.
 
-## Architettura e Funzionalità Principali
+## 3. Piano di Implementazione
 
-*(Questa sezione riassume l'architettura PWA Offline-First basata su React, Firebase e IndexedDB. Per i dettagli, fare riferimento alle sezioni specifiche del codice sorgente.)*
+Per allineare l'applicazione al contratto dati finale, verranno eseguiti i seguenti passaggi:
 
-- **Backend:** Firebase (Authentication, Firestore, Cloud Messaging)
-- **Frontend:** React, Vite, Material-UI
-- **Database Locale:** IndexedDB (tramite Dexie.js)
-- **Principio Chiave:** L'applicazione garantisce l'operatività offline, sincronizzando i dati con Firestore non appena la connessione torna disponibile.
+1.  **Modifica Schema Dati (`src/models/rapportino.schema.ts`):** Aggiornare lo schema Zod per riflettere la struttura concordata. Questo include:
+    *   Riorganizzare i campi `luogoId` e `naveId` all'interno di un oggetto `sede`.
+    *   Assicurare la presenza di tutti i campi obbligatori (`id`, `idTecnico`, `nomeTecnico`, `stato`, `metadata`, etc.).
+    *   Rimuovere esplicitamente ogni riferimento a `cliente` e `trasferta` dallo schema di base da sincronizzare.
+
+2.  **Modifica Logica di Creazione Report:** Adattare la funzione di submit del form (presumibilmente in `src/pages/ReportFormPage.tsx` o file collegati) per costruire l'oggetto `rapportino` secondo il nuovo schema prima del salvataggio/invio.
+
+3.  **Verifica Funzionalità:** Testare che la creazione, il salvataggio (online e in coda offline) e la visualizzazione dei report continuino a funzionare senza regressioni e che i dati generati siano conformi al 100%.

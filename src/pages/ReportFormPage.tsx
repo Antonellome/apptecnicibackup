@@ -31,6 +31,8 @@ import { generateRapportinoPDF } from '@/services/rapportinoPDFGenerator';
 import { shareOrDownload } from '@/services/shareService';
 import dayjs from 'dayjs';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
+import { v4 as uuidv4 } from 'uuid';
+import { createRapportinoSchema, RapportinoSchema } from '@/models/rapportino.schema';
 
 const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'permesso', 'legge 104'];
 const MULTI_DAY_ALLOWED_KEYWORDS = ['ferie', 'malattia'];
@@ -376,37 +378,56 @@ const ReportFormPage: React.FC = () => {
         setDettaglioOre(prev => prev.filter(d => d.tecnicoId !== tecnicoIdToRemove));
     };
 
-    const getFullReportData = (dataPerReport: Date = dataInizio || new Date()): Omit<Rapportino, 'id'> => {
-        const mainTecnicoDetail = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId)!;
-        const oreLavoroTotali = dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0);
+    const getFullReportData = (): RapportinoSchema | null => {
+        if (!loggedInTecnicoId || !tecnicoScrivente || !dataInizio)
+        {
+            showSnackbar("Dati utente o data mancanti.", "error");
+            return null;
+        }
 
+        const tipoGiornataSelezionato = tipiGiornata.find(t => t.id === tipoGiornataId);
         const naveSelezionata = navi.find(n => n.id === naveId);
         const luogoSelezionato = luoghi.find(l => l.id === luogoId);
 
-        const nomeDestinazione = naveId === 'Nessuna' ? 'Nessuna' : (naveSelezionata?.nome || (luogoId === 'Nessuno' ? 'Nessuno' : luogoSelezionato?.nome || 'Generico'));
-        const nomeReport = `Rapportino del ${format(dataPerReport, 'dd/MM/yyyy')} - ${nomeDestinazione}`;
-
-        return {
-            nome: nomeReport,
-            data: Timestamp.fromDate(dataPerReport),
-            oreLavoro: oreLavoroTotali,
-            tecnicoId: loggedInTecnicoId!,
-            tipoGiornataId,
-            isTrasferta: mainTecnicoDetail.isManual, // Questo potrebbe essere riconsiderato
-            dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => ({...rest, ore: parseFloat(String(rest.ore)) || 0 })),
-            presenze: dettaglioOre.map(d => d.tecnicoId),
-            veicoloId: veicoloId || 'Nessuno',
-            naveId: naveId || 'Nessuna',
-            luogoId: luogoId || 'Nessuno',
-            descrizioneBreve: descrizioneBreve || '',
-            lavoroEseguito: lavoroEseguito || '',
-            materialiImpiegati: materialiImpiegati || '',
-            firmaFirmatarioNome: firmaFirmatarioNome || '',
-            firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
-            firmaVettoriale: firmaVettoriale || null,
-            createdAt: originalReport?.createdAt ? (originalReport.createdAt instanceof Timestamp ? originalReport.createdAt : Timestamp.fromDate(new Date(originalReport.createdAt))) : Timestamp.now(),
-            updatedAt: Timestamp.now(),
+        const dataToValidate: Partial<RapportinoSchema> = {
+            id: isEditMode ? reportId! : uuidv4(),
+            idTecnico: loggedInTecnicoId,
+            nomeTecnico: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim(),
+            data: dayjs(dataInizio),
+            idTipoGiornata: tipoGiornataId,
+            descrizioneTipoGiornata: tipoGiornataSelezionato?.nome || 'N/D',
+            oreLavorate: dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0),
+            sede: {
+                idLuogo: luogoId || null,
+                descrizioneLuogo: luogoSelezionato?.nome || null,
+                idNave: naveId || null,
+                nomeNave: naveSelezionata?.nome || null,
+            },
+            attivitaSvolte: lavoroEseguito || '',
+            stato: 'confermato',
+            metadata: {
+                createdAt: originalReport?.createdAt instanceof Date ? originalReport.createdAt : new Date(),
+                updatedAt: new Date(),
+                createdBy: loggedInTecnicoId,
+            },
+            // Campi specifici App Tecnici (non per App Master)
+            dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => ({ ...rest, ore: parseFloat(String(rest.ore)) || 0 })),
+            veicoloId: veicoloId || undefined,
+            materialiImpiegati: materialiImpiegati || undefined,
+            firma: firmaVettoriale || undefined,
         };
+        
+        const rapportinoSchema = createRapportinoSchema();
+        const validation = rapportinoSchema.safeParse(dataToValidate);
+
+        if (!validation.success) {
+            const firstError = validation.error.errors[0];
+            console.error("Errore di validazione Zod:", validation.error);
+            showSnackbar(`Errore di validazione: ${firstError.path.join('.')} - ${firstError.message}`, "error");
+            return null;
+        }
+
+        return validation.data;
     };
 
     const salvaOAccodaRapportino = async (options: { navigateOnSuccess: boolean } = { navigateOnSuccess: true }): Promise<string | null> => {
@@ -437,9 +458,11 @@ const ReportFormPage: React.FC = () => {
         setIsSaving(true);
         try {
             let finalId: string | undefined | null = reportId;
+            const reportData = getFullReportData();
+
+            if (!reportData) return null; // La validazione è fallita
 
             if (navigator.onLine && !isOfflineMode) {
-                const reportData = getFullReportData();
                 if (isEditMode && reportId) {
                     await runTransaction(firestoreDb, async (transaction) => {
                         const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
@@ -451,7 +474,6 @@ const ReportFormPage: React.FC = () => {
                     finalId = docRef.id;
                 }
             } else {
-                const reportData = getFullReportData();
                 finalId = await aggiungiAllaCoda(reportData, reportId);
             }
 
@@ -562,13 +584,10 @@ const ReportFormPage: React.FC = () => {
 
         try {
             const reportDataForPdf = getFullReportData();
-            const finalReportData = {
-                 id: idToUse || reportId || 'N/D (Offline)',
-                 ...reportDataForPdf
-            } as Rapportino;
+            if (!reportDataForPdf) throw new Error("Dati del report invalidi per la generazione del PDF.")
 
             if (!masterData) throw new Error("Dati anagrafici non disponibili per la generazione del PDF.");
-            const pdfBlob = await generateRapportinoPDF(finalReportData, masterData as MasterData);
+            const pdfBlob = await generateRapportinoPDF(reportDataForPdf as Rapportino, masterData as MasterData);
             const newPdfUrl = URL.createObjectURL(pdfBlob);
             setPdfUrl(newPdfUrl);
         } catch (error) {
