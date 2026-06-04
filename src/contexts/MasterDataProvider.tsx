@@ -6,6 +6,7 @@ import { db } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box, Typography, Button } from '@mui/material';
 import { MasterDataContext } from './MasterDataContext';
+import { useAuth } from '../hooks/useAuth'; // Importa l'hook di autenticazione
 
 const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni'>)[] = [
     'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti', 'sedi', 'ditte', 'categorie'
@@ -103,6 +104,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const [masterData, setMasterData] = useState<MasterData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any | null>(null);
+    const { user, loading: authLoading } = useAuth(); // Usa l'hook di autenticazione
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -147,8 +149,15 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     }, []);
 
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        // Esegui il caricamento dei dati master SOLO se l'autenticazione è completata e c'è un utente
+        if (!authLoading && user) {
+            loadData();
+        } else if (!authLoading && !user) {
+            // Se l'autenticazione è finita ma non c'è utente (es. pagina di login), non facciamo nulla
+            // e consideriamo il caricamento "finito" per questo provider.
+            setLoading(false);
+        }
+    }, [authLoading, user, loadData]);
 
     const contextValue = useMemo(() => ({
         masterData, 
@@ -157,7 +166,8 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         refetchData: loadData 
     }), [masterData, loading, error, loadData]);
 
-    if (loading && !masterData) return <FullScreenLoader />;
+    // Durante il caricamento dell'autenticazione, mostriamo un loader
+    if (authLoading || (loading && !masterData && !error)) return <FullScreenLoader />;
     
     if (error) {
         return (
@@ -180,6 +190,13 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         );
     }
 
+    // Se non stiamo caricando l'autenticazione e non c'è utente (siamo sulla pagina di login),
+    // renderizziamo i children senza dati master.
+    if (!user) {
+        return <>{children}</>; // Utile per le pagine pubbliche come il Login
+    }
+
+    // Se l'utente è loggato ma i dati non sono ancora pronti, mostriamo il loader.
     if (!masterData) return <FullScreenLoader />;
 
     return (

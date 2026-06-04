@@ -178,12 +178,11 @@ export interface EnrichedRapportino extends Rapportino {
     tecnico?: Tecnico;
     tipoGiornata?: TipoGiornata;
     veicolo?: Veicolo;
-    nave?: Nave;
-    luogo?: Luogo;
     isOffline: boolean;
     isEditable: boolean;
     oreGiorno?: number;
-    destinazione?: string;
+    naveNome?: string; // CAMPO AGGIUNTO
+    luogoNome?: string; // CAMPO AGGIUNTO
     tecnicoScrivente?: Tecnico;
     isClickable?: boolean;
 }

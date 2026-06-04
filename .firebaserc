@@ -2,6 +2,14 @@
   "projects": {
     "default": "riso-project-app"
   },
-  "targets": {},
+  "targets": {
+    "riso-project-app": {
+      "hosting": {
+        "mio-target": [
+          "tecnici"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

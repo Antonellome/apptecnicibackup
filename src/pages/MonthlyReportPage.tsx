@@ -10,17 +10,23 @@ import {
   TableCell,
   TableContainer,
   TableRow,
-  Grid
+  Grid,
+  CircularProgress,
+  Tooltip
 } from '@mui/material';
+import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData, Tecnico } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
 import DettaglioCostiTipoGiornata from '@/components/Rapportini/DettaglioCostiTipoGiornata';
 import FullScreenLoader from '@/components/FullScreenLoader';
+import { generateMonthlyReportPDF } from '@/services/monthlyReportGenerator';
+import { shareOrDownload } from '@/services/shareService';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 
 
 // --- STRUTTURA DATI (INVARIATA) ---
@@ -41,6 +47,8 @@ export interface RiepilogoMese {
 const MonthlyReportPage = () => {
     const { userProfile } = useAuth();
     const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const { showSnackbar } = useSnackbar();
 
     const localAnagrafiche = useLiveQuery(() => db.anagrafiche.toArray(), [], null);
     const impostazioniLocali = useLiveQuery(() => db.tariffe_locali.get('main'), [], null);
@@ -70,17 +78,22 @@ const MonthlyReportPage = () => {
 
     const rapportiniArricchiti = useMemo(() => {
         if (!rapportiniLocali || !masterData || !userProfile) return [];
+
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
+        const naviMap = new Map(masterData.navi.map((n) => [n.id, n.nome]));
+        const luoghiMap = new Map(masterData.luoghi.map((l) => [l.id, l.nome]));
         
         return rapportiniLocali.map(report => {
             const oreLavoro = report.dettaglioOreTecnici?.find(d => d.tecnicoId === userProfile.tecnicoId)?.ore ?? report.oreLavoro ?? 0;
             const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId);
-
+            
             return {
                 ...report,
                 data: new Date(report.data),
                 tipoGiornata: tipoGiornata,
                 oreGiorno: oreLavoro,
+                naveNome: report.naveId ? naviMap.get(report.naveId) : undefined,
+                luogoNome: report.luogoId ? luoghiMap.get(report.luogoId) : undefined,
             } as EnrichedRapportino;
         });
     }, [rapportiniLocali, masterData, userProfile]);
@@ -144,6 +157,32 @@ const MonthlyReportPage = () => {
     const handleMonthChange = (increment: number) => {
         setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
     };
+    
+    const handleGenerateMonthlyReport = async () => {
+        if (!rapportiniArricchiti || rapportiniArricchiti.length === 0 || !riepilogoMese) {
+            showSnackbar('Nessun dato valido da includere nel PDF.', 'info');
+            return;
+        }
+
+        const tecnico = masterData?.tecnici?.find(t => t.id === userProfile?.tecnicoId);
+
+        if (!tecnico) {
+            showSnackbar('Profilo tecnico non trovato nei dati locali.', 'error');
+            return;
+        }
+    
+        setIsGeneratingPdf(true);
+        try {
+            const pdfBlob = await generateMonthlyReportPDF(rapportiniArricchiti, riepilogoMese, tecnico, currentMonth);
+            const fileName = `Riepilogo_Mensile_${tecnico.cognome}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.pdf`;
+            await shareOrDownload(pdfBlob, fileName);
+        } catch (error) {
+            console.error("Errore durante la generazione del PDF mensile:", error);
+            showSnackbar('Si è verificato un errore durante la creazione del report.', 'error');
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+      };
 
     const isNextButtonDisabled = isSameMonth(currentMonth, new Date());
     const isLoadingPage = !localAnagrafiche || !impostazioniLocali || !masterData;
@@ -154,9 +193,28 @@ const MonthlyReportPage = () => {
 
     return (
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
-            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
-                Report Mensile
-            </Typography>
+            <Grid container justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Grid size="auto">
+                    <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+                        Report Mensile
+                    </Typography>
+                </Grid>
+                <Grid size="auto">
+                    <Tooltip title="Genera riepilogo PDF del mese corrente">
+                        <span> {/* Span necessario per il Tooltip su un bottone disabilitato */}
+                        <Button 
+                            variant="outlined" 
+                            startIcon={isGeneratingPdf ? <CircularProgress size={20}/> : <PdfIcon/>}
+                            onClick={handleGenerateMonthlyReport}
+                            disabled={isGeneratingPdf || !riepilogoMese}
+                        >
+                        Genera Mensile
+                        </Button>
+                        </span>
+                    </Tooltip>
+                </Grid>
+            </Grid>
+
             <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
                 <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>

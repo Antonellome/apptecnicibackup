@@ -226,6 +226,63 @@ const SettingsPage: React.FC = () => {
         <Box sx={{ maxWidth: 800, mx: 'auto', p: { xs: 2, sm: 3 } }}>
             <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>Impostazioni</Typography>
 
+            <Accordion elevation={3} sx={{ mb: 4 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6">Guida App Tecnici</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                    <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2, mb: 2 }}>
+                        <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Installazione App</Typography>
+                        <Typography paragraph>
+                            Per un accesso più rapido, puoi installare questa applicazione sulla schermata principale del tuo dispositivo, come se fosse un'app nativa.
+                        </Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Android:</Typography>
+                        <Typography paragraph>
+                            Apri il menu del browser (i tre puntini in alto a destra) e seleziona "Installa app" o "Aggiungi a schermata Home".
+                        </Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>iOS (iPhone/iPad):</Typography>
+                        <Typography paragraph>
+                            Tocca il pulsante di condivisione (il quadrato con la freccia verso l'alto) nella barra di navigazione di Safari e scorri fino a trovare "Aggiungi a Home".
+                        </Typography>
+                    </Box>
+
+                    <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2, mb: 2 }}>
+                        <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Funzionalità delle Pagine</Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Home:</Typography>
+                        <Typography paragraph>
+                            La pagina principale da cui puoi navigare verso tutte le sezioni principali dell'app.
+                        </Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Nuovo Report:</Typography>
+                        <Typography paragraph>
+                            Crea un nuovo rapporto di intervento, inserendo tutti i dettagli necessari.
+                        </Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>I Miei Report:</Typography>
+                        <Typography paragraph>
+                            Consulta lo storico di tutti i tuoi report inviati.
+                        </Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Report Mensili:</Typography>
+                        <Typography paragraph>
+                            Visualizza un riepilogo mensile delle tue attività.
+                        </Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Notifiche:</Typography>
+                        <Typography paragraph>
+                            Leggi le comunicazioni importanti inviate dall'azienda.
+                        </Typography>
+                        <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Check-in:</Typography>
+                        <Typography paragraph>
+                            Registra l'inizio e la fine delle tue attività giornaliere.
+                        </Typography>
+                    </Box>
+
+                    <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2 }}>
+                        <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Modalità Offline</Typography>
+                        <Typography paragraph>
+                            L'applicazione è progettata per funzionare anche senza una connessione a Internet. Puoi continuare a creare report e utilizzare le altre funzionalità. I dati verranno sincronizzati automaticamente non appena il dispositivo tornerà online.
+                        </Typography>
+                    </Box>
+                </AccordionDetails>
+            </Accordion>
+
             <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
                 <Typography variant="h6" gutterBottom>Gestione Tariffe</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -251,7 +308,7 @@ const SettingsPage: React.FC = () => {
 
             <Accordion elevation={3} sx={{ mb: 4 }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography>Guida e Gestione Account</Typography>
+                    <Typography>Gestione Account</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                      <Typography paragraph>Qui puoi gestire le impostazioni del tuo account.</Typography>
@@ -268,10 +325,21 @@ const SettingsPage: React.FC = () => {
              <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
                 <Typography variant="h6" gutterBottom>Manutenzione App</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Se riscontri problemi o l&apos;app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente.
+                    Se riscontri problemi o l&apos;app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
+                    <strong>Attenzione: questa operazione può cancellare i dati non ancora sincronizzati con il server, come i report creati offline.</strong>
                 </Typography>
                 <ForceUpdateButton />
             </Paper>
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4, p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                    APP TECNICI
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    V1.1
+                </Typography>
+            </Box>
+
         </Box>
     );
 }
