@@ -29,10 +29,7 @@ import SignatureDialog from '@/components/form/SignatureDialog';
 import PdfPreviewDialog from '@/components/pdf/PdfPreviewDialog';
 import { generateRapportinoPDF } from '@/services/rapportinoPDFGenerator';
 import { shareOrDownload } from '@/services/shareService';
-import dayjs from 'dayjs';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
-import { v4 as uuidv4 } from 'uuid';
-import { createRapportinoSchema, RapportinoSchema } from '@/models/rapportino.schema';
 
 const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'permesso', 'legge 104'];
 const MULTI_DAY_ALLOWED_KEYWORDS = ['ferie', 'malattia'];
@@ -46,14 +43,14 @@ const calculateOre = (dettaglio: Partial<DettaglioOreData>): number => {
     if (dettaglio.isManual) {
         return parseFloat(String(dettaglio.ore)) || 0;
     }
-    let inizio = dayjs(`1970-01-01T${dettaglio.oraInizio || '00:00'}`);
-    let fine = dayjs(`1970-01-01T${dettaglio.oraFine || '00:00'}`);
+    const inizio = new Date(`1970-01-01T${dettaglio.oraInizio || '00:00'}`);
+    const fine = new Date(`1970-01-01T${dettaglio.oraFine || '00:00'}`);
 
-    if (fine.isBefore(inizio) || fine.isSame(inizio)) {
-        fine = fine.add(1, 'day');
+    if (fine <= inizio) {
+        fine.setDate(fine.getDate() + 1);
     }
 
-    const diff = fine.diff(inizio, 'minute');
+    const diff = (fine.getTime() - inizio.getTime()) / (1000 * 60); // Differenza in minuti
     const oreCalcolate = (diff - (dettaglio.pausa || 0)) / 60;
     return Math.max(0, parseFloat(oreCalcolate.toFixed(2)));
 };
@@ -61,23 +58,16 @@ const calculateOre = (dettaglio: Partial<DettaglioOreData>): number => {
 const createInitialDettaglio = (
     tecnicoId: string,
     nome: string,
-    baseDetail?: DettaglioOreData
+    baseDetail?: Partial<DettaglioOreData>
 ): DettaglioOreData => {
-    if (baseDetail) {
-        return {
-            ...baseDetail,
-            tecnicoId,
-            nome,
-        };
-    }
-    const defaultDetail = {
+    const defaultDetail: DettaglioOreData = {
         tecnicoId,
         nome,
-        isManual: false,
-        oraInizio: '07:30',
-        oraFine: '16:30',
-        pausa: 60,
-        ore: 8,
+        isManual: baseDetail?.isManual || false,
+        oraInizio: baseDetail?.oraInizio || '07:30',
+        oraFine: baseDetail?.oraFine || '16:30',
+        pausa: baseDetail?.pausa || 60,
+        ore: baseDetail?.ore || 0,
     };
     defaultDetail.ore = calculateOre(defaultDetail);
     return defaultDetail;
@@ -367,9 +357,12 @@ const ReportFormPage: React.FC = () => {
     const handleAltriTecniciChange = (_: React.SyntheticEvent, nuoviTecniciSelezionati: Tecnico[]) => {
         const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
         if (!scrivente) return;
+
+        const baseDetail = isLavorativo ? scrivente : undefined;
+
         const nuoviDettagli = nuoviTecniciSelezionati.map(t => {
             const existingDetail = dettaglioOre.find(d => d.tecnicoId === t.id);
-            return existingDetail || createInitialDettaglio(t.id, `${t.cognome} ${t.nome}`.trim(), scrivente);
+            return existingDetail || createInitialDettaglio(t.id, `${t.cognome} ${t.nome}`.trim(), baseDetail);
         });
         setDettaglioOre([scrivente, ...nuoviDettagli]);
     };
@@ -378,56 +371,41 @@ const ReportFormPage: React.FC = () => {
         setDettaglioOre(prev => prev.filter(d => d.tecnicoId !== tecnicoIdToRemove));
     };
 
-    const getFullReportData = (): RapportinoSchema | null => {
-        if (!loggedInTecnicoId || !tecnicoScrivente || !dataInizio)
-        {
+    const getFullReportData = (): Omit<Rapportino, 'id'> | null => {
+        if (!loggedInTecnicoId || !tecnicoScrivente || !dataInizio) {
             showSnackbar("Dati utente o data mancanti.", "error");
             return null;
         }
 
         const tipoGiornataSelezionato = tipiGiornata.find(t => t.id === tipoGiornataId);
-        const naveSelezionata = navi.find(n => n.id === naveId);
-        const luogoSelezionato = luoghi.find(l => l.id === luogoId);
+        const scriventeDettaglio = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
 
-        const dataToValidate: Partial<RapportinoSchema> = {
-            id: isEditMode ? reportId! : uuidv4(),
-            idTecnico: loggedInTecnicoId,
-            nomeTecnico: `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim(),
-            data: dayjs(dataInizio),
-            idTipoGiornata: tipoGiornataId,
-            descrizioneTipoGiornata: tipoGiornataSelezionato?.nome || 'N/D',
-            oreLavorate: dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0),
-            sede: {
-                idLuogo: luogoId || null,
-                descrizioneLuogo: luogoSelezionato?.nome || null,
-                idNave: naveId || null,
-                nomeNave: naveSelezionata?.nome || null,
-            },
-            attivitaSvolte: lavoroEseguito || '',
-            stato: 'confermato',
-            metadata: {
-                createdAt: originalReport?.createdAt instanceof Date ? originalReport.createdAt : new Date(),
-                updatedAt: new Date(),
-                createdBy: loggedInTecnicoId,
-            },
-            // Campi specifici App Tecnici (non per App Master)
-            dettaglioOreTecnici: dettaglioOre.map(({ nome, ...rest }) => ({ ...rest, ore: parseFloat(String(rest.ore)) || 0 })),
-            veicoloId: veicoloId || undefined,
-            materialiImpiegati: materialiImpiegati || undefined,
-            firma: firmaVettoriale || undefined,
+        const reportData: Omit<Rapportino, 'id'> = {
+            nome: `Rapportino del ${format(dataInizio, 'dd/MM/yyyy')} - ${tipoGiornataSelezionato?.nome || 'N/D'}`,
+            data: dataInizio,
+            oreLavoro: dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0),
+            tecnicoId: loggedInTecnicoId,
+            tipoGiornataId: tipoGiornataId,
+            isTrasferta: false, 
+            oraInizio: scriventeDettaglio?.oraInizio || '',
+            oraFine: scriventeDettaglio?.oraFine || '',
+            pausa: scriventeDettaglio?.pausa || 0,
+            dettaglioOreTecnici: dettaglioOre.map(d => ({...d, ore: parseFloat(String(d.ore)) || 0})),
+            presenze: dettaglioOre.map(d => d.tecnicoId),
+            veicoloId: veicoloId || 'Nessuno',
+            naveId: naveId || 'Nessuna',
+            luogoId: luogoId || 'Nessuno',
+            descrizioneBreve: descrizioneBreve || '',
+            lavoroEseguito: lavoroEseguito || '',
+            materialiImpiegati: materialiImpiegati || '',
+            firmaFirmatarioNome: firmaFirmatarioNome || '',
+            firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
+            firmaVettoriale: firmaVettoriale || null,
+            createdAt: originalReport?.createdAt || new Date(),
+            updatedAt: new Date(),
         };
         
-        const rapportinoSchema = createRapportinoSchema();
-        const validation = rapportinoSchema.safeParse(dataToValidate);
-
-        if (!validation.success) {
-            const firstError = validation.error.errors[0];
-            console.error("Errore di validazione Zod:", validation.error);
-            showSnackbar(`Errore di validazione: ${firstError.path.join('.')} - ${firstError.message}`, "error");
-            return null;
-        }
-
-        return validation.data;
+        return reportData;
     };
 
     const salvaOAccodaRapportino = async (options: { navigateOnSuccess: boolean } = { navigateOnSuccess: true }): Promise<string | null> => {
@@ -449,10 +427,6 @@ const ReportFormPage: React.FC = () => {
                 showSnackbar("Il campo 'Nave' è obbligatorio. Selezionare un'opzione.", "warning");
                 return null;
             }
-            if (!luogoId) {
-                showSnackbar("Il campo 'Luogo' è obbligatorio. Selezionare un'opzione.", "warning");
-                return null;
-            }
         }
 
         setIsSaving(true);
@@ -460,17 +434,19 @@ const ReportFormPage: React.FC = () => {
             let finalId: string | undefined | null = reportId;
             const reportData = getFullReportData();
 
-            if (!reportData) return null; // La validazione è fallita
+            if (!reportData) return null; 
+
+            const dataWithId = { ...reportData, id: reportId || 'local-' + Date.now() };
 
             if (navigator.onLine && !isOfflineMode) {
                 if (isEditMode && reportId) {
                     await runTransaction(firestoreDb, async (transaction) => {
                         const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
-                        transaction.update(reportRef, reportData);
+                        transaction.update(reportRef, dataWithId);
                     });
                 } else {
                     const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
-                    const docRef = await addDoc(collectionRef, reportData);
+                    const docRef = await addDoc(collectionRef, dataWithId);
                     finalId = docRef.id;
                 }
             } else {
@@ -511,11 +487,17 @@ const ReportFormPage: React.FC = () => {
                 tecnicoId: loggedInTecnicoId,
                 tipoGiornataId,
                 isTrasferta: false,
+                oraInizio: '', 
+                oraFine: '', 
+                pausa: 0, 
                 dettaglioOreTecnici: [{
                     tecnicoId: loggedInTecnicoId,
                     ore: 8,
                     isManual: true,
                     nome: `${tecnicoScrivente?.cognome || ''} ${tecnicoScrivente?.nome || ''}`.trim(),
+                    oraInizio: '', 
+                    oraFine: '', 
+                    pausa: 0, 
                 }],
                 presenze: [loggedInTecnicoId],
                 veicoloId: 'Nessuno',
@@ -536,7 +518,7 @@ const ReportFormPage: React.FC = () => {
                 const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
                 giorniDaCreare.forEach(giorno => {
                     const reportRef = doc(collectionRef);
-                    batch.set(reportRef, createReportObject(giorno));
+                    batch.set(reportRef, { ...createReportObject(giorno), id: reportRef.id });
                 });
                 await batch.commit();
             } else {
@@ -583,11 +565,14 @@ const ReportFormPage: React.FC = () => {
         if (pdfUrl) URL.revokeObjectURL(pdfUrl);
 
         try {
-            const reportDataForPdf = getFullReportData();
-            if (!reportDataForPdf) throw new Error("Dati del report invalidi per la generazione del PDF.")
+            const reportData = getFullReportData();
+            if (!reportData) throw new Error("Dati del report invalidi per la generazione del PDF.")
 
             if (!masterData) throw new Error("Dati anagrafici non disponibili per la generazione del PDF.");
-            const pdfBlob = await generateRapportinoPDF(reportDataForPdf as Rapportino, masterData as MasterData);
+            
+            const reportDataWithId = { ...reportData, id: reportId || 'temp-id' };
+
+            const pdfBlob = await generateRapportinoPDF(reportDataWithId, masterData as MasterData);
             const newPdfUrl = URL.createObjectURL(pdfBlob);
             setPdfUrl(newPdfUrl);
         } catch (error) {
