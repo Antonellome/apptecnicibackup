@@ -1,7 +1,9 @@
+
 import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, db } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { getToken } from 'firebase/messaging';
+import { auth, db, messaging } from '@/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '@/models/definitions';
 import { AuthContext, AuthContextType } from './AuthContextDefinition';
 import FullScreenLoader from '../components/FullScreenLoader';
@@ -11,11 +13,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Function to get FCM token and update Firestore
+  const getFcmToken = async (uid: string) => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      console.log("FCM not supported in this environment.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        await navigator.serviceWorker.ready;
+
+        console.log("Service worker is active, getting token...");
+
+        const currentToken = await getToken(messaging, {
+          vapidKey: 'BIvIQohxlYqW7gficYtCso06NArpaqE0va_j1PRJ63W159OTpQk-Be_nW9PLd-_46l4YqKC4W2iOVoORNocHbyk',
+          serviceWorkerRegistration: swRegistration,
+        });
+
+        if (currentToken) {
+          console.log('FCM Token retrieved successfully:', currentToken);
+          const userDocRef = doc(db, 'tecnici', uid);
+          await updateDoc(userDocRef, { fcmToken: currentToken });
+        } else {
+          console.log('No registration token available.');
+        }
+      }
+    } catch (error) {
+      console.error('An error occurred while retrieving FCM token.', error);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // Rimuoviamo il setLoading(true) iniziale perché la logica è già complessa
-      // e lo stato iniziale di loading è già true.
-
       setUser(currentUser);
       
       if (currentUser) {
@@ -25,20 +57,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
               if (tecnicoDocSnap.exists()) {
                   const tecnicoData = tecnicoDocSnap.data();
+                  // ... (existing profile logic)
                   const isAdmin = tecnicoData.isAdmin || false;
                   const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
                   let categoriaObj: { id: string; nome: string; } | undefined = undefined;
 
                   if (id_categoria) {
-                      try {
-                          const catDocRef = doc(db, 'categorie', id_categoria);
-                          const catDoc = await getDoc(catDocRef);
-                          if (catDoc.exists()) {
-                              categoriaObj = { id: id_categoria, nome: catDoc.data().nome || '' };
-                          }
-                      } catch (err) {
-                          console.error("[Auth] Errore nel risolvere la categoria:", err);
-                      }
+                    try {
+                        const catDocRef = doc(db, 'categorie', id_categoria);
+                        const catDoc = await getDoc(catDocRef);
+                        if (catDoc.exists()) {
+                            categoriaObj = { id: id_categoria, nome: catDoc.data().nome || '' };
+                        }
+                    } catch (err) {
+                        console.error("[Auth] Errore nel risolvere la categoria:", err);
+                    }
                   }
 
                   const nome = tecnicoData.nome || '';
@@ -52,33 +85,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                       isAdmin: isAdmin,
                       categoria: categoriaObj,
                       displayName: `${nome} ${cognome}`.trim(),
-                      theme: 'light', // Default theme
+                      theme: 'light',
                   };
                   setUserProfile(profile);
 
+                  // *** GET FCM TOKEN HERE ***
+                  await getFcmToken(currentUser.uid);
+
               } else {
-                  console.warn(`[Auth] Profilo tecnico non trovato per UID: ${currentUser.uid}. L'utente non avrà autorizzazioni complete.`);
-                  setUserProfile(null); // Assicurati di resettare il profilo se non trovato
+                  console.warn(`[Auth] Profilo tecnico non trovato per UID: ${currentUser.uid}.`);
+                  setUserProfile(null);
               }
           } catch (error) {
               console.error("[Auth] Errore critico nel caricamento del profilo utente:", error);
-              setUserProfile(null); // Resetta in caso di errore critico
+              setUserProfile(null);
           }
       } else {
-          setUserProfile(null); // L'utente non è loggato, nessun profilo
+          setUserProfile(null);
       }
       
-      setLoading(false); // Fine del processo di autenticazione/caricamento dati
+      setLoading(false);
     });
 
-    // La funzione di cleanup che esegue l'unsubscribe
     return () => unsubscribe();
-  }, []); // L'array vuoto assicura che l'effetto venga eseguito solo una volta (al mount)
+  }, []);
 
   const logout = useCallback(async () => {
     try {
         await signOut(auth);
-        // Lo stato verrà aggiornato automaticamente da onAuthStateChanged
     } catch (error) {
         console.error("Errore durante il logout:", error);
     }
@@ -88,7 +122,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await sendPasswordResetEmail(auth, email);
   }, []);
 
-  // Memoizzazione del valore del contesto per evitare re-render non necessari
   const value: AuthContextType = useMemo(() => ({
     user,
     userProfile,
@@ -97,9 +130,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     resetPassword,
   }), [user, userProfile, loading, logout, resetPassword]);
 
-  // **LA SOLUZIONE**
-  // Se lo stato di autenticazione non è ancora stato verificato,
-  // mostra un loader a schermo intero invece dell'applicazione.
   if (loading) {
     return <FullScreenLoader />;
   }

@@ -31,15 +31,16 @@ const enrichRapportino = (rapportino: Partial<Rapportino> & { id: string, isOffl
     const luoghiMap = new Map(masterData.luoghi.map((l) => [l.id, l.nome]));
     const reportDate = rapportino.data instanceof Timestamp ? rapportino.data.toDate() : new Date(rapportino.data as any);
     const tipoGiornata = tipiGiornataMap.get(rapportino.tipoGiornataId!) || { id: '', nome: 'N/D', colore: '', sigla: '' };
-    const destinazione = rapportino.naveId ? naviMap.get(rapportino.naveId) : (rapportino.luogoId ? luoghiMap.get(rapportino.luogoId) : 'Nessuna');
-
+    
     return {
         ...rapportino,
         id: rapportino.id,
         data: reportDate,
         tipoGiornata: tipoGiornata,
-        destinazione: destinazione || 'N/D',
+        naveNome: rapportino.naveId ? naviMap.get(rapportino.naveId) : undefined,
+        luogoNome: rapportino.luogoId ? luoghiMap.get(rapportino.luogoId) : undefined,
         isOffline: rapportino.isOffline || false,
+        isEditable: true, // Aggiunta la proprietà mancante
     } as Omit<EnrichedRapportino, 'isClickable'>;
 };
 
@@ -159,7 +160,7 @@ const ReportListPage = () => {
               <Box key={report.id}> 
                 <ListItem component={ListItemButton} onClick={() => handleReportClick(report)}>
                   <ListItemText 
-                    primary={report.destinazione}
+                    primary={report.naveNome || report.luogoNome || 'N/D'}
                     secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })}`}
                   />
                   <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>

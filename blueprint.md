@@ -8,9 +8,15 @@
 
 Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo per l'applicazione di gestione dei rapportini. Serve come raccolta delle linee guida per lo sviluppo assistito dall'AI.
 
-## 1. Specifiche Funzionali dell'App Tecnici (Fonte di Verità Assoluta)
+## 1. Informazioni di Deploy
 
-### 1.1. Struttura Generale e Pagine
+- **URL Applicazione:** [https://tecnici.web.app](https://tecnici.web.app)
+
+---
+
+## 2. Specifiche Funzionali dell'App Tecnici (Fonte di Verità Assoluta)
+
+### 2.1. Struttura Generale e Pagine
 
 **HOME PAGE**
 - **AppBar Stabile:** Presente e identica in tutte le pagine. Contiene:
@@ -108,7 +114,7 @@ Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo
     - Le modifiche vengono salvate nel database locale e usate per i calcoli nella pagina Report Mensili.
     - Contiene un tasto per forzare l'aggiornamento dell'applicazione.
 
-### 1.2. Gestione Offline
+### 2.2. Gestione Offline
 
 - **Priorità:** La gestione offline complessa verrà affrontata dopo aver stabilizzato l'applicazione e implementato le funzionalità principali.
 - **Creazione Report Offline:** Un nuovo rapportino creato senza connessione deve essere salvato in una coda locale.
@@ -121,11 +127,11 @@ Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo
 
 ---
 
-## 2. Contratto Dati Firestore
+## 3. Contratto Dati Firestore
 
 *Questa sezione definisce le strutture dati esatte che l'AI deve utilizzare.*
 
-### 2.1. Accesso alle Collezioni
+### 3.1. Accesso alle Collezioni
 
 | Nome Collezione     | Accesso App Tecnici | Scopo                                                              |
 | ------------------- | ------------------- | ------------------------------------------------------------------ |
@@ -138,7 +144,7 @@ Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo
 | `notifiche`         | Sola Lettura        | Lettura delle notifiche a te indirizzate.                         |
 | `notificheLetture`  | Scrittura           | Creazione dei record che confermano la tua lettura di una notifica.|
 
-### 2.2. Modelli Dati (Interfacce TypeScript)
+### 3.2. Modelli Dati (Interfacce TypeScript)
 
 ```typescript
 // Da: collection 'tecnici'
@@ -249,7 +255,7 @@ export interface NotificaLettura {
 
 ---
 
-## 3. Linee Guida per lo Sviluppo AI
+## 4. Linee Guida per lo Sviluppo AI
 
 *Queste sono le regole operative che l'AI deve seguire durante lo sviluppo in questo progetto.*
 
@@ -414,23 +420,9 @@ You'll need to manually update these components.
 
 ---
 
-## 4. Stato del Progetto e Piano di Lavoro
+## 5. Piano di Lavoro
 
-### 4.1. Problema Attuale: Errori di Build (PRIORITÀ MASSIMA)
-
-- **Stato:** L'applicazione non si avvia a causa di errori di build.
-- **Componente:** `src/pages/ReportFormPage.tsx`.
-- **Causa:** Race condition. Il componente tenta di usare `tecnici` e `tipiGiornata` prima che siano caricati.
-
-### 4.2. Piano di Lavoro
-
-1.  **RISOLVERE GLI ERRORI DI BUILD (ORA):**
-    - **Azione:** Implementare una guardia di sicurezza in `ReportFormPage.tsx`. Il rendering della logica che dipende da `masterData` deve attendere che `masterData`, `masterData.tecnici`, e `masterData.tipiGiornata` siano completamente disponibili.
-2.  **VERIFICARE LA STABILITÀ:**
-    - Avviare l'app e confermare che le pagine di creazione e modifica dei report si carichino senza errori.
-3.  **IMPLEMENTARE LE SPECIFICHE FUNZIONALI:**
-    - Seguire punto per punto le specifiche definite nella Sezione 1 per allineare il comportamento dell'app.
-    - Affrontare per ultima la logica complessa della gestione offline per i Report Mensili.
+*Questa sezione è vuota. L'applicazione è considerata completa in attesa di ulteriori istruzioni.*
 
 ---
 
@@ -457,11 +449,3 @@ Ogni singola risposta dell'AI deve iniziare con la parola **"CIAO"**. Questa reg
 L'IA DEVE SCRIVERE IN CHAT IN LINGUA ITALIANA.
 
 ---
-
-## 5. Log di Lavoro AI
-
-### Sessione 1: Correzione Flusso Notifiche
-- **Obiettivo:** Risolvere l'errore `TS2339: Property 'addNotification' does not exist on type 'NotificationContextType'`.
-- **Analisi:** Il `NotificationProvider` è read-only da Firestore. `AppInitializer` non deve "aggiungere" notifiche manualmente. Il flusso corretto è che il listener `onSnapshot` del provider rilevi automaticamente le nuove notifiche.
-- **Azione 1 (Completata):** Modificato `src/utils/fcm.ts`. Semplificata `initializeForegroundMessageListener` rimuovendo il callback `addNotification`. Ora si limita a loggare il messaggio in arrivo, delegando l'aggiornamento dello stato al `NotificationProvider`.
-- **Azione 2 (In Corso):** Modificare `src/components/AppInitializer.tsx` per allinearlo alla nuova firma di `initializeForegroundMessageListener` e rimuovere la chiamata a `useNotifications` e `addNotification`, che causano l'errore di build.

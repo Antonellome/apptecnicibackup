@@ -52,7 +52,8 @@ const calculateOre = (dettaglio: Partial<DettaglioOreData>): number => {
 
     const diff = (fine.getTime() - inizio.getTime()) / (1000 * 60); // Differenza in minuti
     const oreCalcolate = (diff - (dettaglio.pausa || 0)) / 60;
-    return Math.max(0, parseFloat(oreCalcolate.toFixed(2)));
+    // Arrotonda al quarto d'ora più vicino (0.25)
+    return Math.round(oreCalcolate * 4) / 4;
 };
 
 const createInitialDettaglio = (
@@ -845,20 +846,32 @@ const ReportFormPage: React.FC = () => {
                         <Button variant="outlined" color="primary" onClick={handleCancel} disabled={isSaving || isSharing}>Chiudi</Button>
 
                         <Box sx={{ display: 'flex', gap: 2 }}>
-                           {!isReadOnly && (
-                                <Button variant="contained" onClick={handleSave} disabled={disableActions}>
-                                    {isSaving ? <CircularProgress size={24} /> : (isEditMode ? 'Aggiorna' : 'Salva')}
+                           {isReadOnly ? (
+                                <Button
+                                    variant="contained"
+                                    color="secondary"
+                                    onClick={handleShare}
+                                    disabled={isSaving || isSharing}
+                                    startIcon={(isGeneratingPdf || isSharing) ? <CircularProgress size={24} /> : <ShareIcon />}
+                                >
+                                    Condividi
                                 </Button>
-                           )}
-                            <Button
-                                variant="contained"
-                                color="secondary"
-                                onClick={handleSaveAndShare}
-                                disabled={disableActions || isMultiDay}
-                                startIcon={(isGeneratingPdf || isSharing) ? <CircularProgress size={24} /> : <ShareIcon />}
-                            >
-                                Salva e Condividi
-                            </Button>
+                            ) : (
+                                <>
+                                    <Button variant="contained" onClick={handleSave} disabled={disableActions}>
+                                        {isSaving ? <CircularProgress size={24} /> : (isEditMode ? 'Aggiorna' : 'Salva')}
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        color="secondary"
+                                        onClick={handleSaveAndShare}
+                                        disabled={disableActions || isMultiDay}
+                                        startIcon={(isGeneratingPdf || isSharing) ? <CircularProgress size={24} /> : <ShareIcon />}
+                                    >
+                                        Salva e Condividi
+                                    </Button>
+                                </>
+                            )}
                         </Box>
                     </Box>
                 </Paper>

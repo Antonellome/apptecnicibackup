@@ -13,33 +13,31 @@ import {
 } from '@mui/material';
 import { RiepilogoMese } from '@/pages/MonthlyReportPage';
 
-interface DettaglioCostiTipoGiornataProps {
+interface DettaglioOreTipoGiornataProps {
   dettaglio: RiepilogoMese['dettaglio'];
 }
 
-const DettaglioCostiTipoGiornata: React.FC<DettaglioCostiTipoGiornataProps> = ({ dettaglio }) => {
-  const sortedDettaglio = Array.from(dettaglio.values()).sort((a, b) => b.costo - a.costo);
+const DettaglioOreTipoGiornata: React.FC<DettaglioOreTipoGiornataProps> = ({ dettaglio }) => {
+  const sortedDettaglio = Array.from(dettaglio.values()).sort((a, b) => (b.oreOrdinarie + b.oreStraordinario) - (a.oreOrdinarie + a.oreStraordinario));
 
   // --- CALCOLO TOTALI PER IL FOOTER ---
   const totalOreOrdinarie = sortedDettaglio.reduce((acc, item) => acc + item.oreOrdinarie, 0);
   const totalOreStraordinario = sortedDettaglio.reduce((acc, item) => acc + item.oreStraordinario, 0);
   const totalGiorni = sortedDettaglio.reduce((acc, item) => acc + item.giorni, 0);
-  const totalCosto = sortedDettaglio.reduce((acc, item) => acc + item.costo, 0);
 
   const footerCellStyle = { fontWeight: 'bold', fontSize: '0.95rem' };
 
   return (
     <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
-      <Typography variant="h5" gutterBottom>Dettaglio Costi per Attività</Typography>
+      <Typography variant="h5" gutterBottom>Dettaglio Ore per Attività</Typography>
       <TableContainer component={Paper} variant="outlined">
-        <Table size="small" aria-label="dettaglio costi per tipo di giornata">
+        <Table size="small" aria-label="dettaglio ore per tipo di giornata">
           <TableHead>
             <TableRow sx={{ '& th': { fontWeight: 'bold' } }}>
               <TableCell>Tipo Attività</TableCell>
               <TableCell align="right">Ore Ord.</TableCell>
               <TableCell align="right">Ore Straord.</TableCell>
               <TableCell align="right">Giorni</TableCell>
-              <TableCell align="right">Costo Stimato</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -54,7 +52,6 @@ const DettaglioCostiTipoGiornata: React.FC<DettaglioCostiTipoGiornataProps> = ({
                 <TableCell align="right">{item.oreOrdinarie > 0 ? item.oreOrdinarie.toFixed(2) : '-'}</TableCell>
                 <TableCell align="right">{item.oreStraordinario > 0 ? item.oreStraordinario.toFixed(2) : '-'}</TableCell>
                 <TableCell align="right">{item.giorni}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: '500' }}>€ {item.costo.toFixed(2)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -64,7 +61,6 @@ const DettaglioCostiTipoGiornata: React.FC<DettaglioCostiTipoGiornataProps> = ({
                     <TableCell sx={footerCellStyle} align="right">{totalOreOrdinarie.toFixed(2)}</TableCell>
                     <TableCell sx={footerCellStyle} align="right">{totalOreStraordinario.toFixed(2)}</TableCell>
                     <TableCell sx={footerCellStyle} align="right">{totalGiorni}</TableCell>
-                    <TableCell sx={footerCellStyle} align="right">€ {totalCosto.toFixed(2)}</TableCell>
                 </TableRow>
             </TableFooter>
         </Table>
@@ -73,4 +69,4 @@ const DettaglioCostiTipoGiornata: React.FC<DettaglioCostiTipoGiornataProps> = ({
   );
 };
 
-export default DettaglioCostiTipoGiornata;
+export default DettaglioOreTipoGiornata;

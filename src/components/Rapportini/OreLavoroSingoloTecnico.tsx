@@ -19,16 +19,22 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
     return `${String(hours).padStart(2, '0')}:${minutes}`;
 });
 
-const PAUSA_OPTIONS = [0, 30, 60];
+const PAUSA_OPTIONS = [0, 30, 60, 90, 120];
 
 const ORE_MANUALI_OPTIONS = Array.from({ length: 29 }, (_, i) => {
     const value = i * 0.5;
+    const hours = Math.floor(value);
+    const minutes = (value % 1) * 60;
+    const timeLabel = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
     let label = '';
     if (value <= 8) {
-        label = `${value} ore`;
+        label = `${timeLabel} ore`;
     } else {
-        const straordinario = value - 8;
-        label = `8 + ${straordinario.toFixed(1)} ore`;
+        const straordinarioHours = Math.floor(value - 8);
+        const straordinarioMinutes = ((value - 8) % 1) * 60;
+        const straordinarioLabel = `${String(straordinarioHours).padStart(2, '0')}:${String(straordinarioMinutes).padStart(2, '0')}`;
+        label = `8:00 + ${straordinarioLabel} ore`;
     }
     return { value, label };
 });

@@ -18,15 +18,17 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData, Tecnico } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
-import DettaglioCostiTipoGiornata from '@/components/Rapportini/DettaglioCostiTipoGiornata';
+import DettaglioOreTipoGiornata from '@/components/Rapportini/DettaglioOreTipoGiornata';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { generateMonthlyReportPDF } from '@/services/monthlyReportGenerator';
 import { shareOrDownload } from '@/services/shareService';
 import { useSnackbar } from '@/contexts/SnackbarContext';
+import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
+import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 
 
 // --- STRUTTURA DATI (INVARIATA) ---
@@ -49,6 +51,8 @@ const MonthlyReportPage = () => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const { showSnackbar } = useSnackbar();
+    const [pdfPreviewBlob, setPdfPreviewBlob] = useState<Blob | null>(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
     const localAnagrafiche = useLiveQuery(() => db.anagrafiche.toArray(), [], null);
     const impostazioniLocali = useLiveQuery(() => db.tariffe_locali.get('main'), [], null);
@@ -154,6 +158,10 @@ const MonthlyReportPage = () => {
         return riepilogo.oreTotali > 0 || riepilogo.dettaglio.size > 0 ? riepilogo : null;
     }, [rapportiniArricchiti, masterData, userProfile]);
 
+    const reportDays = useMemo(() => {
+        return rapportiniArricchiti.map(r => r.data);
+    }, [rapportiniArricchiti]);
+
     const handleMonthChange = (increment: number) => {
         setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
     };
@@ -174,8 +182,8 @@ const MonthlyReportPage = () => {
         setIsGeneratingPdf(true);
         try {
             const pdfBlob = await generateMonthlyReportPDF(rapportiniArricchiti, riepilogoMese, tecnico, currentMonth);
-            const fileName = `Riepilogo_Mensile_${tecnico.cognome}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.pdf`;
-            await shareOrDownload(pdfBlob, fileName);
+            setPdfPreviewBlob(pdfBlob);
+            setIsPreviewOpen(true);
         } catch (error) {
             console.error("Errore durante la generazione del PDF mensile:", error);
             showSnackbar('Si è verificato un errore durante la creazione del report.', 'error');
@@ -183,6 +191,15 @@ const MonthlyReportPage = () => {
             setIsGeneratingPdf(false);
         }
       };
+
+    const handleShareFromPreview = async (blob: Blob, fileName: string) => {
+        try {
+            await shareOrDownload(blob, fileName);
+        } catch (error) {
+            console.error("Errore durante la condivisione del PDF:", error);
+            showSnackbar('Si è verificato un errore durante la condivisione.', 'error');
+        }
+    };
 
     const isNextButtonDisabled = isSameMonth(currentMonth, new Date());
     const isLoadingPage = !localAnagrafiche || !impostazioniLocali || !masterData;
@@ -220,51 +237,59 @@ const MonthlyReportPage = () => {
                 <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
                 <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
             </Paper>
-            {!riepilogoMese && (
-                 <Paper sx={{ p: 4, textAlign: 'center' }}>
-                     <Typography variant="h6">Nessun dato per questo mese</Typography>
-                     <Typography color="text.secondary">Non sono stati trovati rapportini nella cache locale per il periodo selezionato.</Typography>
-                 </Paper>
-            )}
-            {riepilogoMese && (
-                 <Grid container spacing={3}>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 5,
-                            lg: 4
-                        }}>
-                        <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
-                            <Typography variant="h5" gutterBottom>Riepilogo</Typography>
-                            <TableContainer component={Paper} variant="outlined">
-                                <Table size="small">
-                                    <TableBody>
-                                        <TableRow>
-                                            <TableCell><Typography fontWeight="bold">Ore Totali</Typography></TableCell>
-                                            <TableCell align="right"><Typography variant="h6">{riepilogoMese.oreTotali.toFixed(2)}</Typography></TableCell>
-                                        </TableRow>
-                                        <TableRow sx={{ backgroundColor: 'primary.lighter' }}>
-                                            <TableCell><Typography fontWeight="bold">Costo Stimato</Typography></TableCell>
-                                            <TableCell align="right"><Typography variant="h5" color="primary.main" fontWeight="bold">€ {riepilogoMese.costoTotale.toFixed(2)}</Typography></TableCell>
-                                        </TableRow>
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
+            
+            <Grid container spacing={3}>
+                 <Grid size={{ xs: 12, md: 4 }}>
+                     <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+                         <Typography variant="h5" gutterBottom>Calendario</Typography>
+                         <MonthlyCalendarView currentMonth={currentMonth} reportDays={reportDays} />
+                     </Paper>
+                 </Grid>
+                 <Grid size={{ xs: 12, md: 8 }}>
+                    {!riepilogoMese && (
+                        <Paper sx={{ p: 4, textAlign: 'center', height: '100%' }}>
+                            <Typography variant="h6">Nessun dato per questo mese</Typography>
+                            <Typography color="text.secondary">Non sono stati trovati rapportini nella cache locale per il periodo selezionato.</Typography>
                         </Paper>
-                    </Grid>
-                    <Grid
-                        size={{
-                            xs: 12,
-                            md: 7,
-                            lg: 8
-                        }}>
-                        <DettaglioCostiTipoGiornata dettaglio={riepilogoMese.dettaglio} />
-                    </Grid>
-                    <Grid sx={{ mt: 2 }} size={12}>
-                        <ActivityBreakdown riepilogo={riepilogoMese} />
-                    </Grid>
+                    )}
+                    {riepilogoMese && (
+                        <Grid container spacing={3}>
+                            <Grid size={{ xs: 12, lg: 6 }}>
+                                <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+                                    <Typography variant="h5" gutterBottom>Riepilogo</Typography>
+                                    <TableContainer component={Paper} variant="outlined">
+                                        <Table size="small">
+                                            <TableBody>
+                                                <TableRow>
+                                                    <TableCell><Typography fontWeight="bold">Ore Totali</Typography></TableCell>
+                                                    <TableCell align="right"><Typography variant="h6">{riepilogoMese.oreTotali.toFixed(2)}</Typography></TableCell>
+                                                </TableRow>
+                                                <TableRow sx={{ backgroundColor: 'primary.lighter' }}>
+                                                    <TableCell><Typography fontWeight="bold">Costo Stimato</Typography></TableCell>
+                                                    <TableCell align="right"><Typography variant="h5" color="primary.main" fontWeight="bold">€ {riepilogoMese.costoTotale.toFixed(2)}</Typography></TableCell>
+                                                </TableRow>
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                </Paper>
+                            </Grid>
+                            <Grid size={{ xs: 12, lg: 6 }}>
+                                <DettaglioOreTipoGiornata dettaglio={riepilogoMese.dettaglio} />
+                            </Grid>
+                            <Grid sx={{ mt: 2 }} size={12}>
+                                <ActivityBreakdown riepilogo={riepilogoMese} />
+                            </Grid>
+                        </Grid>
+                    )}
                 </Grid>
-            )}
+            </Grid>
+            <PdfPreviewModal
+                open={isPreviewOpen}
+                onClose={() => setIsPreviewOpen(false)}
+                pdfBlob={pdfPreviewBlob}
+                fileName={`Riepilogo_Mensile_${userProfile?.cognome}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.pdf`}
+                onShare={handleShareFromPreview}
+            />
         </Box>
     );
 };
