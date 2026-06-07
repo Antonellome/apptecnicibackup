@@ -66,13 +66,28 @@ const ReportListPage = () => {
     );
 
     const unsubscribe = onSnapshot(rapportiniQuery, (snapshot) => {
-        const fetchedDocs = snapshot.docs.map(doc => {
-             const data = doc.data();
-             const date = data.data instanceof Timestamp ? data.data.toDate() : new Date(data.data);
-             return { id: doc.id, ...data, data: date } as Rapportino;
-        });
+        const changes = snapshot.docChanges();
+        const puts: Rapportino[] = [];
+        const deletes: string[] = [];
 
-        localDb.rapportini.bulkPut(fetchedDocs);
+        for (const change of changes) {
+            if (change.type === 'removed') {
+                deletes.push(change.doc.id);
+            } else {
+                const data = change.doc.data();
+                const date = data.data instanceof Timestamp ? data.data.toDate() : new Date(data.data as any);
+                puts.push({ id: change.doc.id, ...data, data: date } as Rapportino);
+            }
+        }
+        
+        // Esegui operazioni bulk per efficienza
+        if (puts.length > 0) {
+            localDb.rapportini.bulkPut(puts);
+        }
+        if (deletes.length > 0) {
+            localDb.rapportini.bulkDelete(deletes);
+        }
+
         setSyncState({ loading: false, error: null });
 
     }, (err) => {
@@ -186,4 +201,4 @@ const ReportListPage = () => {
   );
 };
 
-export default ReportListPage; 
+export default ReportListPage;

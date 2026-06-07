@@ -9,6 +9,7 @@ import { MasterDataProvider } from './contexts/MasterDataProvider';
 import { GlobalDataProvider } from './contexts/GlobalDataProvider';
 import CssBaseline from '@mui/material/CssBaseline';
 import { GlobalStyles } from '@mui/material';
+import PWAUpdater from './components/PWAUpdater';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       <GlobalStyles styles={{ 'body::-webkit-scrollbar': { display: 'none' } }} />
       <AuthProvider>
         <SnackbarProvider>
+          <PWAUpdater />
           <MasterDataProvider>
             <GlobalDataProvider>
               <NotificationProvider>
