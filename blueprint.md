@@ -4,6 +4,17 @@
 
 ---
 
+# REGOLA ZERO: L'AUTORITÀ DEL CODICE MASTER
+
+**Questa è la regola più importante e non può essere ignorata.**
+
+1.  **IL CODICE MASTER COMANDA:** Il codice sorgente funzionante e deployato dell'applicazione "MASTER OFFICE" è la fonte di verità ultima e inappellabile per quanto riguarda la struttura dei dati e le API.
+2.  **IL BLUEPRINT È UNA GUIDA, NON UN VANGELO:** Questo documento (`blueprint.md`) serve come guida e contesto storico. Se esiste una discrepanza tra quanto scritto qui e il comportamento effettivo della Master App, **la Master App ha sempre ragione**.
+3.  **DIVIETO DI MANIPOLAZIONE UNILATERALE:** È severamente vietato modificare le strutture dati principali (in particolare l'oggetto `Rapportino`) sulla base di interpretazioni di questo blueprint senza aver prima ottenuto una conferma esplicita e formale dal team della Master App. Qualsiasi tentativo di "migliorare" o "refattorizzare" la struttura dati in modo unilaterale è considerato un'azione non autorizzata e potenzialmente dannosa per l'integrità del sistema.
+
+---
+
+
 # Blueprint: Gestione Rapportini Tecnici
 
 Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo per l'applicazione di gestione dei rapportini. Serve come raccolta delle linee guida per lo sviluppo assistito dall'AI.
@@ -146,6 +157,9 @@ Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo
 
 ### 3.2. Modelli Dati (Interfacce TypeScript)
 
+**ATTENZIONE: CONTRATTO DATI EFFETTIVO. QUESTA È L'UNICA FONTE DI VERITÀ.**
+*La struttura `Rapportino` qui definita è quella effettivamente processata dalla Master App. Qualsiasi deviazione da questo schema non è supportata e causerà errori di runtime. Questa definizione sovrascrive qualsiasi altra versione presente in questo documento o in altre comunicazioni precedenti.*
+
 ```typescript
 // Da: collection 'tecnici'
 // Usato per i dati del tuo profilo.
@@ -189,50 +203,46 @@ export interface Checkin {
   tipoAnagrafica: 'nave' | 'luogo';
 }
 
-// Per: collection 'rapportini'
-// Il modello principale che dovrai costruire.
+// --- CONTRATTO DATI EFFETTIVO RAPPORTINO ---
+// Questa è la struttura che la MASTER APP si aspetta e processa.
+// È una STRUTTURA PIATTA. Non usare strutture nidificate.
 export interface Rapportino {
-  // RIFERIMENTI OBBLIGATORI
-  sede: {
-    id: string; // ID della Nave o Luogo
-    tipo: 'nave' | 'luogo';
-  };
-  tipoGiornataId: string;
-  data: Date; // Timestamp Firestore
+  id: string;
 
-  // DETTAGLI DEL LAVORO
-  presenze: string[]; // Array di tecnicoId (UIDs)
-  attivitaSvolte: string[];
-  dettaglioOreTecnici: {
-    tecnicoId: string;
-    ore: number;
-  }[];
-  materialeUtilizzato: {
-    descrizione: string;
-    quantita: number;
-  }[];
+  // Dati principali
+  data: firebase.firestore.Timestamp; // O un oggetto Date JavaScript al momento del processing
+  descrizioneBreve: string;
+  lavoroEseguito: string;
+  materialiImpiegati: string;
+  
+  // Relazioni (memorizzate come ID)
+  tecnicoId: string;      // Tecnico che ha compilato
+  naveId: string;
+  luogoId: string;
+  veicoloId: string;
+  tipoGiornataId: string;
+  
+  // Campi Opzionali
+  isTrasferta?: boolean;
   note?: string;
 
-  // FIRMA E CHIUSURA
-  chiuso: boolean;
-  firma: {
-    firmatarioNome: string;
-    firmatarioRuolo: string;
-    // Carica l'immagine su Storage e salva qui solo il path.
-    signatureImagePath: string;
-  };
+  // Dati Firma (struttura piatta)
+  firmaVettoriale?: string;      // L'SVG della firma come stringa
+  firmaFirmatarioNome?: string;
+  firmaFirmatarioSocieta?: string;
 
-  // METADATI DI SISTEMA
-  metadata: {
-    createdAt: Date; // Timestamp Firestore
-    createdBy: string; // Il tuo UID
-    updatedAt?: Date; // Opzionale, aggiunto in caso di modifica
-    updatedBy?: string; // Opzionale, il tuo UID se modifichi
+  // Dettaglio Ore (array di oggetti piatti)
+  dettaglioOreTecnici?: {
+    tecnicoId: string;
+    oraInizio: string;
+    oraFine: string;
+    ore: number;
+    pausa: number;
+    isManual?: boolean;
+  }[];
 
-    // CAMPO DI SOLA LETTURA: NON VALORIZZARE
-    // Viene popolato dalla App Master dopo la sincronizzazione.
-    numeroRapportino?: string;
-  };
+  // Presenze (array di stringhe ID)
+  presenze?: string[]; 
 }
 
 // Da: collection 'notifiche'

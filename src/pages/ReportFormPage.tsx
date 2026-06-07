@@ -31,7 +31,7 @@ import { generateRapportinoPDF } from '@/services/rapportinoPDFGenerator';
 import { shareOrDownload } from '@/services/shareService';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 
-const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'permesso', 'legge 104'];
+const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'legge 104'];
 const MULTI_DAY_ALLOWED_KEYWORDS = ['ferie', 'malattia'];
 
 const isGiornataLavorativa = (tipo: TipoGiornata | undefined): boolean => {
