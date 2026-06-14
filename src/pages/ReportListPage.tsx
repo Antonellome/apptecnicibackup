@@ -4,7 +4,6 @@ import {
   Box,
   Typography,
   List,
-  ListItem,
   ListItemText,
   Button,
   Alert,
@@ -14,7 +13,7 @@ import {
   Chip
 } from '@mui/material';
 import { CloudQueue, Sync } from '@mui/icons-material';
-import { format, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isSameMonth, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
@@ -40,7 +39,7 @@ const enrichRapportino = (rapportino: Partial<Rapportino> & { id: string, isOffl
         naveNome: rapportino.naveId ? naviMap.get(rapportino.naveId) : undefined,
         luogoNome: rapportino.luogoId ? luoghiMap.get(rapportino.luogoId) : undefined,
         isOffline: rapportino.isOffline || false,
-        isEditable: true, // Aggiunta la proprietà mancante
+        isEditable: true, 
     } as Omit<EnrichedRapportino, 'isClickable'>;
 };
 
@@ -80,7 +79,6 @@ const ReportListPage = () => {
             }
         }
         
-        // Esegui operazioni bulk per efficienza
         if (puts.length > 0) {
             localDb.rapportini.bulkPut(puts);
         }
@@ -151,6 +149,16 @@ const ReportListPage = () => {
     navigate(path);
   };
 
+  const renderOre = (report: Omit<EnrichedRapportino, 'isClickable'>) => {
+    if (report.oraInizio && report.oraFine) {
+        return `${report.oraInizio} - ${report.oraFine} (P: ${report.pausa || '0h'})`;
+    }
+    if (report.oreLavoro) {
+        return `Totale: ${report.oreLavoro}h`;
+    }
+    return 'Orario non spec.';
+  };
+
   return (
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -171,23 +179,54 @@ const ReportListPage = () => {
       <Paper elevation={3} sx={{ mt: 2 }}>
         <List disablePadding>
           {(displayedRapportini && displayedRapportini.length > 0) ? (
-            displayedRapportini.map((report, index) => (
+            displayedRapportini.map((report, index) => {
+              const nextReport = displayedRapportini[index + 1];
+              const isLastOfDate = !nextReport || !isSameDay(report.data, nextReport.data);
+
+              return (
               <Box key={report.id}> 
-                <ListItem component={ListItemButton} onClick={() => handleReportClick(report)}>
-                  <ListItemText 
-                    primary={report.naveNome || report.luogoNome || 'N/D'}
-                    secondary={`Data: ${format(report.data, 'dd/MM/yyyy', { locale: it })}`}
+                <ListItemButton onClick={() => handleReportClick(report)} sx={{ py: 2 }}>
+                    <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between' }}>
+                        {/* Sinistra */}
+                        <Box sx={{ flex: '0 0 25%' }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }} noWrap>{report.naveNome || report.luogoNome || 'N/D'}</Typography>
+                            <Typography variant="body2" color="text.secondary">{format(report.data, 'dd/MM/yyyy', { locale: it })}</Typography>
+                        </Box>
+
+                        {/* Centro */}
+                        <Box sx={{ flex: '1 1 auto', px: 2, overflow: 'hidden' }}>
+                            <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }} noWrap>
+                                {report.descrizioneBreve || 'Nessuna descrizione'}
+                            </Typography>
+                        </Box>
+
+                        {/* Destra */}
+                        <Box sx={{ flex: '0 0 30%', textAlign: 'right' }}>
+                            <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1}}>
+                                {report.isOffline && <Chip label="Offline" size="small" color="info" variant="outlined" />}
+                                <Typography variant="body2" sx={{ fontWeight: '500' }}>
+                                    {report.tipoGiornata?.nome}
+                                </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                {renderOre(report)}
+                            </Typography>
+                        </Box>
+                    </Box>
+                </ListItemButton>
+                {index < displayedRapportini.length - 1 && (
+                  <Divider 
+                    component="li" 
+                    sx={{ 
+                      backgroundColor: isLastOfDate ? 'primary.main' : undefined,
+                      height: isLastOfDate ? '2px' : '1px',
+                      opacity: isLastOfDate ? 0.3 : 1
+                    }} 
                   />
-                  <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                      {report.isOffline && <Chip label="Offline" size="small" color="info" variant="outlined" />}
-                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        {report.tipoGiornata?.nome}
-                      </Typography>
-                  </Box>
-                </ListItem>
-                {index < displayedRapportini.length - 1 && <Divider component="li" />}
+                )}
               </Box>
-            ))
+              )
+            })
           ) : (
             !syncState.loading && (
               <Typography sx={{ textAlign: 'center', p: 4, fontStyle: 'italic', color: 'text.secondary' }}>
