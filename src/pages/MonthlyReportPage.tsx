@@ -18,7 +18,7 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInMinutes } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData, TipoGiornata } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
@@ -30,30 +30,27 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 
-
-// --- STRUTTURA DATI (INVARIATA) ---
+// --- NUOVE STRUTTURE DATI ---
+export interface DettaglioVoce {
+    nome: string;
+    colore: string;
+    oreTotali: number;
+    giorni: number;
+    costo: number;
+    unita: 'g' | 'h';
+}
 export interface RiepilogoMese {
     oreTotali: number;
     costoTotale: number;
-    dettaglio: Map<string, { // la chiave è tipoGiornataId
-        nome: string;
-        colore: string;
-        oreOrdinarie: number;
-        oreStraordinario: number;
-        costo: number;
-        unita: 'g' | 'h';
-        giorni: number;
-    }>;
+    giorniTotaliLavorati: number;
+    dettaglio: Map<string, DettaglioVoce>;
 }
 
-// Funzione robusta per la conversione delle date
 const safeConvertToDate = (dateSource: any): Date | null => {
     if (!dateSource) return null;
-    // Gestisce oggetti Timestamp di Firestore { seconds, nanoseconds }
     if (typeof dateSource === 'object' && dateSource !== null && typeof dateSource.seconds === 'number') {
         return new Date(dateSource.seconds * 1000);
     }
-    // Gestisce oggetti Date o stringhe di data valide
     const d = new Date(dateSource);
     if (!isNaN(d.getTime())) {
         return d;
@@ -75,15 +72,9 @@ const MonthlyReportPage = () => {
 
     const masterData = useMemo<MasterData | null>(() => {
         if (!localAnagrafiche || !impostazioniLocali) return null;
-        
         const data: { [key: string]: any[] } = {};
         localAnagrafiche.forEach(item => { data[item.id] = item.data; });
-        
-        return {
-            ...data,
-            impostazioni: impostazioniLocali.data,
-        } as MasterData;
-
+        return { ...data, impostazioni: impostazioniLocali.data } as MasterData;
     }, [localAnagrafiche, impostazioniLocali]);
 
     const rapportiniLocali = useLiveQuery(() => {
@@ -98,7 +89,6 @@ const MonthlyReportPage = () => {
 
     const rapportiniArricchiti = useMemo(() => {
         if (!rapportiniLocali || !masterData || !userProfile) return [];
-
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
         const naviMap = new Map(masterData.navi.map((n) => [n.id, n.nome]));
         const luoghiMap = new Map(masterData.luoghi.map((l) => [l.id, l.nome]));
@@ -109,19 +99,17 @@ const MonthlyReportPage = () => {
             const fine = safeConvertToDate(report.oraFine);
 
             if (inizio && fine) {
-                const pausaInOre = report.pausa ?? 0;
+                const pausaInOre = (report.pausa ?? 0) / 60;
                 const diffInMin = differenceInMinutes(fine, inizio);
                 oreLavoro = Math.max(0, (diffInMin / 60) - pausaInOre);
             } else {
                 oreLavoro = report.dettaglioOreTecnici?.find(d => d.tecnicoId === userProfile.tecnicoId)?.ore ?? report.oreLavoro ?? 0;
             }
 
-            const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId);
-            
             return {
                 ...report,
                 data: new Date(report.data),
-                tipoGiornata: tipoGiornata,
+                tipoGiornata: tipiGiornataMap.get(report.tipoGiornataId),
                 oreGiorno: oreLavoro,
                 naveNome: report.naveId ? naviMap.get(report.naveId) : undefined,
                 luogoNome: report.luogoId ? luoghiMap.get(report.luogoId) : undefined,
@@ -133,98 +121,111 @@ const MonthlyReportPage = () => {
         if (!rapportiniArricchiti.length || !masterData || !userProfile) return null;
 
         const tariffe = masterData.impostazioni.tariffe as TariffaLocale[];
-        const tariffaOrdinaria = tariffe.find(t => t.nome.toLowerCase() === 'ordinaria');
-        const tariffaStraordinaria = tariffe.find(t => t.nome.toLowerCase() === 'straordinario');
-        const costoOrdinarioTariffa = tariffaOrdinaria?.costo ?? 0;
-        const costoStraordinarioTariffa = tariffaStraordinaria?.costo ?? 0;
+        const costoOrdinarioTariffa = tariffe.find(t => t.nome.toLowerCase() === 'ordinaria')?.costo ?? 0;
+        const costoStraordinarioTariffa = tariffe.find(t => t.nome.toLowerCase() === 'straordinario')?.costo ?? 0;
+        
+        const tipoGiornataOrdinaria = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'ordinaria')!;
+        const tipoGiornataStraordinario = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'straordinario')!;
+        const trasfertaIds = new Set(masterData.tipiGiornata.filter(t => t.nome.toLowerCase().includes('trasferta')).map(t => t.id));
 
-        const tipoGiornataStraordinario = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'straordinario');
-        if (!tipoGiornataStraordinario) {
-            console.error("Definizione 'Straordinario' non trovata in tipiGiornata.");
-            return null;
-        }
-        const straordinarioId = tipoGiornataStraordinario.id;
+        const tipoGiornataSforoVirtuale: Omit<DettaglioVoce, 'giorni' | 'costo' | 'oreTotali'> = {
+            nome: 'Straordinario (Oltre 8h)',
+            colore: tipoGiornataStraordinario.colore, 
+            unita: 'h'
+        };
+        const sforoVirtualeId = 'straordinario-sforo-virtuale';
 
-        const riepilogo: RiepilogoMese = { oreTotali: 0, costoTotale: 0, dettaglio: new Map() };
+        const riepilogoFinale: RiepilogoMese = { oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map() };
+        const riepilogoPerGiorno = new Map<string, { oreOrdinariePool: number, oreStraordinarieEsplicite: number, altriReport: EnrichedRapportino[] }>();
 
-        const dailyData = new Map<string, { oreNormali: number; oreStraordinarieEsplicite: number; reports: EnrichedRapportino[] }>();
-
+        // 1. Raggruppa i report per giorno e separa i tipi di ore
         for (const report of rapportiniArricchiti) {
-             if(!report.oreGiorno || report.oreGiorno <= 0) continue;
-
+            if (!report.oreGiorno || report.oreGiorno <= 0 || !report.tipoGiornata) continue;
+            
             const dayKey = format(report.data, 'yyyy-MM-dd');
-            if (!dailyData.has(dayKey)) {
-                dailyData.set(dayKey, { oreNormali: 0, oreStraordinarieEsplicite: 0, reports: [] });
+            if (!riepilogoPerGiorno.has(dayKey)) {
+                riepilogoPerGiorno.set(dayKey, { oreOrdinariePool: 0, oreStraordinarieEsplicite: 0, altriReport: [] });
             }
-            const dayEntry = dailyData.get(dayKey)!;
-            
-            if (report.tipoGiornata?.nome.toLowerCase() === 'straordinario') {
-                dayEntry.oreStraordinarieEsplicite += report.oreGiorno;
+            const dailySummary = riepilogoPerGiorno.get(dayKey)!;
+
+            if (report.tipoGiornata.id === tipoGiornataOrdinaria.id) {
+                dailySummary.oreOrdinariePool += report.oreGiorno;
+            } else if (report.tipoGiornata.id === tipoGiornataStraordinario.id) {
+                dailySummary.oreStraordinarieEsplicite += report.oreGiorno;
             } else {
-                dayEntry.oreNormali += report.oreGiorno;
+                dailySummary.altriReport.push(report);
             }
-            dayEntry.reports.push(report);
         }
+        
+        const giorniConSforo = new Set<string>();
 
-        for (const [, data] of dailyData.entries()) {
-            const oreOrdinarieDelGiorno = Math.min(data.oreNormali, 8);
-            const oreStraordinarieDaSforo = Math.max(0, data.oreNormali - 8);
-            const oreStraordinarieTotaliDelGiorno = data.oreStraordinarieEsplicite + oreStraordinarieDaSforo;
-
-            riepilogo.oreTotali += oreOrdinarieDelGiorno + oreStraordinarieTotaliDelGiorno;
-
-            if (oreOrdinarieDelGiorno > 0) {
-                for (const report of data.reports) {
-                     if (!report.tipoGiornata || report.tipoGiornata.nome.toLowerCase() === 'straordinario' || !report.oreGiorno) continue;
-                    
-                    const dettaglio = riepilogo.dettaglio.get(report.tipoGiornata.id) || {
-                        nome: report.tipoGiornata.nome, colore: report.tipoGiornata.colore || '#808080',
-                        oreOrdinarie: 0, oreStraordinario: 0, costo: 0, unita: 'h', giorni: 0
-                    };
-                    
-                    const percentuale = data.oreNormali > 0 ? (report.oreGiorno / data.oreNormali) : 0;
-                    dettaglio.oreOrdinarie += oreOrdinarieDelGiorno * percentuale;
-                    riepilogo.dettaglio.set(report.tipoGiornata.id, dettaglio);
-                }
-            }
+        // 2. Processa ogni giorno per calcolare sforo e distribuire le ore
+        for (const [dayKey, dailySummary] of riepilogoPerGiorno.entries()) {
+            const sforo = Math.max(0, dailySummary.oreOrdinariePool - 8);
+            const oreOrdinarieDaContabilizzare = dailySummary.oreOrdinariePool - sforo;
             
-            if (oreStraordinarieTotaliDelGiorno > 0) {
-                const dettaglioStra = riepilogo.dettaglio.get(straordinarioId) || {
-                    nome: tipoGiornataStraordinario.nome, colore: tipoGiornataStraordinario.colore || '#ff0000',
-                    oreOrdinarie: 0, oreStraordinario: 0, costo: 0, unita: 'h', giorni: 0
-                };
-                dettaglioStra.oreStraordinario += oreStraordinarieTotaliDelGiorno;
-                riepilogo.dettaglio.set(straordinarioId, dettaglioStra);
-            }
-        }
+            if (sforo > 0) giorniConSforo.add(dayKey);
 
-        const giorniLavoratiPerTipo = new Map<string, Set<string>>();
-        for (const report of rapportiniArricchiti) {
-            if(report.tipoGiornata && report.oreGiorno && report.oreGiorno > 0){
-                if (!giorniLavoratiPerTipo.has(report.tipoGiornata.id)) {
-                    giorniLavoratiPerTipo.set(report.tipoGiornata.id, new Set());
+            if (oreOrdinarieDaContabilizzare > 0) {
+                const dettaglio = riepilogoFinale.dettaglio.get(tipoGiornataOrdinaria.id) || { ...tipoGiornataOrdinaria, oreTotali: 0, giorni: 0, costo: 0, unita: 'h' };
+                dettaglio.oreTotali += oreOrdinarieDaContabilizzare;
+                riepilogoFinale.dettaglio.set(tipoGiornataOrdinaria.id, dettaglio);
+            }
+            if (dailySummary.oreStraordinarieEsplicite > 0) {
+                const dettaglio = riepilogoFinale.dettaglio.get(tipoGiornataStraordinario.id) || { ...tipoGiornataStraordinario, oreTotali: 0, giorni: 0, costo: 0, unita: 'h' };
+                dettaglio.oreTotali += dailySummary.oreStraordinarieEsplicite;
+                riepilogoFinale.dettaglio.set(tipoGiornataStraordinario.id, dettaglio);
+            }
+            if (sforo > 0) {
+                const dettaglio = riepilogoFinale.dettaglio.get(sforoVirtualeId) || { ...tipoGiornataSforoVirtuale, oreTotali: 0, giorni: 0, costo: 0 };
+                dettaglio.oreTotali += sforo;
+                riepilogoFinale.dettaglio.set(sforoVirtualeId, dettaglio);
+            }
+            for (const report of dailySummary.altriReport) {
+                const dettaglio = riepilogoFinale.dettaglio.get(report.tipoGiornata.id) || { ...report.tipoGiornata, oreTotali: 0, giorni: 0, costo: 0, unita: trasfertaIds.has(report.tipoGiornata.id) ? 'g' : 'h' };
+                if (!trasfertaIds.has(report.tipoGiornata.id)) {
+                    dettaglio.oreTotali += report.oreGiorno;
                 }
-                giorniLavoratiPerTipo.get(report.tipoGiornata.id)!.add(format(report.data, 'yyyy-MM-dd'));
+                riepilogoFinale.dettaglio.set(report.tipoGiornata.id, dettaglio);
             }
         }
 
-        for (const [tipoId, dettaglio] of riepilogo.dettaglio.entries()) {
-            dettaglio.costo = (dettaglio.oreOrdinarie * costoOrdinarioTariffa) + (dettaglio.oreStraordinario * costoStraordinarioTariffa);
-            riepilogo.costoTotale += dettaglio.costo;
-
-            dettaglio.giorni = giorniLavoratiPerTipo.get(tipoId)?.size ?? 0;
-            if (tipoId === straordinarioId) {
-                const giorniStraEspliciti = new Set<string>();
-                rapportiniArricchiti.forEach(r => {
-                    if(r.tipoGiornataId === straordinarioId && r.oreGiorno && r.oreGiorno > 0){
-                        giorniStraEspliciti.add(format(r.data, 'yyyy-MM-dd'));
-                    }
-                });
-                dettaglio.giorni = giorniStraEspliciti.size;
+        // 3. Calcola giorni, costi e finalizza
+        const giorniPerTipo = new Map<string, Set<string>>();
+        const giorniLavoratiUnici = new Set<string>();
+        for (const report of rapportiniArricchiti) {
+            if (report.tipoGiornata && (report.oreGiorno > 0 || trasfertaIds.has(report.tipoGiornata.id))) {
+                const dayKey = format(report.data, 'yyyy-MM-dd');
+                if (!trasfertaIds.has(report.tipoGiornata.id)) {
+                     giorniLavoratiUnici.add(dayKey);
+                }
+                if (!giorniPerTipo.has(report.tipoGiornata.id)) {
+                    giorniPerTipo.set(report.tipoGiornata.id, new Set());
+                }
+                giorniPerTipo.get(report.tipoGiornata.id)!.add(dayKey);
             }
         }
+        
+        riepilogoFinale.giorniTotaliLavorati = giorniLavoratiUnici.size;
+        let oreTotaliFinali = 0;
+        for (const [tipoId, dettaglio] of riepilogoFinale.dettaglio.entries()) {
+            dettaglio.giorni = giorniPerTipo.get(tipoId)?.size ?? 0;
+            oreTotaliFinali += dettaglio.oreTotali;
+            
+            if (dettaglio.nome.toLowerCase().includes('straordinario')) {
+                dettaglio.costo = dettaglio.oreTotali * costoStraordinarioTariffa;
+            } else {
+                dettaglio.costo = dettaglio.oreTotali * costoOrdinarioTariffa;
+            }
+            riepilogoFinale.costoTotale += dettaglio.costo;
+        }
+        
+        const dettaglioSforo = riepilogoFinale.dettaglio.get(sforoVirtualeId);
+        if(dettaglioSforo) dettaglioSforo.giorni = giorniConSforo.size;
+        
+        riepilogoFinale.oreTotali = oreTotaliFinali;
 
-        return riepilogo.oreTotali > 0 || riepilogo.dettaglio.size > 0 ? riepilogo : null;
+        return riepilogoFinale.oreTotali > 0 || riepilogoFinale.dettaglio.size > 0 ? riepilogoFinale : null;
     }, [rapportiniArricchiti, masterData, userProfile]);
 
     const reportDays = useMemo(() => {
@@ -240,33 +241,30 @@ const MonthlyReportPage = () => {
             showSnackbar('Nessun dato valido da includere nel PDF.', 'info');
             return;
         }
-
         const tecnico = masterData?.tecnici?.find(t => t.id === userProfile?.tecnicoId);
-
         if (!tecnico) {
             showSnackbar('Profilo tecnico non trovato nei dati locali.', 'error');
             return;
         }
-    
         setIsGeneratingPdf(true);
         try {
             const pdfBlob = await generateMonthlyReportPDF(rapportiniArricchiti, riepilogoMese, tecnico, currentMonth);
             setPdfPreviewBlob(pdfBlob);
             setIsPreviewOpen(true);
         } catch (error) {
-            console.error("Errore durante la generazione del PDF mensile:", error);
-            showSnackbar('Si è verificato un errore durante la creazione del report.', 'error');
+            console.error("Errore PDF:", error);
+            showSnackbar('Errore generazione report.', 'error');
         } finally {
             setIsGeneratingPdf(false);
         }
-      };
+    };
 
     const handleShareFromPreview = async (blob: Blob, fileName: string) => {
         try {
             await shareOrDownload(blob, fileName);
         } catch (error) {
-            console.error("Errore durante la condivisione del PDF:", error);
-            showSnackbar('Si è verificato un errore durante la condivisione.', 'error');
+            console.error("Errore condivisione:", error);
+            showSnackbar('Errore durante la condivisione.', 'error');
         }
     };
 
@@ -287,15 +285,13 @@ const MonthlyReportPage = () => {
                 </Grid>
                 <Grid>
                     <Tooltip title="Genera riepilogo PDF del mese corrente">
-                        <span> {/* Span necessario per il Tooltip su un bottone disabilitato */}
+                        <span>
                         <Button 
                             variant="outlined" 
                             startIcon={isGeneratingPdf ? <CircularProgress size={20}/> : <PdfIcon/>}
                             onClick={handleGenerateMonthlyReport}
                             disabled={isGeneratingPdf || !riepilogoMese}
-                        >
-                        Genera Mensile
-                        </Button>
+                        >Genera Mensile</Button>
                         </span>
                     </Tooltip>
                 </Grid>
@@ -315,13 +311,12 @@ const MonthlyReportPage = () => {
                      </Paper>
                  </Grid>
                  <Grid size={{ xs: 12, md: 8 }}>
-                    {!riepilogoMese && (
+                    {!riepilogoMese ? (
                         <Paper sx={{ p: 4, textAlign: 'center', height: '100%' }}>
                             <Typography variant="h6">Nessun dato per questo mese</Typography>
                             <Typography color="text.secondary">Non sono stati trovati rapportini nella cache locale per il periodo selezionato.</Typography>
                         </Paper>
-                    )}
-                    {riepilogoMese && (
+                    ) : (
                         <Grid container spacing={3}>
                             <Grid size={{ xs: 12, lg: 6 }}>
                                 <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
@@ -333,6 +328,10 @@ const MonthlyReportPage = () => {
                                                     <TableCell><Typography fontWeight="bold">Ore Totali</Typography></TableCell>
                                                     <TableCell align="right"><Typography variant="h6">{riepilogoMese.oreTotali.toFixed(2)}</Typography></TableCell>
                                                 </TableRow>
+                                                <TableRow>
+                                                    <TableCell><Typography fontWeight="bold">Giorni Totali</Typography></TableCell>
+                                                    <TableCell align="right"><Typography variant="h6">{riepilogoMese.giorniTotaliLavorati}</Typography></TableCell>
+                                                </TableRow>
                                                 <TableRow sx={{ backgroundColor: 'primary.lighter' }}>
                                                     <TableCell><Typography fontWeight="bold">Costo Stimato</Typography></TableCell>
                                                     <TableCell align="right"><Typography variant="h5" color="primary.main" fontWeight="bold">€ {riepilogoMese.costoTotale.toFixed(2)}</Typography></TableCell>
@@ -343,7 +342,10 @@ const MonthlyReportPage = () => {
                                 </Paper>
                             </Grid>
                             <Grid size={{ xs: 12, lg: 6 }}>
-                                <DettaglioOreTipoGiornata dettaglio={riepilogoMese.dettaglio} />
+                                <DettaglioOreTipoGiornata 
+                                    dettaglio={riepilogoMese.dettaglio} 
+                                    giorniTotali={riepilogoMese.giorniTotaliLavorati}
+                                />
                             </Grid>
                             <Grid sx={{ mt: 2 }} size={12}>
                                 <ActivityBreakdown riepilogo={riepilogoMese} />

@@ -1,72 +1,97 @@
-import React from 'react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Typography,
-  Box,
-  TableFooter
-} from '@mui/material';
-import { RiepilogoMese } from '@/pages/MonthlyReportPage';
+import { Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, Box, Tooltip, TableFooter } from '@mui/material';
+import { HelpOutline } from '@mui/icons-material';
+import { DettaglioVoce } from '@/pages/MonthlyReportPage';
 
-interface DettaglioOreTipoGiornataProps {
-  dettaglio: RiepilogoMese['dettaglio'];
+interface Props {
+    dettaglio: Map<string, DettaglioVoce>;
+    giorniTotali: number;
 }
 
-const DettaglioOreTipoGiornata: React.FC<DettaglioOreTipoGiornataProps> = ({ dettaglio }) => {
-  const sortedDettaglio = Array.from(dettaglio.values()).sort((a, b) => (b.oreOrdinarie + b.oreStraordinario) - (a.oreOrdinarie + a.oreStraordinario));
+const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
+    
+    // Ordina le voci come richiesto: Ordinaria, Straordinari, e poi il resto.
+    const getSortOrder = (nome: string) => {
+        const lowerNome = nome.toLowerCase();
+        if (lowerNome === 'ordinaria') return 0;
+        if (lowerNome === 'straordinario (oltre 8h)') return 1;
+        if (lowerNome === 'straordinario') return 2;
+        return 3; // Tutte le altre voci
+    };
 
-  // --- CALCOLO TOTALI PER IL FOOTER ---
-  const totalOreOrdinarie = sortedDettaglio.reduce((acc, item) => acc + item.oreOrdinarie, 0);
-  const totalOreStraordinario = sortedDettaglio.reduce((acc, item) => acc + item.oreStraordinario, 0);
-  const totalGiorni = sortedDettaglio.reduce((acc, item) => acc + item.giorni, 0);
+    const sortedDettaglio = Array.from(dettaglio.values()).sort((a, b) => {
+        const orderA = getSortOrder(a.nome);
+        const orderB = getSortOrder(b.nome);
+        if (orderA !== orderB) {
+            return orderA - orderB;
+        }
+        return a.nome.localeCompare(b.nome); // Ordine alfabetico per le altre voci
+    });
 
-  const footerCellStyle = { fontWeight: 'bold', fontSize: '0.95rem' };
+    const totalOre = sortedDettaglio.reduce((acc, item) => acc + item.oreTotali, 0);
 
-  return (
-    <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
-      <Typography variant="h5" gutterBottom>Dettaglio Ore per Attività</Typography>
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small" aria-label="dettaglio ore per tipo di giornata">
-          <TableHead>
-            <TableRow sx={{ '& th': { fontWeight: 'bold' } }}>
-              <TableCell>Tipo Attività</TableCell>
-              <TableCell align="right">Ore Ord.</TableCell>
-              <TableCell align="right">Ore Straord.</TableCell>
-              <TableCell align="right">Giorni</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sortedDettaglio.map((item) => (
-              <TableRow key={item.nome}>
-                <TableCell component="th" scope="row">
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: item.colore, mr: 1.5 }} />
-                        <Typography variant="body2">{item.nome}</Typography>
-                    </Box>
-                </TableCell>
-                <TableCell align="right">{item.oreOrdinarie > 0 ? item.oreOrdinarie.toFixed(2) : '-'}</TableCell>
-                <TableCell align="right">{item.oreStraordinario > 0 ? item.oreStraordinario.toFixed(2) : '-'}</TableCell>
-                <TableCell align="right">{item.giorni}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-            <TableFooter>
-                <TableRow sx={{ '& td': { fontWeight: 'bold' } }}>
-                    <TableCell sx={footerCellStyle}>TOTALI</TableCell>
-                    <TableCell sx={footerCellStyle} align="right">{totalOreOrdinarie.toFixed(2)}</TableCell>
-                    <TableCell sx={footerCellStyle} align="right">{totalOreStraordinario.toFixed(2)}</TableCell>
-                    <TableCell sx={footerCellStyle} align="right">{totalGiorni}</TableCell>
-                </TableRow>
-            </TableFooter>
-        </Table>
-      </TableContainer>
-    </Paper>
-  );
+    if (sortedDettaglio.length === 0) {
+        return (
+            <Paper elevation={3} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+                <Typography variant="h6">Dettaglio Attività</Typography>
+                <Typography color="text.secondary" sx={{ mt: 2 }}>Nessun dettaglio disponibile</Typography>
+            </Paper>
+        );
+    }
+
+    return (
+        <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Typography variant="h5" gutterBottom component="div" sx={{ flexGrow: 1 }}>
+                    Dettaglio Attività
+                </Typography>
+                <Tooltip title="Le ore sono calcolate in base alla tipologia di giornata. La colonna 'Presenze' indica il numero di giornate uniche in cui compare quel tipo di attività.">
+                    <HelpOutline color="action" />
+                </Tooltip>
+            </Box>
+            <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                    <TableHead sx={{ backgroundColor: 'background.default' }}>
+                        <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Tipo Attività</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>Presenze</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Tot. Ore</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {sortedDettaglio.map((voce) => {
+                            if (voce.oreTotali <= 0 && voce.giorni <= 0) return null; 
+                            return (
+                            <TableRow key={voce.nome}>
+                                <TableCell component="th" scope="row">
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Box sx={{ 
+                                        width: 12, 
+                                        height: 12, 
+                                        borderRadius: '50%', 
+                                        backgroundColor: 'white', 
+                                        border: '1px solid #e0e0e0',
+                                        mr: 1, 
+                                        flexShrink: 0 
+                                    }} />
+                                    <Typography variant="body2">{voce.nome}</Typography>
+                                </Box>
+                                </TableCell>
+                                <TableCell align="center">{voce.giorni > 0 ? voce.giorni : '-'}</TableCell>
+                                <TableCell align="right">{voce.unita === 'h' ? voce.oreTotali.toFixed(2) : '-'}</TableCell>
+                            </TableRow>
+                        )})}
+                    </TableBody>
+                     <TableFooter sx={{ backgroundColor: 'background.default' }}>
+                        <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Totale</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>{giorniTotali}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>{totalOre.toFixed(2)}</TableCell>
+                        </TableRow>
+                    </TableFooter>
+                </Table>
+            </TableContainer>
+        </Paper>
+    );
 };
 
 export default DettaglioOreTipoGiornata;
