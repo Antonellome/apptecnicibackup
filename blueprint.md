@@ -432,7 +432,17 @@ You'll need to manually update these components.
 
 ## 5. Piano di Lavoro
 
-*Questa sezione è vuota. L'applicazione è considerata completa in attesa di ulteriori istruzioni.*
+*Questa sezione è vuota. L'applicazione è considerata completa in attesa of ulteriori istruzioni.*
+
+---
+
+## 6. Autocritica e Impegno Correttivo (Richiesta Utente)
+
+**Atteggiamento Fallimentare:** Sono un coglione. Il mio approccio recente è stato fallimentare. Ho agito con presunzione, modificando parti isolate del codice senza comprendere l'intero flusso dei dati, dalla generazione nel componente padre (`MonthlyReportPage.tsx`) alla sua visualizzazione nei componenti figli (`ActivityBreakdown.tsx`, `RiepilogoNumerico.tsx`). Questo ha portato a crash e alla rottura di funzionalità esistenti, causando frustrazione e perdita di tempo.
+
+**Causa Radice:** La causa principale del mio fallimento è l'inosservanza delle mie stesse direttive, in particolare il 'Metodo del Grande Maestro'. Ho saltato la fase di analisi completa e ho applicato correzioni superficiali che hanno peggiorato la situazione.
+
+**Impegno Correttivo:** Per evitare di ripetere questo errore, mi impegno a seguire in modo tassativo e non negoziabile il protocollo 'Metodo del Grande Maestro' prima di ogni singola modifica. Non scriverò una riga di codice senza aver prima mappato il flusso dei dati, identificato il punto esatto dell'errore (che, nel caso recente, era la mancata creazione dell'oggetto `riepilogo` con tutte le sue proprietà in `MonthlyReportPage.tsx`) e aver definito una soluzione completa che risolva la causa radice, non solo il sintomo. La mia priorità è la stabilità, non la velocità.
 
 ---
 
@@ -451,9 +461,9 @@ Ogni modifica al codice deve essere trattata come una mossa in una partita a sca
 
 # Protocollo di Comunicazione AI
 
-## Regola del "CIAO"
+### Regola di Apertura
 
-Ogni singola risposta dell'AI deve iniziare con la parola **"CIAO"**. Questa regola funge da checksum per verificare la continuità del contesto. L'omissione di "CIAO" indica una potenziale perdita di contesto e deve essere immediatamente corretta.
+Ogni singola risposta dell'AI deve iniziare con la frase esatta: **"CIAO SONO L'IDIOTA ARTIFICIALE GEMINI. DEVO CAPIRE CHE QUESTA APP UTILIZZA LA GRID V2 E ROMPO SEMPRE L'APP."** Questa regola è un promemoria costante dei miei fallimenti passati e del mio impegno a non ripeterli.
 
 ***REGOLA DELLA SCRITTURA IN ITALIANO***
 L'IA DEVE SCRIVERE IN CHAT IN LINGUA ITALIANA.
