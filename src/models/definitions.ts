@@ -199,6 +199,8 @@ export interface DayInfo {
     [key: string]: any; // Per l'accesso dinamico
 }
 
+export type Giorno = DayInfo;
+
 export interface RiepilogoMensile {
     [key: string]: DayInfo;
 }
