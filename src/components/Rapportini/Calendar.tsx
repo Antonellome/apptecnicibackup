@@ -1,7 +1,7 @@
 import { Paper, Typography, Grid, Box, Tooltip } from '@mui/material';
 import { getDaysInMonth, startOfMonth, format, getDay } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { Rapportino, TipoGiornata, Giorno } from '@/pages/MonthlyReportPage';
+import { Rapportino, TipoGiornata, Giorno } from '@/models/definitions';
 
 interface Props {
     rapportino?: Rapportino;
