@@ -7,7 +7,7 @@ import {
   Paper,
   Grid
 } from '@mui/material';
-import { RiepilogoMese } from '@/pages/MonthlyReportPage';
+import { RiepilogoMese, DettaglioVoce } from '@/models/definitions';
 
 interface ActivityBreakdownProps {
   riepilogo: RiepilogoMese;
@@ -16,10 +16,10 @@ interface ActivityBreakdownProps {
 const ActivityBreakdown: React.FC<ActivityBreakdownProps> = ({ riepilogo }) => {
 
     const { displayActivities, totalHoursForChart } = useMemo(() => {
-        const activities = Array.from(riepilogo.dettaglio.values())
-            .filter(d => d.oreTotali > 0 && d.unita === 'h');
+        const activities: DettaglioVoce[] = Array.from(riepilogo.dettaglio.values())
+            .filter((d: DettaglioVoce) => d.oreTotali > 0 && d.unita === 'h');
         
-        const total = activities.reduce((acc, activity) => acc + activity.oreTotali, 0);
+        const total = activities.reduce((acc: number, activity: DettaglioVoce) => acc + activity.oreTotali, 0);
 
         return { displayActivities: activities, totalHoursForChart: total };
 
@@ -29,23 +29,31 @@ const ActivityBreakdown: React.FC<ActivityBreakdownProps> = ({ riepilogo }) => {
         return null; 
     }
 
-    const sortedActivities = displayActivities.sort((a, b) => b.oreTotali - a.oreTotali);
+    const sortedActivities = [...displayActivities].sort((a: DettaglioVoce, b: DettaglioVoce) => b.oreTotali - a.oreTotali);
 
     return (
         <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
             <Typography variant="h5" gutterBottom>Distribuzione Attività Mensili (su base ore)</Typography>
             <Box sx={{ flexGrow: 1 }}>
-                {sortedActivities.map((activity) => {
+                {sortedActivities.map((activity: DettaglioVoce) => {
                     const percentage = (activity.oreTotali / totalHoursForChart) * 100;
                     return (
                         <Tooltip title={`${activity.oreTotali.toFixed(2)} ore`} placement="top" key={activity.nome}>
                             <Grid container alignItems="center" spacing={2} sx={{ mb: 1.5 }}>
-                                <Grid size={{ xs: 5, sm: 4 }}>
+                                <Grid
+                                    size={{
+                                        xs: 5,
+                                        sm: 4
+                                    }}>
                                     <Typography variant="body2" sx={{ fontWeight: '500' }}>
                                         {activity.nome}
                                     </Typography>
                                 </Grid>
-                                <Grid size={{ xs: 7, sm: 8 }}>
+                                <Grid
+                                    size={{
+                                        xs: 7,
+                                        sm: 8
+                                    }}>
                                     <LinearProgress
                                         variant="determinate"
                                         value={percentage}
@@ -54,7 +62,7 @@ const ActivityBreakdown: React.FC<ActivityBreakdownProps> = ({ riepilogo }) => {
                                             borderRadius: '4px',
                                             backgroundColor: (theme) => theme.palette.grey[200],
                                             '& .MuiLinearProgress-bar': {
-                                                backgroundColor: (theme) => theme.palette.primary.main, 
+                                                backgroundColor: activity.colore || 'primary.main',
                                             },
                                         }}
                                     />

@@ -1,7 +1,5 @@
-
 {
   "hosting": {
-    "site": "tecnici",
     "public": "dist",
     "ignore": [
       "firebase.json",
