@@ -1,3 +1,4 @@
+import { Timestamp } from 'firebase/firestore';
 
 // =================================================================
 // INTERFACCE DI BASE E UTILITY
@@ -200,6 +201,38 @@ export interface DayInfo {
 
 export interface RiepilogoMensile {
     [key: string]: DayInfo;
+}
+
+export interface DettaglioVoce {
+  id: string;
+  nome: string;
+  oreTotali: number;
+  giorni: number;
+  costo: number;
+  unita: 'h' | 'g';
+  descrizione?: string;
+  tariffa?: number;
+  tipo: 'oraria' | 'giornaliera';
+  colore: string;
+  sigla?: string;
+  lavorativo: boolean;
+  icona: string;
+  oreOrdinarie?: number;
+  oreStraordinario?: number;
+}
+
+export interface RiepilogoMese {
+  giorniLavorati: number;
+  giorniStraordinario: number;
+  giorniFerie: number;
+  giorniMalattia: number;
+  giorniPermesso: number;
+  giorniFestivo: number;
+  giorniLavoratiUnici: number;
+  oreOrdinarie: number;
+  oreStraordinarie: number;
+  giorniTrasferta: number;
+  voci: DettaglioVoce[];
 }
 
 
