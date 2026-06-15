@@ -4,7 +4,6 @@ import {
   Box,
   Typography,
   List,
-  ListItemText,
   Button,
   Alert,
   Paper,
@@ -12,7 +11,7 @@ import {
   Divider,
   Chip
 } from '@mui/material';
-import { CloudQueue, Sync } from '@mui/icons-material';
+import { CloudQueue, Sync, WifiOff } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, isSameMonth, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
@@ -49,11 +48,25 @@ const ReportListPage = () => {
   const { masterData, loading: masterDataLoading, error: masterDataError } = useMasterData();
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [syncState, setSyncState] = useState({ loading: true, error: null as string | null});
+  const [syncState, setSyncState] = useState({ loading: false, error: null as string | null });
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
-    if (!userProfile?.tecnicoId) {
-      setSyncState({ loading: false, error: "Profilo utente non caricato." });
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOnline || !userProfile?.tecnicoId) {
+      setSyncState({ loading: false, error: isOnline ? "Profilo utente non caricato." : "Sei offline. I dati non possono essere sincronizzati." });
       return;
     }
     setSyncState({ loading: true, error: null });
@@ -79,28 +92,36 @@ const ReportListPage = () => {
             }
         }
         
-        if (puts.length > 0) {
-            localDb.rapportini.bulkPut(puts);
-        }
-        if (deletes.length > 0) {
-            localDb.rapportini.bulkDelete(deletes);
-        }
-
-        setSyncState({ loading: false, error: null });
+        localDb.transaction('rw', localDb.rapportini, async () => {
+          if (puts.length > 0) {
+              await localDb.rapportini.bulkPut(puts);
+          }
+          if (deletes.length > 0) {
+              await localDb.rapportini.bulkDelete(deletes);
+          }
+        }).then(() => {
+          setSyncState({ loading: false, error: null });
+        }).catch(err => {
+          console.error("Dexie transaction failed: ", err);
+          setSyncState({ loading: false, error: `Errore nell'aggiornamento locale: ${err.message}` });
+        });
 
     }, (err) => {
         console.error("Firestore Snapshot Error: ", err);
-        setSyncState({ loading: false, error: `Errore di sincronizzazione: ${err.message}` });
+        setSyncState({ loading: false, error: `Impossibile sincronizzare. Visualizzazione dati locali.` });
     });
 
     return () => unsubscribe();
-  }, [userProfile]);
+  }, [userProfile, isOnline]);
 
   const localRapportini = useLiveQuery(async () => {
     if (!userProfile?.tecnicoId) return [];
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
-    const reportsInMonth = await localDb.rapportini.where('data').between(start, end, true, true).toArray();
+    const reportsInMonth = await localDb.rapportini
+      .where('data')
+      .between(start, end, true, true)
+      .toArray();
     const userReports = reportsInMonth.filter(r => r.presenze && r.presenze.includes(userProfile.tecnicoId));
     userReports.sort((a, b) => b.data.getTime() - a.data.getTime());
     return userReports;
@@ -109,12 +130,12 @@ const ReportListPage = () => {
   const offlineSyncEvents = useLiveQuery(() => localDb.syncQueue.where('type').equals('rapportino').toArray(), []);
 
  const displayedRapportini = useMemo(() => {
-    if (!masterData || !userProfile || !localRapportini || !offlineSyncEvents) return [];
+    if (!masterData || !userProfile || !localRapportini) return [];
 
     const enrichedLocal = localRapportini.map(r => enrichRapportino(r, masterData));
     const localIds = new Set(localRapportini.map(r => r.id));
 
-    const offlineUnsynced = offlineSyncEvents
+    const offlineUnsynced = (offlineSyncEvents || [])
         .map(event => {
             const rapportinoPayload = event.payload as Rapportino;
             const rapportinoDate = rapportinoPayload.data instanceof Timestamp ? rapportinoPayload.data.toDate() : new Date(rapportinoPayload.data as any);
@@ -130,14 +151,14 @@ const ReportListPage = () => {
     return all;
 }, [localRapportini, offlineSyncEvents, masterData, userProfile, currentMonth]);
 
-  const isLoading = masterDataLoading || !userProfile || localRapportini === undefined || offlineSyncEvents === undefined;
+  const isLoading = masterDataLoading || localRapportini === undefined;
 
   if (isLoading) {
       return <FullScreenLoader />;
   }
 
   if (masterDataError) {
-      return <Box sx={{ p: 4, textAlign: 'center' }}><Alert severity="error">Errore nel caricamento dei dati. Riprova più tardi.</Alert></Box>;
+      return <Box sx={{ p: 4, textAlign: 'center' }}><Alert severity="error">Errore critico nel caricamento dei dati anagrafici. Impossibile continuare.</Alert></Box>;
   }
 
   const handleMonthChange = (increment: number) => {
@@ -167,7 +188,8 @@ const ReportListPage = () => {
       </Box>
 
       {syncState.loading && <Chip icon={<Sync />} label="Sincronizzazione in corso..." color="info" sx={{ mb: 2, width: '100%' }} />}
-      {syncState.error && <Alert severity="warning" sx={{ mb: 2 }}>{syncState.error}</Alert>}
+      {syncState.error && !isOnline && <Alert severity="warning" icon={<WifiOff/>} sx={{ mb: 2 }}>{syncState.error}</Alert>}
+      {syncState.error && isOnline && <Alert severity="warning" sx={{ mb: 2 }}>{syncState.error}</Alert>}
       {offlineSyncEvents && offlineSyncEvents.length > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEvents.length} report non sincronizzati`} color="warning" sx={{ mb: 2, width: '100%' }}/>}
 
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -228,7 +250,7 @@ const ReportListPage = () => {
               )
             })
           ) : (
-            !syncState.loading && (
+            (localRapportini && localRapportini.length === 0 && !syncState.loading) && (
               <Typography sx={{ textAlign: 'center', p: 4, fontStyle: 'italic', color: 'text.secondary' }}>
                 Nessun report trovato per il mese selezionato.
               </Typography>

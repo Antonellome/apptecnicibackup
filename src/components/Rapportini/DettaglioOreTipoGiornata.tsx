@@ -1,6 +1,6 @@
 import { Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, Box, Tooltip, TableFooter } from '@mui/material';
 import { HelpOutline } from '@mui/icons-material';
-import { DettaglioVoce } from '@/pages/MonthlyReportPage';
+import { type DettaglioVoce } from '@/models/definitions';
 
 interface Props {
     dettaglio: Map<string, DettaglioVoce>;

@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useReducer, useCallback } from 'react';
+import React, { useEffect, useState, useReducer } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
@@ -129,7 +129,7 @@ const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
-    const { masterData, loading: masterDataLoading, updateTariffe } = useMasterData(); // <-- CARICHIAMO updateTariffe DAL CONTESTO
+    const { masterData, loading: masterDataLoading, updateTariffe } = useMasterData() as any; // <-- CARICHIAMO updateTariffe DAL CONTESTO
 
     const [state, dispatch] = useReducer(settingsReducer, initialState);
     const { tariffe, isSaving, isDirty } = state;
@@ -306,7 +306,7 @@ const SettingsPage: React.FC = () => {
                     APP TECNICI
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    V1.3.2
+                    V1.3.3
                 </Typography>
             </Box>
 

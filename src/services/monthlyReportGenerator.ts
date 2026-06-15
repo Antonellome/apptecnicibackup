@@ -1,10 +1,8 @@
-
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { EnrichedRapportino, Tecnico } from '@/models/definitions';
-import { RiepilogoMese } from '@/pages/MonthlyReportPage';
+import { EnrichedRapportino, Tecnico, RiepilogoMese } from '@/models/definitions';
 
 // --- Funzione Principale per Generare il PDF del Report Mensile ---
 export const generateMonthlyReportPDF = async (
@@ -50,7 +48,7 @@ export const generateMonthlyReportPDF = async (
 
     const summaryBody = Array.from(riepilogo.dettaglio.values()).map(item => [
         item.nome,
-        `${item.oreOrdinarie + item.oreStraordinario}h`,
+        `${item.oreTotali.toFixed(2)}h`,
         `${item.giorni} gg`
     ]);
 

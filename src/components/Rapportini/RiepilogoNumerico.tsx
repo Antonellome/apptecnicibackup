@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiepilogoMese } from '@/pages/MonthlyReportPage';
+import { type RiepilogoMese } from '@/models/definitions';
 import {
   Paper, 
   Typography, 
@@ -8,7 +8,6 @@ import {
   ListItemIcon, 
   ListItemText, 
   Divider, 
-  Box
 } from '@mui/material';
 import {
   FaBriefcase, 
@@ -16,7 +15,6 @@ import {
   FaCoffee, 
   FaPlaneDeparture, 
   FaRegCalendarCheck, 
-  FaRegCalendarTimes, 
   FaProcedures,
   FaStarOfLife,
 } from 'react-icons/fa';

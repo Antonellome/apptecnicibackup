@@ -1,6 +1,6 @@
 import { Paper, Typography, Box, Divider, List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
 import { AccessTime, MoreTime, Functions, FlightTakeoff } from '@mui/icons-material';
-import { RiepilogoMese } from '@/pages/MonthlyReportPage';
+import { type RiepilogoMese } from '@/models/definitions';
 
 interface Props {
     riepilogo: RiepilogoMese;

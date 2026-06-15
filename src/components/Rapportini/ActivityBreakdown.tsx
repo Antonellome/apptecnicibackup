@@ -7,8 +7,7 @@ import {
   Paper,
   Grid
 } from '@mui/material';
-import { RiepilogoMese } from '@/pages/MonthlyReportPage';
-import { DettaglioVoce } from '@/models/definitions';
+import { type RiepilogoMese } from '@/models/definitions';
 
 interface ActivityBreakdownProps {
   riepilogo: RiepilogoMese;
@@ -26,7 +25,7 @@ const ActivityBreakdown: React.FC<ActivityBreakdownProps> = ({ riepilogo }) => {
 
     const { sortedActivities, totalHoursForChart } = useMemo(() => {
         const activities = Array.from(riepilogo.dettaglio.values())
-            .filter((d: DettaglioVoce) => d.oreTotali > 0);
+            .filter((d) => d.oreTotali > 0);
         
         const total = activities.reduce((acc, activity) => acc + activity.oreTotali, 0);
 

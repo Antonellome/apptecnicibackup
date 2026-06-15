@@ -1,4 +1,3 @@
-
 import { useState, useMemo } from 'react';
 import {
   Box,
@@ -18,7 +17,7 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInMinutes } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData, TipoGiornata } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, TariffaLocale, RiepilogoMese, DettaglioVoce } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
@@ -30,24 +29,6 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 import { useMasterData } from '@/hooks/useMasterData';
-
-// --- STRUTTURE DATI ---
-export interface DettaglioVoce {
-    nome: string;
-    colore: string;
-    oreTotali: number;
-    giorni: number;
-    costo: number;
-    unita: 'g' | 'h';
-    id: string;
-}
-
-export interface RiepilogoMese {
-    oreTotali: number;
-    costoTotale: number;
-    giorniTotaliLavorati: number;
-    dettaglio: Map<string, DettaglioVoce>;
-}
 
 const safeConvertToDate = (dateSource: any): Date | null => {
     if (!dateSource) return null;
@@ -170,7 +151,22 @@ const MonthlyReportPage = () => {
         }
 
         // --- Fase 3: Creazione Dettaglio Finale e Calcolo Costi ---
-        const riepilogoFinale: RiepilogoMese = { oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map() };
+        const riepilogoFinale: RiepilogoMese = {
+          oreTotali: 0, 
+          costoTotale: 0, 
+          giorniTotaliLavorati: 0, 
+          dettaglio: new Map(),
+          giorniLavorati: 0,
+          giorniStraordinario: 0,
+          giorniFerie: 0,
+          giorniMalattia: 0,
+          giorniPermesso: 0,
+          giorniFestivo: 0,
+          giorniTrasferta: 0,
+          giorniLavoratiUnici: 0,
+          oreOrdinarie: 0,
+          oreStraordinarie: 0,
+        };
         let costoTotaleAcc = 0;
         let oreTotaliAcc = 0;
         const giorniLavoratiSet = new Set<string>();
@@ -199,7 +195,6 @@ const MonthlyReportPage = () => {
                 costoVoce = val.ore * costoUnitario;
             }
             
-            // Le trasferte non contano nelle ore totali ma solo nel costo
             if (!nome.toLowerCase().includes('trasferta')) {
                 oreTotaliAcc += val.ore;
                 val.giorni.forEach(g => giorniLavoratiSet.add(g));
@@ -214,7 +209,10 @@ const MonthlyReportPage = () => {
                 oreTotali: val.ore,
                 giorni: val.giorni.size,
                 costo: costoVoce,
-            });
+                tipo: tipoGiornata?.tipo ?? 'oraria',
+                lavorativo: tipoGiornata?.lavorativo ?? false,
+                icona: tipoGiornata?.icona ?? '',
+            } as DettaglioVoce);
         });
 
         riepilogoFinale.costoTotale = costoTotaleAcc;

@@ -30,7 +30,6 @@ interface RapportinoConCalcoli extends EnrichedRapportino {
   guadagno?: number;
   oreOrdinarie?: number;
   oreStraordinario?: number;
-  oreGiorno?: number;
 }
 
 interface GeneratedReportViewProps {
