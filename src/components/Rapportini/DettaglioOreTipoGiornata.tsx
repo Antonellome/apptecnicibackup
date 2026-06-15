@@ -9,13 +9,12 @@ interface Props {
 
 const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
     
-    // Ordina le voci come richiesto: Ordinaria, Straordinari, e poi il resto.
     const getSortOrder = (nome: string) => {
         const lowerNome = nome.toLowerCase();
         if (lowerNome === 'ordinaria') return 0;
-        if (lowerNome === 'straordinario (oltre 8h)') return 1;
+        if (lowerNome === 'straordinario (>8h)') return 1;
         if (lowerNome === 'straordinario') return 2;
-        return 3; // Tutte le altre voci
+        return 3;
     };
 
     const sortedDettaglio = Array.from(dettaglio.values()).sort((a, b) => {
@@ -24,7 +23,7 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
         if (orderA !== orderB) {
             return orderA - orderB;
         }
-        return a.nome.localeCompare(b.nome); // Ordine alfabetico per le altre voci
+        return a.nome.localeCompare(b.nome);
     });
 
     const totalOre = sortedDettaglio.reduce((acc, item) => acc + item.oreTotali, 0);
@@ -61,15 +60,15 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
                         {sortedDettaglio.map((voce) => {
                             if (voce.oreTotali <= 0 && voce.giorni <= 0) return null; 
                             return (
-                            <TableRow key={voce.nome}>
+                            <TableRow key={voce.id}>
                                 <TableCell component="th" scope="row">
                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Box sx={{ 
+                                     <Box sx={{ 
                                         width: 12, 
                                         height: 12, 
                                         borderRadius: '50%', 
-                                        backgroundColor: 'white', 
-                                        border: '1px solid #e0e0e0',
+                                        backgroundColor: voce.nome.toLowerCase().includes('trasferta') ? voce.colore : 'white',
+                                        border: `1px solid ${voce.colore || '#e0e0e0'}`,
                                         mr: 1, 
                                         flexShrink: 0 
                                     }} />
@@ -77,7 +76,7 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
                                 </Box>
                                 </TableCell>
                                 <TableCell align="center">{voce.giorni > 0 ? voce.giorni : '-'}</TableCell>
-                                <TableCell align="right">{voce.unita === 'h' ? voce.oreTotali.toFixed(2) : '-'}</TableCell>
+                                 <TableCell align="right">{voce.oreTotali > 0 ? voce.oreTotali.toFixed(2) : '-'}</TableCell>
                             </TableRow>
                         )})}
                     </TableBody>

@@ -7,7 +7,8 @@ import {
   Paper,
   Grid
 } from '@mui/material';
-import { RiepilogoMese, DettaglioVoce } from '@/models/definitions';
+import { RiepilogoMese } from '@/pages/MonthlyReportPage';
+import { DettaglioVoce } from '@/models/definitions';
 
 interface ActivityBreakdownProps {
   riepilogo: RiepilogoMese;
@@ -15,45 +16,52 @@ interface ActivityBreakdownProps {
 
 const ActivityBreakdown: React.FC<ActivityBreakdownProps> = ({ riepilogo }) => {
 
-    const { displayActivities, totalHoursForChart } = useMemo(() => {
-        const activities: DettaglioVoce[] = Array.from(riepilogo.dettaglio.values())
-            .filter((d: DettaglioVoce) => d.oreTotali > 0 && d.unita === 'h');
-        
-        const total = activities.reduce((acc: number, activity: DettaglioVoce) => acc + activity.oreTotali, 0);
+    const getSortOrder = (nome: string) => {
+        const lowerNome = nome.toLowerCase();
+        if (lowerNome === 'ordinaria') return 0;
+        if (lowerNome === 'straordinario (>8h)') return 1;
+        if (lowerNome === 'straordinario') return 2;
+        return 3;
+    };
 
-        return { displayActivities: activities, totalHoursForChart: total };
+    const { sortedActivities, totalHoursForChart } = useMemo(() => {
+        const activities = Array.from(riepilogo.dettaglio.values())
+            .filter((d: DettaglioVoce) => d.oreTotali > 0);
+        
+        const total = activities.reduce((acc, activity) => acc + activity.oreTotali, 0);
+
+        const sorted = activities.sort((a, b) => {
+            const orderA = getSortOrder(a.nome);
+            const orderB = getSortOrder(b.nome);
+            if (orderA !== orderB) {
+                return orderA - orderB;
+            }
+            return a.nome.localeCompare(b.nome);
+        });
+
+        return { sortedActivities: sorted, totalHoursForChart: total };
 
     }, [riepilogo.dettaglio]);
 
-    if (totalHoursForChart === 0 || displayActivities.length === 0) {
+    if (totalHoursForChart === 0 || sortedActivities.length === 0) {
         return null; 
     }
-
-    const sortedActivities = [...displayActivities].sort((a: DettaglioVoce, b: DettaglioVoce) => b.oreTotali - a.oreTotali);
 
     return (
         <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
             <Typography variant="h5" gutterBottom>Distribuzione Attività Mensili (su base ore)</Typography>
             <Box sx={{ flexGrow: 1 }}>
-                {sortedActivities.map((activity: DettaglioVoce) => {
+                {sortedActivities.map((activity) => {
                     const percentage = (activity.oreTotali / totalHoursForChart) * 100;
                     return (
-                        <Tooltip title={`${activity.oreTotali.toFixed(2)} ore`} placement="top" key={activity.nome}>
+                        <Tooltip title={`${activity.oreTotali.toFixed(2)} ore`} placement="top" key={activity.id}>
                             <Grid container alignItems="center" spacing={2} sx={{ mb: 1.5 }}>
-                                <Grid
-                                    size={{
-                                        xs: 5,
-                                        sm: 4
-                                    }}>
+                                <Grid size={{ xs: 5, sm: 4 }}>
                                     <Typography variant="body2" sx={{ fontWeight: '500' }}>
                                         {activity.nome}
                                     </Typography>
                                 </Grid>
-                                <Grid
-                                    size={{
-                                        xs: 7,
-                                        sm: 8
-                                    }}>
+                                <Grid size={{ xs: 7, sm: 8 }}>
                                     <LinearProgress
                                         variant="determinate"
                                         value={percentage}
@@ -62,7 +70,7 @@ const ActivityBreakdown: React.FC<ActivityBreakdownProps> = ({ riepilogo }) => {
                                             borderRadius: '4px',
                                             backgroundColor: (theme) => theme.palette.grey[200],
                                             '& .MuiLinearProgress-bar': {
-                                                backgroundColor: activity.colore || 'primary.main',
+                                                 backgroundColor: 'primary.main',
                                             },
                                         }}
                                     />
