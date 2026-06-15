@@ -61,11 +61,10 @@ export interface Tecnico extends FirebaseDoc {
   categoriaId?: string;
   nomeCompleto?: string;
   attivo?: boolean;
-  // Campi per sistema notifiche come da architettura
   fcmTokens: string[];
   abilitato: boolean;
   categoria: string;
-  [key: string]: any; // Per altre proprietà non strettamente definite
+  [key: string]: any;
 }
 
 export interface Cliente extends FirebaseDoc { nome: string; }
@@ -76,7 +75,7 @@ export interface TipoGiornata extends FirebaseDoc {
     descrizione?: string; 
     tariffa?: number; 
     tipo: 'oraria' | 'giornaliera';
-    colore?: string;
+    colore: string;
     sigla?: string;
     lavorativo: boolean;
     icona: string;
@@ -86,7 +85,7 @@ export interface Veicolo extends FirebaseDoc {
     marca: string; 
     modello: string; 
     targa: string;
-    nome: string; // La rendo obbligatoria per risolvere l'errore in converters.ts
+    nome: string;
 }
 
 export interface Luogo extends FirebaseDoc { nome: string; }
@@ -105,11 +104,11 @@ export interface Tariffa {
     id: string;
     tipoGiornataId: string;
     nome: string;
-    tariffa: number; // Questo è il 'costo'
+    tariffa: number;
 }
 
 export interface TariffaLocale extends Tariffa {
-    costo: number; // Alias per 'tariffa' per coerenza nel client
+    costo: number;
     unita: 'g' | 'h';
 }
 
@@ -156,23 +155,18 @@ export interface CondivisioneInSospeso {
     fileName: string;
 }
 
-// --- NUOVA ARCHITETTURA NOTIFICHE ---
 export interface Notifica extends FirebaseDoc {
     title: string;
-    message: string; // Corpo del messaggio
+    message: string;
     createdAt: Date;
-    sent: boolean; // Flag per la Cloud Function
-    target: {
-        type: 'user' | 'category' | 'all';
-        id: string; // ID del tecnico, nome categoria, o 'all'
-        name: string; // Nome descrittivo (es: "Mario Rossi", "Elettricisti")
-    };
+    sent: boolean;
+    target: { type: 'user' | 'category' | 'all'; id: string; name: string; };
 }
 
 export interface AppNotification extends Notifica {}
 
 // =================================================================
-// MODELLI ARRICCHITI E CALCOLATI (SOLO CLIENT-SIDE)
+// MODELLI ARRICCHITI E CALCOLATI
 // =================================================================
 
 export interface EnrichedRapportino extends Rapportino {
@@ -181,9 +175,9 @@ export interface EnrichedRapportino extends Rapportino {
     veicolo?: Veicolo;
     isOffline: boolean;
     isEditable: boolean;
-    oreGiorno?: number;
-    naveNome?: string; // CAMPO AGGIUNTO
-    luogoNome?: string; // CAMPO AGGIUNTO
+    oreGiorno: number;
+    naveNome?: string;
+    luogoNome?: string;
     tecnicoScrivente?: Tecnico;
     isClickable?: boolean;
 }
@@ -196,45 +190,41 @@ export interface DayInfo {
     tipo: string;
     ore: number;
     tooltip: string;
-    [key: string]: any; // Per l'accesso dinamico
+    [key: string]: any;
 }
+
+export type Giorno = DayInfo;
 
 export interface RiepilogoMensile {
     [key: string]: DayInfo;
 }
 
-export interface DettaglioVoce {
-  id: string;
-  nome: string;
+export interface DettaglioVoce extends TipoGiornata {
   oreTotali: number;
   giorni: number;
   costo: number;
   unita: 'h' | 'g';
-  descrizione?: string;
-  tariffa?: number;
-  tipo: 'oraria' | 'giornaliera';
-  colore: string;
-  sigla?: string;
-  lavorativo: boolean;
-  icona: string;
-  oreOrdinarie?: number;
-  oreStraordinario?: number;
 }
 
 export interface RiepilogoMese {
+  oreTotali: number;
+  costoTotale: number;
+  giorniTotaliLavorati: number;
+  // Contatori specifici per tipo di giornata
   giorniLavorati: number;
   giorniStraordinario: number;
   giorniFerie: number;
   giorniMalattia: number;
   giorniPermesso: number;
   giorniFestivo: number;
-  giorniLavoratiUnici: number;
+  giorniTrasferta: number;
+  giorniLavoratiUnici: number; // Giorni unici in cui si è lavorato (escl. trasferte)
+  // Contatori specifici per ore
   oreOrdinarie: number;
   oreStraordinarie: number;
-  giorniTrasferta: number;
-  voci: DettaglioVoce[];
+  // Mappa dettagliata per la visualizzazione
+  dettaglio: Map<string, DettaglioVoce>;
 }
-
 
 export interface MasterData {
     tecnici: Tecnico[];
