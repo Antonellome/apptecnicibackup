@@ -18,7 +18,7 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInMinutes } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, TariffaLocale, MasterData, TipoGiornata } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, TariffaLocale, TipoGiornata } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
@@ -29,6 +29,7 @@ import { shareOrDownload } from '@/services/shareService';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
+import { useMasterData } from '@/hooks/useMasterData'; // <-- IMPORTIAMO LA FONTE DI VERITÀ
 
 // --- NUOVE STRUTTURE DATI ---
 export interface DettaglioVoce {
@@ -38,6 +39,7 @@ export interface DettaglioVoce {
     giorni: number;
     costo: number;
     unita: 'g' | 'h';
+    id: string; // Aggiunto per lookup affidabile
 }
 export interface RiepilogoMese {
     oreTotali: number;
@@ -61,21 +63,12 @@ const safeConvertToDate = (dateSource: any): Date | null => {
 
 const MonthlyReportPage = () => {
     const { userProfile } = useAuth();
+    const { masterData, loading: masterDataLoading } = useMasterData();
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const { showSnackbar } = useSnackbar();
     const [pdfPreviewBlob, setPdfPreviewBlob] = useState<Blob | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
-    const localAnagrafiche = useLiveQuery(() => db.anagrafiche.toArray(), [], null);
-    const impostazioniLocali = useLiveQuery(() => db.tariffe_locali.get('main'), [], null);
-
-    const masterData = useMemo<MasterData | null>(() => {
-        if (!localAnagrafiche || !impostazioniLocali) return null;
-        const data: { [key: string]: any[] } = {};
-        localAnagrafiche.forEach(item => { data[item.id] = item.data; });
-        return { ...data, impostazioni: impostazioniLocali.data } as MasterData;
-    }, [localAnagrafiche, impostazioniLocali]);
 
     const rapportiniLocali = useLiveQuery(() => {
         if (!userProfile) return [];
@@ -88,7 +81,7 @@ const MonthlyReportPage = () => {
     }, [userProfile, currentMonth], [] as Rapportino[]);
 
     const rapportiniArricchiti = useMemo(() => {
-        if (!rapportiniLocali || !masterData || !userProfile) return [];
+        if (!rapportiniLocali || !masterData || !masterData.tipiGiornata || !masterData.navi || !masterData.luoghi || !userProfile) return [];
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
         const naviMap = new Map(masterData.navi.map((n) => [n.id, n.nome]));
         const luoghiMap = new Map(masterData.luoghi.map((l) => [l.id, l.nome]));
@@ -118,30 +111,29 @@ const MonthlyReportPage = () => {
     }, [rapportiniLocali, masterData, userProfile]);
 
     const riepilogoMese = useMemo<RiepilogoMese | null>(() => {
-        if (!rapportiniArricchiti.length || !masterData || !userProfile) return null;
+        if (!rapportiniArricchiti.length || !masterData || !userProfile || !masterData.impostazioni || !masterData.tipiGiornata) return null;
 
-        const tariffe = masterData.impostazioni.tariffe as TariffaLocale[];
-        const costoOrdinarioTariffa = tariffe.find(t => t.nome.toLowerCase() === 'ordinaria')?.costo ?? 0;
-        const costoStraordinarioTariffa = tariffe.find(t => t.nome.toLowerCase() === 'straordinario')?.costo ?? 0;
-        
+        const tariffeMap = new Map(masterData.impostazioni.tariffe.map(t => [t.id, t]));
         const tipoGiornataOrdinaria = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'ordinaria')!;
         const tipoGiornataStraordinario = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'straordinario')!;
         const trasfertaIds = new Set(masterData.tipiGiornata.filter(t => t.nome.toLowerCase().includes('trasferta')).map(t => t.id));
 
-        const tipoGiornataSforoVirtuale: Omit<DettaglioVoce, 'giorni' | 'costo' | 'oreTotali'> = {
+        const tipoGiornataSforoVirtuale: DettaglioVoce = {
+            id: 'straordinario-sforo-virtuale',
             nome: 'Straordinario (Oltre 8h)',
             colore: tipoGiornataStraordinario.colore, 
-            unita: 'h'
+            unita: 'h',
+            oreTotali: 0,
+            giorni: 0,
+            costo: 0,
         };
-        const sforoVirtualeId = 'straordinario-sforo-virtuale';
+        const sforoVirtualeId = tipoGiornataSforoVirtuale.id;
 
         const riepilogoFinale: RiepilogoMese = { oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map() };
         const riepilogoPerGiorno = new Map<string, { oreOrdinariePool: number, oreStraordinarieEsplicite: number, altriReport: EnrichedRapportino[] }>();
 
-        // 1. Raggruppa i report per giorno e separa i tipi di ore
         for (const report of rapportiniArricchiti) {
             if (!report.oreGiorno || report.oreGiorno <= 0 || !report.tipoGiornata) continue;
-            
             const dayKey = format(report.data, 'yyyy-MM-dd');
             if (!riepilogoPerGiorno.has(dayKey)) {
                 riepilogoPerGiorno.set(dayKey, { oreOrdinariePool: 0, oreStraordinarieEsplicite: 0, altriReport: [] });
@@ -159,11 +151,9 @@ const MonthlyReportPage = () => {
         
         const giorniConSforo = new Set<string>();
 
-        // 2. Processa ogni giorno per calcolare sforo e distribuire le ore
         for (const [dayKey, dailySummary] of riepilogoPerGiorno.entries()) {
             const sforo = Math.max(0, dailySummary.oreOrdinariePool - 8);
             const oreOrdinarieDaContabilizzare = dailySummary.oreOrdinariePool - sforo;
-            
             if (sforo > 0) giorniConSforo.add(dayKey);
 
             if (oreOrdinarieDaContabilizzare > 0) {
@@ -177,7 +167,7 @@ const MonthlyReportPage = () => {
                 riepilogoFinale.dettaglio.set(tipoGiornataStraordinario.id, dettaglio);
             }
             if (sforo > 0) {
-                const dettaglio = riepilogoFinale.dettaglio.get(sforoVirtualeId) || { ...tipoGiornataSforoVirtuale, oreTotali: 0, giorni: 0, costo: 0 };
+                const dettaglio = riepilogoFinale.dettaglio.get(sforoVirtualeId) || { ...tipoGiornataSforoVirtuale };
                 dettaglio.oreTotali += sforo;
                 riepilogoFinale.dettaglio.set(sforoVirtualeId, dettaglio);
             }
@@ -190,7 +180,6 @@ const MonthlyReportPage = () => {
             }
         }
 
-        // 3. Calcola giorni, costi e finalizza
         const giorniPerTipo = new Map<string, Set<string>>();
         const giorniLavoratiUnici = new Set<string>();
         for (const report of rapportiniArricchiti) {
@@ -208,20 +197,32 @@ const MonthlyReportPage = () => {
         
         riepilogoFinale.giorniTotaliLavorati = giorniLavoratiUnici.size;
         let oreTotaliFinali = 0;
+
+        // ===== LA NUOVA LOGICA DI CALCOLO COSTI =====
+        riepilogoFinale.costoTotale = 0; // Azzera il totale prima di ricalcolare
         for (const [tipoId, dettaglio] of riepilogoFinale.dettaglio.entries()) {
+            const tariffaCorretta = tariffeMap.get(tipoId);
+            const costoUnitario = tariffaCorretta?.costo ?? 0;
+            const unita = tariffaCorretta?.unita ?? 'h';
+
             dettaglio.giorni = giorniPerTipo.get(tipoId)?.size ?? 0;
-            oreTotaliFinali += dettaglio.oreTotali;
             
-            if (dettaglio.nome.toLowerCase().includes('straordinario')) {
-                dettaglio.costo = dettaglio.oreTotali * costoStraordinarioTariffa;
-            } else {
-                dettaglio.costo = dettaglio.oreTotali * costoOrdinarioTariffa;
+            if (unita === 'g') {
+                dettaglio.costo = dettaglio.giorni * costoUnitario;
+            } else { // 'h'
+                dettaglio.costo = dettaglio.oreTotali * costoUnitario;
             }
+            
+            // Gestione speciale per lo sforo virtuale, che non ha una sua tariffa
+            if(tipoId === sforoVirtualeId) {
+                 const costoStraordinario = tariffeMap.get(tipoGiornataStraordinario.id)?.costo ?? 0;
+                 dettaglio.costo = dettaglio.oreTotali * costoStraordinario;
+                 dettaglio.giorni = giorniConSforo.size;
+            }
+
             riepilogoFinale.costoTotale += dettaglio.costo;
+            oreTotaliFinali += dettaglio.oreTotali;
         }
-        
-        const dettaglioSforo = riepilogoFinale.dettaglio.get(sforoVirtualeId);
-        if(dettaglioSforo) dettaglioSforo.giorni = giorniConSforo.size;
         
         riepilogoFinale.oreTotali = oreTotaliFinali;
 
@@ -269,9 +270,8 @@ const MonthlyReportPage = () => {
     };
 
     const isNextButtonDisabled = isSameMonth(currentMonth, new Date());
-    const isLoadingPage = !localAnagrafiche || !impostazioniLocali || !masterData;
 
-    if (isLoadingPage) {
+    if (masterDataLoading) {
         return <FullScreenLoader />;
     }
 

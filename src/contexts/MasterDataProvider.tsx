@@ -6,7 +6,7 @@ import { db } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box, Typography, Button } from '@mui/material';
 import { MasterDataContext } from './MasterDataContext';
-import { useAuth } from '../hooks/useAuth'; // Importa l'hook di autenticazione
+import { useAuth } from '../hooks/useAuth';
 
 const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni'>)[] = [
     'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti', 'sedi', 'ditte', 'categorie'
@@ -28,7 +28,6 @@ const TARIFFS_BLUEPRINT: { nome: string; costo: number; unita: 'g' | 'h'; }[] = 
 async function fetchMasterDataFromFirebase(): Promise<Omit<MasterData, 'impostazioni'>> {
     const loadedAnagrafiche: { [key: string]: any[] } = {};
     for (const key of ANAGRAFICA_COLLECTIONS) {
-        console.log(`Fetching ${key} from Firebase...`);
         const querySnapshot = await getDocs(collection(firestoreDb, key));
         const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         loadedAnagrafiche[key] = items;
@@ -37,9 +36,7 @@ async function fetchMasterDataFromFirebase(): Promise<Omit<MasterData, 'impostaz
 }
 
 async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): Promise<MasterData> {
-    console.log("Populating local database with data correction logic...");
     await db.anagrafiche.clear();
-
     for (const key of ANAGRAFICA_COLLECTIONS) {
         await db.anagrafiche.put({ id: key, data: (anagrafiche as any)[key] || [], timestamp: new Date() });
     }
@@ -47,56 +44,44 @@ async function populateLocalDB(anagrafiche: Omit<MasterData, 'impostazioni'>): P
     const tipiGiornataDaDB = (anagrafiche.tipiGiornata || []) as TipoGiornata[];
     const blueprintMapByName = new Map(TARIFFS_BLUEPRINT.map(t => [t.nome.toLowerCase(), t]));
     
-    const existingTariffe = await db.tariffe_locali.get('main');
-    const existingTariffeMap = new Map(existingTariffe?.data.tariffe.map(t => [t.tipoGiornataId, t]));
+    const existingImpostazioni = await db.tariffe_locali.get('main');
+    const existingTariffeMap = new Map(existingImpostazioni?.data.tariffe.map(t => [t.tipoGiornataId, t]));
 
     const finalTariffe: TariffaLocale[] = tipiGiornataDaDB.map((tipoGiornata) => {
-        const existing = existingTariffeMap.get(tipoGiornata.id);
+        const existingTariff = existingTariffeMap.get(tipoGiornata.id);
+        if (existingTariff) {
+            return existingTariff;
+        }
+
         const lookupName = tipoGiornata.nome?.toLowerCase() || '';
         const blueprintDefault = blueprintMapByName.get(lookupName) || blueprintMapByName.get(lookupName === '104' ? 'legge 104' : '');
-
-        let costo = blueprintDefault?.costo ?? 0;
-        let unita = blueprintDefault?.unita ?? 'h';
-
-        if (existing) {
-            costo = existing.costo;
-            unita = existing.unita;
-        }
-
-        if (tipoGiornata.nome === 'Malattia' && costo === 10 && unita === 'h') {
-            console.log('Found and correcting poisoned "Malattia" tariff.');
-            costo = 80;
-            unita = 'g';
-        }
+        const costo = blueprintDefault?.costo ?? 0;
+        const unita = blueprintDefault?.unita ?? 'h';
 
         return {
             id: tipoGiornata.id,
             tipoGiornataId: tipoGiornata.id,
             nome: tipoGiornata.nome,
             costo: costo,
-            tariffa: costo, // CORREZIONE: Aggiunta la proprietà `tariffa` richiesta
+            tariffa: costo, 
             unita: unita,
         };
     });
 
     const finalImpostazioni: Impostazioni = { id: 'main', tariffe: finalTariffe };
     await db.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
-    console.log("Local database and tariffs populated correctly.");
-
+    
     return { ...anagrafiche, impostazioni: finalImpostazioni };
 }
 
 async function loadDataFromCache(): Promise<MasterData | null> {
-    console.log("Attempting to load data from cache...");
     const localAnagrafiche = await db.anagrafiche.toArray();
-    if (localAnagrafiche.length === 0) {
-        console.log("Cache is empty.");
-        return null;
-    }
+    if (localAnagrafiche.length === 0) return null;
+    
     const data: { [key: string]: any[] } = {};
     localAnagrafiche.forEach(item => { data[item.id] = item.data; });
     const impostazioni = await db.tariffe_locali.get('main');
-    console.log("Data loaded from cache successfully.");
+
     return { ...data, impostazioni: impostazioni?.data } as MasterData;
 }
 
@@ -104,38 +89,46 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const [masterData, setMasterData] = useState<MasterData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any | null>(null);
-    const { user, loading: authLoading } = useAuth(); // Usa l'hook di autenticazione
+    const { user, loading: authLoading } = useAuth();
 
     const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
-
         try {
-            console.log("Starting data sync process...");
             const fetchedData = await fetchMasterDataFromFirebase();
             const finalData = await populateLocalDB(fetchedData);
             setMasterData(finalData);
-        } catch (onlineError: any) {
-            console.warn("Online fetch failed. Attempting to fallback to cache.", onlineError.message);
+        } catch (onlineError: any) {            
             try {
                 const cachedData = await loadDataFromCache();
-                if (cachedData) {
-                    setMasterData(cachedData);
-                } else {
-                    throw onlineError; 
-                }
+                if (cachedData) setMasterData(cachedData);
+                else throw onlineError;
             } catch {
-                console.error("CRITICAL: Online and Cache data loading failed.", onlineError);
-                setError(onlineError); 
+                setError(onlineError);
             }
         } finally {
             setLoading(false);
-            console.log("Data sync process finished.");
         }
     }, []);
 
+    // ========= LA NUOVA FUNZIONE PER LA REATTIVITÀ ISTANTANEA =========
+    const updateTariffe = useCallback(async (nuoveTariffe: TariffaLocale[]) => {
+        if (!masterData) throw new Error("MasterData non è ancora stato caricato.");
+
+        await db.tariffe_locali.update('main', {
+            'data.tariffe': nuoveTariffe,
+            'timestamp': new Date()
+        });
+
+        setMasterData(prevData => {
+            if (!prevData) return null; // Non dovrebbe succedere
+            const nuoveImpostazioni = { ...prevData.impostazioni, tariffe: nuoveTariffe };
+            return { ...prevData, impostazioni: nuoveImpostazioni as Impostazioni };
+        });
+    }, [masterData]);
+    // ==================================================================
+
     const forceClearAndReload = useCallback(async () => {
-        console.log("Forcing cache clear and reload...");
         setLoading(true);
         setError(null);
         try {
@@ -149,12 +142,9 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     }, []);
 
     useEffect(() => {
-        // Esegui il caricamento dei dati master SOLO se l'autenticazione è completata e c'è un utente
         if (!authLoading && user) {
             loadData();
         } else if (!authLoading && !user) {
-            // Se l'autenticazione è finita ma non c'è utente (es. pagina di login), non facciamo nulla
-            // e consideriamo il caricamento "finito" per questo provider.
             setLoading(false);
         }
     }, [authLoading, user, loadData]);
@@ -163,10 +153,10 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         masterData, 
         loading, 
         error, 
-        refetchData: loadData 
-    }), [masterData, loading, error, loadData]);
+        refetchData: loadData, 
+        updateTariffe // <-- ESPORTIAMO LA NUOVA FUNZIONE
+    }), [masterData, loading, error, loadData, updateTariffe]);
 
-    // Durante il caricamento dell'autenticazione, mostriamo un loader
     if (authLoading || (loading && !masterData && !error)) return <FullScreenLoader />;
     
     if (error) {
@@ -175,28 +165,21 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 <Alert severity="error" sx={{ mb: 2 }}>
                     <Typography variant="h6">Errore Critico di Sincronizzazione</Typography>
                 </Alert>
-                <Typography variant="body1" color="text.secondary">Impossibile avviare l&apos;applicazione. Non è stato possibile scaricare i dati dal server e la cache locale è vuota o corrotta.</Typography>
+                <Typography>Impossibile avviare l&apos;app. Controlla la connessione e riprova.</Typography>
                 <Button variant="contained" color="error" onClick={forceClearAndReload} sx={{ mt: 2, mb: 2 }}>
                     Tenta di nuovo (Svuota la cache e ricarica)
                 </Button>
-                <Box component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', backgroundColor: '#f5f5f5', p: 2, mt: 2, borderRadius: 1, maxHeight: '40vh', overflow: 'auto' }}>
-                    {
-                        `Error Name: ${error.name}\n` +
-                        `Message: ${error.message}\n\n` +
-                        `Stack: ${error.stack}`
-                    }
+                <Box component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', p: 2, mt: 2 }}>
+                    {`Dettagli: ${error.message}`}
                 </Box>
             </Box>
         );
     }
 
-    // Se non stiamo caricando l'autenticazione e non c'è utente (siamo sulla pagina di login),
-    // renderizziamo i children senza dati master.
     if (!user) {
-        return <>{children}</>; // Utile per le pagine pubbliche come il Login
+        return <>{children}</>; 
     }
 
-    // Se l'utente è loggato ma i dati non sono ancora pronti, mostriamo il loader.
     if (!masterData) return <FullScreenLoader />;
 
     return (

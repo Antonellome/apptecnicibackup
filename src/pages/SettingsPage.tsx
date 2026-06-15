@@ -7,9 +7,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { db } from '@/db/local-db';
 import { TariffaLocale } from '@/models/definitions';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useMasterData } from '@/hooks/useMasterData';
 import { ForceUpdateButton } from '@/components/ForceUpdateButton';
 
@@ -24,8 +22,7 @@ type SettingsAction =
     | { type: 'SYNC_TARIFFE'; payload: TariffaLocale[] }
     | { type: 'UPDATE_TARIFFA_COSTO'; payload: { id: string; costo: number } }
     | { type: 'SET_SAVING'; payload: boolean }
-    | { type: 'SAVE_SUCCESS' }
-    | { type: 'SET_DIRTY' };
+    | { type: 'SAVE_SUCCESS' };
 
 const initialState: SettingsState = {
     tariffe: [],
@@ -36,8 +33,9 @@ const initialState: SettingsState = {
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
     switch (action.type) {
         case 'SYNC_TARIFFE':
+            if (state.isDirty) return state; // Non sovrascrivere se ci sono modifiche non salvate
             const sortedTariffe = [...action.payload].sort((a, b) => a.nome.localeCompare(b.nome));
-            return { ...state, tariffe: sortedTariffe, isDirty: false };
+            return { ...state, tariffe: sortedTariffe };
         
         case 'UPDATE_TARIFFA_COSTO': {
             return {
@@ -48,10 +46,6 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
                 ),
             };
         }
-        
-        case 'SET_DIRTY':
-            if (state.isDirty) return state; // Evita ri-render se è già dirty
-            return { ...state, isDirty: true };
 
         case 'SET_SAVING':
             return { ...state, isSaving: action.payload };
@@ -69,10 +63,9 @@ interface TariffaRowProps {
     tariffa: TariffaLocale;
     isSaving: boolean;
     onCostoChange: (id: string, costo: number) => void;
-    onDirty: () => void;
 }
 
-const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChange, onDirty }) => {
+const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChange }) => {
     const [inputValue, setInputValue] = useState(tariffa.costo.toFixed(2));
     const [isEditing, setIsEditing] = useState(false);
 
@@ -86,7 +79,6 @@ const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChang
         const rawValue = e.target.value;
         if (/^[0-9,.]*$/.test(rawValue)) {
             setInputValue(rawValue);
-            onDirty(); // Notifica il parent che il form è stato modificato
         }
     };
 
@@ -137,57 +129,36 @@ const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
-    const { loading: masterDataLoading } = useMasterData();
-
-    const impostazioniLive = useLiveQuery(() => db.tariffe_locali.get('main'), []);
+    const { masterData, loading: masterDataLoading, updateTariffe } = useMasterData(); // <-- CARICHIAMO updateTariffe DAL CONTESTO
 
     const [state, dispatch] = useReducer(settingsReducer, initialState);
     const { tariffe, isSaving, isDirty } = state;
 
     useEffect(() => {
-        if (impostazioniLive?.data?.tariffe && !isDirty) {
-             dispatch({ type: 'SYNC_TARIFFE', payload: impostazioniLive.data.tariffe });
+        if (masterData?.impostazioni?.tariffe) {
+             dispatch({ type: 'SYNC_TARIFFE', payload: masterData.impostazioni.tariffe });
         }
-    }, [impostazioniLive, isDirty]);
-
-    useEffect(() => {
-        const fixMalattiaTariff = async () => {
-            const settings = await db.tariffe_locali.get('main');
-            if (settings) {
-                const malattiaTariff = settings.data.tariffe.find(t => t.nome.toLowerCase() === 'malattia');
-                if (malattiaTariff && (malattiaTariff.unita !== 'h' || malattiaTariff.costo !== 10)) {
-                    console.log("Applicazione patch una tantum: Adeguamento tariffa 'Malattia' a 10 €/h.");
-                    await db.tariffe_locali.update('main', { 'data.tariffe': settings.data.tariffe.map(t => 
-                        t.nome.toLowerCase() === 'malattia' ? { ...t, costo: 10, unita: 'h' } : t
-                    )});
-                }
-            }
-        };
-        fixMalattiaTariff();
-    }, []);
+    }, [masterData?.impostazioni?.tariffe]);
 
     const handleTariffaCostoChange = (id: string, costo: number) => {
         dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { id, costo } });
     };
     
-    const handleSetDirty = useCallback(() => {
-        dispatch({ type: 'SET_DIRTY' });
-    }, []);
+    // RIMOSSO handleSetDirty perché l'update gestisce isDirty
     
     const handleSalva = async () => {
-        if (!impostazioniLive) {
-            showSnackbar('Impossibile trovare la configurazione delle tariffe da aggiornare.', 'error');
+        if (!updateTariffe) {
+            showSnackbar('Funzione di aggiornamento non disponibile.', 'error');
             return;
         }
         dispatch({ type: 'SET_SAVING', payload: true });
 
         try {
-            await db.tariffe_locali.update('main', {
-                'data.tariffe': tariffe,
-                'timestamp': new Date()
-            });
+            // ======== LA CHIAMATA ORA PASSA DAL CONTESTO CENTRALE! ========
+            await updateTariffe(tariffe);
+            // ================================================================
 
-            showSnackbar('Tariffe salvate con successo in locale!', 'success');
+            showSnackbar('Tariffe salvate e applicate con successo!', 'success');
             dispatch({ type: 'SAVE_SUCCESS' });
         } catch (error) {
             console.error("Errore durante il salvataggio delle tariffe:", error);
@@ -296,7 +267,6 @@ const SettingsPage: React.FC = () => {
                                 tariffa={tariffa}
                                 isSaving={isSaving}
                                 onCostoChange={handleTariffaCostoChange}
-                                onDirty={handleSetDirty}
                             />
                         </React.Fragment>
                     ))}
