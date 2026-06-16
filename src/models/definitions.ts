@@ -1,4 +1,5 @@
 
+import { Timestamp } from 'firebase/firestore';
 // =================================================================
 // INTERFACCE DI BASE E UTILITY
 // =================================================================
@@ -137,6 +138,11 @@ export interface WebAppUser extends UserProfile {}
 // =================================================================
 // SISTEMA (Sync, Offline, Notifiche)
 // =================================================================
+
+// Aggiunta dell'interfaccia mancante SyncManifest
+export interface SyncManifest {
+  [key: string]: Timestamp;
+}
 
 export interface SyncEvent {
     id?: number;

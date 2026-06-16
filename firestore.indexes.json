@@ -10,6 +10,20 @@
         },
         {
           "fieldPath": "data",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rapportini",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tecnicoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "data",
           "order": "ASCENDING"
         }
       ]

@@ -471,6 +471,7 @@ const ReportFormPage: React.FC = () => {
     };
 
     const handleMultiDaySave = async () => {
+        if (isSaving) return; // <-- ACTION: GUARD
         if (!dataInizio || !dataFine || !tipoGiornataId || !loggedInTecnicoId) {
             showSnackbar("Per la creazione multipla, sono necessarie le date di inizio e fine e il tipo di giornata.", "warning");
             return;
@@ -540,6 +541,7 @@ const ReportFormPage: React.FC = () => {
     };
 
     const proceedToSave = async () => {
+        if (isSaving) return; // <-- ACTION: GUARD
         if (isMultiDay) {
             await handleMultiDaySave();
         } else {
@@ -548,6 +550,7 @@ const ReportFormPage: React.FC = () => {
     };
 
     const handleSave = async () => {
+        if (isSaving) return; // <-- ACTION: GUARD
         if (!isEditMode && firmaVettoriale) {
             setIsConfirmSaveDialogOpen(true);
             return;
@@ -587,6 +590,7 @@ const ReportFormPage: React.FC = () => {
     };
     
     const handleSaveAndShare = async () => {
+        if (isSaving) return; // <-- ACTION: GUARD
         if (isMultiDay) {
             showSnackbar("La funzione 'Salva e Condividi' non è disponibile per la creazione di più giorni.", "warning");
             return;

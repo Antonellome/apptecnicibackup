@@ -1,28 +1,42 @@
-
 import Dexie, { Table } from 'dexie';
-import { Impostazioni, Rapportino, SyncEvent } from '@/models/definitions';
+import { Impostazioni, Rapportino, SyncEvent, SyncManifest } from '@/models/definitions';
 
 export interface AnagraficaCache {
-  id: string; // 'tecnici', 'tipiGiornata', etc.
+  id: string; 
   data: any[];
   timestamp: Date;
 }
 
 export interface TariffaLocaleCache {
-    id: 'main'; // ID fisso per le impostazioni
+    id: 'main';
     data: Impostazioni;
     timestamp: Date;
+}
+
+// Aggiungo l'interfaccia per la cache del manifest, come richiesto dall'architettura
+export interface SyncManifestCache {
+  id: 'main';
+  data: SyncManifest;
 }
 
 export class AppLocalDB extends Dexie {
   anagrafiche!: Table<AnagraficaCache, string>;
   tariffe_locali!: Table<TariffaLocaleCache, string>;
-  syncQueue!: Table<SyncEvent, number>; // La chiave primaria è auto-incrementante
-  rapportini!: Table<Rapportino, string>; // La chiave primaria è l'id del rapportino (stringa)
+  syncQueue!: Table<SyncEvent, number>;
+  rapportini!: Table<Rapportino, string>;
+  // Dichiaro la nuova tabella
+  sync_manifest!: Table<SyncManifestCache, string>;
 
   constructor() {
     super('AppLocalDB');
-    // INCREMENTO VERSIONE A 2
+    
+    // Le versioni sono cumulative e non vanno modificate.
+    this.version(1).stores({
+        anagrafiche: 'id',
+        tariffe_locali: 'id',
+        rapportini_mensili: 'id', // Obsoleta
+    });
+
     this.version(2).stores({
       anagrafiche: 'id',
       tariffe_locali: 'id',
@@ -30,19 +44,19 @@ export class AppLocalDB extends Dexie {
       rapportini: 'id, data, tecnicoId',
     });
 
-    // Definizione della versione 1 per garantire una migrazione corretta
-    this.version(1).stores({
+    // VERSIONE 3: Aggiungo la tabella sync_manifest per allineare il db al blueprint.
+    this.version(3).stores({
         anagrafiche: 'id',
         tariffe_locali: 'id',
-        rapportini_mensili: 'id', // Vecchia tabella, ora obsoleta
+        syncQueue: '++id, type',
+        rapportini: 'id, data, tecnicoId',
+        sync_manifest: 'id' // <-- La tabella che risolve l'errore
     });
 
-    // Apriamo il DB
     this.open().catch(err => {
         console.error(`Errore nell'apertura di Dexie: ${err.stack || err}`);
     });
   }
 }
 
-// Riportiamo l'export a 'db' per compatibilità con il resto del codebase
 export const db = new AppLocalDB();

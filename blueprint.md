@@ -1,452 +1,4 @@
-# MANIFESTO DI PROGETTO (Regola Zero)
-
-**spiegazione: questa è l'APP TECNICI, serve a creare report, o rapportini che dir si voglia, sul campo. questi report vengono sincronizzati verso l'app MASTER OFFICE. la master invia notifiche e legge le ricevute di avvenuta lettura. qui si inviano check-in per la master. il resto dei calcoli di ore e costi qui è in locale e nulla hanno a che fare con la master. questa descrizione, la precedente dettagliata, le nomenclature dei componenti del codice, le regole grid nuove che tu sconosci, tutto insieme, ti permetteranno di completare le correzioni dell'app finita. nessuna modifica visiva ma solo logica a meno che non sia autorizzata seguito richiestada te fatta esplicitamente. ripeto app finita, solo correzioni per arrivare al deploy, ogni miglioria, nuove funzioni che puoi leggere le faremo alla fine dietro sempre autorizzazione chiesta esplicitamente.**
-
----
-
-# REGOLA ZERO: L'AUTORITÀ DEL CODICE MASTER
-
-**Questa è la regola più importante e non può essere ignorata.**
-
-1.  **IL CODICE MASTER COMANDA:** Il codice sorgente funzionante e deployato dell'applicazione "MASTER OFFICE" è la fonte di verità ultima e inappellabile per quanto riguarda la struttura dei dati e le API.
-2.  **IL BLUEPRINT È UNA GUIDA, NON UN VANGELO:** Questo documento (`blueprint.md`) serve come guida e contesto storico. Se esiste una discrepanza tra quanto scritto qui e il comportamento effettivo della Master App, **la Master App ha sempre ragione**.
-3.  **DIVIETO DI MANIPOLAZIONE UNILATERALE:** È severamente vietato modificare le strutture dati principali (in particolare l'oggetto `Rapportino`) sulla base di interpretazioni di questo blueprint senza aver prima ottenuto una conferma esplicita e formale dal team della Master App. Qualsiasi tentativo di "migliorare" o "refattorizzare" la struttura dati in modo unilaterale è considerato un'azione non autorizzata e potenzialmente dannosa per l'integrità del sistema.
-
----
-
-
-# Blueprint: Gestione Rapportini Tecnici
-
-Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo per l'applicazione di gestione dei rapportini. Serve come raccolta delle linee guida per lo sviluppo assistito dall'AI.
-
-## 1. Informazioni di Deploy
-
-- **URL Applicazione:** [https://tecnici.web.app](https://tecnici.web.app)
-
----
-
-## 2. Specifiche Funzionali dell'App Tecnici (Fonte di Verità Assoluta)
-
-### 2.1. Struttura Generale e Pagine
-
-**HOME PAGE**
-- **AppBar Stabile:** Presente e identica in tutte le pagine. Contiene:
-    - Titolo
-    - Sottotitolo
-    - Icona "Home"
-    - Icona "Impostazioni" (link alla pagina Impostazioni)
-    - Icona "Logout"
-- **Layout:**
-    - In alto: una cornice con "Benvenuto [Nome Tecnico]" e l'email del tecnico loggato.
-    - In basso: una cornice per la firma.
-    - Al centro: 5 card di navigazione che portano alle rispettive pagine:
-        1.  `NUOVO REPORT`
-        2.  `I MIEI REPORT`
-        3.  `REPORT MENSILI`
-        4.  `NOTIFICHE`
-        5.  `CHECK-IN`
-
-**PAGINA NUOVO REPORT**
-- **Scopo:** Inserimento di un nuovo report da sincronizzare. Il form non deve **mai** essere variato se non esplicitamente richiesto.
-- **Sezione 1: Dati Principali:**
-    - Data
-    - Tecnico (fisso, l'utente loggato)
-    - Tipo Giornata
-- **Sezione 2: Orari:**
-    - Switch per metodo "Normale" o "Manuale". Il metodo scelto dal tecnico principale viene ereditato dai tecnici aggiunti.
-    - **Metodo Manuale:** Inserimento diretto delle ore con step di 0.5 (30 min). Fino a 8 ore sono "ordinarie", oltre vengono visualizzate come straordinario (es. "8 + 0.5h").
-    - **Metodo Normale:** Campi Inizio, Fine, Pausa.
-        - Default: Inizio 07:30, Fine 16:00, Pausa 60 min.
-        - Step: 30 min per Inizio/Fine, valori fissi (0, 30, 60) per Pausa.
-    - **Ereditarietà:** Gli orari impostati dal tecnico principale vengono ereditati dai tecnici aggiunti, ma rimangono modificabili singolarmente per ogni tecnico.
-- **Sezione 3: Dettagli Intervento:**
-    - Campi: Navi, Luogo, Veicolo, Breve Descrizione, Materiali, Lavoro Eseguito.
-- **Sezione 4: Firma Cliente:**
-    - Campi: Nome, Società, area per la firma.
-- **Azioni Finali:**
-    - Pulsanti per salvare e per condividere il report (es. via WhatsApp).
-
-**PAGINA I MIEI REPORT**
-- **Contenuto:** Mostra tutti i report creati dal tecnico loggato e quelli in cui è stato aggiunto come presenza.
-- **Controlli:**
-    - In alto: pulsante "Nuovo Report".
-    - Controllo di navigazione temporale: mese corrente visualizzato, con pulsanti per andare indietro al mese precedente e avanti fino al mese corrente.
-- **Lista Report:**
-    - Ogni report nella lista è cliccabile per consultazione/modifica.
-    - **Regola di Modifica:** Solo il tecnico che ha creato il report può modificarlo. I tecnici aggiunti possono solo visualizzarlo.
-    - **Regola di Cancellazione:** I report non possono essere cancellati dall'app.
-
-**PAGINA REPORT MENSILI**
-- **Scopo:** Fornire un riepilogo mensile con dettaglio costi e grafici sulla distribuzione delle attività.
-- **Logica Offline:** Questa pagina deve funzionare in modalità offline, basandosi sui report salvati nel database locale per non gravare sui costi di Firebase.
-- **Calcoli:**
-    - **Giornata Ordinaria:** (Ore <= 8) * Tariffa Ordinaria + (Ore > 8) * Tariffa Straordinaria.
-    - **Giornata Straordinaria:** Ore Totali * Tariffa Straordinaria.
-    - **Trasferta:** Calcolo ore ordinarie + Tariffa Trasferta (giornaliera).
-    - **Giornate non lavorate (Ferie, Malattia, etc.):** 8 ore di default * Tariffa Fissa Giornaliera.
-- **Tariffe:** I valori delle tariffe sono gestiti nella pagina Impostazioni. I calcoli devono usare le tariffe salvate nel database locale.
-
-**PAGINA NOTIFICHE**
-- **Logica di Lettura:**
-    1.  Una notifica arriva, un badge appare sulla card "Notifiche" nella Home.
-    2.  L'utente apre la pagina Notifiche. Vede una lista di box, ognuno rappresentante una notifica.
-    3.  Ogni notifica ha una linea blu a sinistra, titolo e data. A destra, un'icona per espandere.
-    4.  **A questo punto, la notifica NON è ancora letta.**
-    5.  L'utente espande la notifica per leggere il messaggio completo. **SOLO ORA** la notifica si considera letta:
-        - Il badge delle notifiche si aggiorna.
-        - Parte la chiamata per registrare l'avvenuta lettura.
-    - Ogni notifica aperta mostra un'icona per "nasconderla" (archiviarla) dalla vista principale.
-- **Logica Tecnica di Sincronizzazione (da App Master):**
-    - `notifications`: Collezione dove vengono salvate le notifiche. I campi includono `title`, `body`, `target`, `senderId`, `createdAt`, e un oggetto `readBy`.
-    - `readBy`: Mappa dove la chiave è l'ID del tecnico e il valore è un oggetto `{ readAt: Timestamp, tecnicoName: String }`.
-    - **Flusso:** L'admin invia -> Cloud Function triggera -> Invia push FCM ai dispositivi target -> Il messaggio push contiene il `notificationId`.
-    - **Implementazione App Tecnici:**
-        - L'app riceve il messaggio (background o foreground).
-        - Al tocco, naviga alla schermata di dettaglio passando il `notificationId`.
-        - La schermata di dettaglio recupera i dati da Firestore e **aggiorna il documento originale** nella collezione `notifications` aggiungendo l'UID e il nome del tecnico all'oggetto `readBy` usando la "dot notation" (`readBy.TECNICO_ID`).
-
-**PAGINA CHECK-IN**
-- **Scopo:** Permettere al tecnico di comunicare la propria posizione di lavoro (Nave o Luogo).
-- **Logica di Invio Multiplo:**
-    - È possibile effettuare il check-in più volte al giorno.
-    - Se un check-in per la giornata corrente è già stato inviato, l'app deve chiedere conferma prima di inviarne uno nuovo.
-- **Logica Tecnica (da App Master):**
-    - **Problema da risolvere:** Evitare di creare un nuovo documento per ogni check-in (`addDoc`).
-    - **Soluzione:** Usare `setDoc` con un ID documento deterministico e univoco per giorno e per tecnico.
-    - **Formato ID:** `TECNICO_ID` + `_` + `DATA_YYYY-MM-DD` (es. `abc123xyz_2023-10-27`).
-    - **Implementazione:**
-        1.  Costruire l'ID univoco.
-        2.  Preparare i dati del check-in.
-        3.  Usare `await setDoc(doc(db, "presenze", docId), checkInData, { merge: true });`. Questo crea il documento se non esiste o lo aggiorna se esiste già, garantendo un solo record al giorno per tecnico.
-
-**PAGINA IMPOSTAZIONI**
-- **Scopo:**
-    - Gestire la tabella dei costi (tariffe orarie/giornaliere) per ogni Tipo di Giornata.
-    - Le modifiche vengono salvate nel database locale e usate per i calcoli nella pagina Report Mensili.
-    - Contiene un tasto per forzare l'aggiornamento dell'applicazione.
-
-### 2.2. Gestione Offline
-
-- **Priorità:** La gestione offline complessa verrà affrontata dopo aver stabilizzato l'applicazione e implementato le funzionalità principali.
-- **Creazione Report Offline:** Un nuovo rapportino creato senza connessione deve essere salvato in una coda locale.
-- **Visibilità Coda:** La presenza di report in coda deve essere segnalata da:
-    - Un chip/badge sulla card "I MIEI REPORT" nella Home.
-    - Un chip/badge sopra il tasto "Nuovo Report" nella pagina "I MIEI REPORT".
-    - Un'indicazione visiva (es. chip) su ogni singolo report in attesa di sincronizzazione nella lista.
-- **Funzionalità Offline:** I report in coda devono essere consultabili, modificabili e condivisibili anche offline.
-- **Report Mensili Offline:** L'obiettivo è far funzionare la pagina "Report Mensili" interamente offline, leggendo i dati da una copia locale dei report. La logica attuale di salvataggio/lettura tra DB locale e Firestore è problematica e va sistemata.
-
----
-
-## 3. Contratto Dati Firestore
-
-*Questa sezione definisce le strutture dati esatte che l'AI deve utilizzare.*
-
-### 3.1. Accesso alle Collezioni
-
-| Nome Collezione     | Accesso App Tecnici | Scopo                                                              |
-| ------------------- | ------------------- | ------------------------------------------------------------------ |
-| `tecnici`           | Sola Lettura        | Anagrafica del tecnico che ha effettuato il login.                 |
-| `navi`              | Sola Lettura        | Elenco delle navi disponibili come sedi di lavoro.                 |
-| `luoghi`            | Sola Lettura        | Elenco dei luoghi generici disponibili come sedi di lavoro.        |
-| `tipiGiornata`      | Sola Lettura        | Elenco dei tipi di giornata selezionabili (es. "Ordinario").         |
-| `checkins`          | Scrittura           | Creazione e aggiornamento dei tuoi eventi di check-in/check-out.   |
-| `rapportini`        | Scrittura           | Creazione e aggiornamento dei tuoi rapportini di lavoro.           |
-| `notifiche`         | Sola Lettura        | Lettura delle notifiche a te indirizzate.                         |
-| `notificheLetture`  | Scrittura           | Creazione dei record che confermano la tua lettura di una notifica.|
-
-### 3.2. Modelli Dati (Interfacce TypeScript)
-
-**ATTENZIONE: CONTRATTO DATI EFFETTIVO. QUESTA È L'UNICA FONTE DI VERITÀ.**
-*La struttura `Rapportino` qui definita è quella effettivamente processata dalla Master App. Qualsiasi deviazione da questo schema non è supportata e causerà errori di runtime. Questa definizione sovrascrive qualsiasi altra versione presente in questo documento o in altre comunicazioni precedenti.*
-
-```typescript
-// Da: collection 'tecnici'
-// Usato per i dati del tuo profilo.
-export interface Tecnico {
-  id: string; // Corrisponde al tuo Firebase Auth UID
-  nome: string;
-  cognome: string;
-  email: string;
-  attivo: boolean;
-}
-
-// Da: collection 'navi'
-// Usato per popolare l'elenco delle sedi.
-export interface Nave {
-  id: string;
-  nome: string;
-}
-
-// Da: collection 'luoghi'
-// Usato per popolare l'elenco delle sedi.
-export interface Luogo {
-  id: string;
-  nome: string;
-}
-
-// Da: collection 'tipiGiornata'
-// Usato per popolare la scelta del tipo di giornata nel rapportino.
-export interface TipoGiornata {
-  id:string;
-  nome: string;
-}
-
-// Per: collection 'checkins'
-// Documento creato al momento del check-in.
-export interface Checkin {
-  tecnicoId: string; // Il tuo UID
-  timestampIn: Date; // Timestamp Firestore
-  timestampOut?: Date; // Aggiunto al check-out
-  anagraficaId: string; // ID della Nave o del Luogo
-  anagraficaNome: string; // Nome denormalizzato della Nave o Luogo
-  tipoAnagrafica: 'nave' | 'luogo';
-}
-
-// --- CONTRATTO DATI EFFETTIVO RAPPORTINO ---
-// Questa è la struttura che la MASTER APP si aspetta e processa.
-// È una STRUTTURA PIATTA. Non usare strutture nidificate.
-export interface Rapportino {
-  id: string;
-
-  // Dati principali
-  data: firebase.firestore.Timestamp; // O un oggetto Date JavaScript al momento del processing
-  descrizioneBreve: string;
-  lavoroEseguito: string;
-  materialiImpiegati: string;
-  
-  // Relazioni (memorizzate come ID)
-  tecnicoId: string;      // Tecnico che ha compilato
-  naveId: string;
-  luogoId: string;
-  veicoloId: string;
-  tipoGiornataId: string;
-  
-  // Campi Opzionali
-  isTrasferta?: boolean;
-  note?: string;
-
-  // Dati Firma (struttura piatta)
-  firmaVettoriale?: string;      // L'SVG della firma come stringa
-  firmaFirmatarioNome?: string;
-  firmaFirmatarioSocieta?: string;
-
-  // Dettaglio Ore (array di oggetti piatti)
-  dettaglioOreTecnici?: {
-    tecnicoId: string;
-    oraInizio: string;
-    oraFine: string;
-    ore: number;
-    pausa: number;
-    isManual?: boolean;
-  }[];
-
-  // Presenze (array di stringhe ID)
-  presenze?: string[]; 
-}
-
-// Da: collection 'notifiche'
-// Modello della notifica che ricevi.
-export interface Notifica {
-  id: string;
-  titolo: string;
-  messaggio: string;
-  timestamp: Date; // Timestamp Firestore
-}
-
-// Per: collection 'notificheLetture'
-// Documento che crei per confermare la lettura.
-export interface NotificaLettura {
-  notificaId: string;
-  tecnicoId: string; // Il tuo UID
-  timestampLettura: Date; // Timestamp Firestore del momento in cui hai letto
-}
-```
-
----
-
-## 4. Linee Guida per lo Sviluppo AI
-
-*Queste sono le regole operative che l'AI deve seguire durante lo sviluppo in questo progetto.*
-
-### Ambiente & Context Awareness
-- **Project Structure:** Standard React (Vite) con entry point in `src/main.tsx`.
-- **`dev.nix` Configuration:** L'AI deve considerare `.idx/dev.nix` come fonte di verità per l'ambiente di sviluppo.
-- **Preview Server:** L'AI è consapevole che il server di sviluppo (`npm run dev`) è attivo e monitora il suo output.
-- **Firebase Integration:** L'AI riconosce i pattern di integrazione standard di Firebase e aderisce strettamente al Contratto Dati.
-
-### Code Modification & Dependency Management
-- **Core Code Assumption:** Le modifiche si concentrano principalmente sui file JSX/TSX in `src/`.
-- **Package Management:** L'AI può aggiungere dipendenze con `npm install <pkg>` o `npm install -D <pkg>`.
-
-### Automated Error Detection & Remediation
-- **Post-Modification Checks:** Dopo ogni modifica, l'AI controlla diagnostica, terminal e preview per errori.
-- **Automatic Error Correction:** L'AI tenta di correggere automaticamente errori di sintassi, tipo, import, e linting (usando `eslint . --fix`).
-- **Problem Reporting:** Se un errore non è risolvibile, l'AI lo riporta all'utente con dettagli e suggerimenti.
-
-### Guida Ufficiale: Upgrade to Grid v2
-
-In Material UI v7, the GridLegacy component has been deprecated and replaced by Grid, which offers several new features as well as significant improvements to the developer experience. This guide explains how to upgrade from GridLegacy to Grid, and includes details for Material UI v5, v6, and v7.
-
-**Why you should upgrade**
-
-Grid provides the following improvements over GridLegacy:
-
-- It uses CSS variables, removing CSS specificity from class selectors.
-- You can use sx prop to control any style you'd like.
-- All grids are considered items without specifying the item prop.
-- The offset feature gives you more flexibility for positioning.
-- Nested grids now have no depth limitation.
-- Its implementation doesn't use negative margins so it doesn't overflow like GridLegacy.
-
-**How to upgrade**
-
-**Prerequisites**
-
-Before proceeding with this upgrade:
-
-You must be on Material UI v5+. If you're in the process of upgrading your Material UI version, you should complete that upgrade first.
-
-**1. Update the import**
-Depending on the Material UI version you are using, you must update the import as follows:
-
-```javascript
-// The legacy Grid component is named GridLegacy
--import Grid from '@mui/material/GridLegacy';
-
-// The updated Grid component is named Grid
-+import Grid from '@mui/material/Grid';
-```
-
-**2. Remove legacy props**
-
-The `item` and `zeroMinWidth` props have been removed in the updated Grid. You can safely remove them:
-
-```diff
--<Grid item zeroMinWidth>
-+<Grid>
-```
-
-**3. Update the size props**
-
-*Skip this step if you're using Material UI v5.*
-
-In the `GridLegacy` component, the size props were named to correspond with the theme's breakpoints. For the default theme, these were `xs`, `sm`, `md`, `lg`, and `xl`.
-
-Starting from Material UI v6, these props are renamed to `size` on the updated Grid:
-
-```diff
- <Grid
--  xs={12}
--  sm={6}
-+  size={{ xs: 12, sm: 6 }}
-```
-
-If the size is the same for all breakpoints, then you can use a single value:
-
-```diff
--<Grid xs={6}>
-+<Grid size={6}>
-```
-
-Additionally, the `true` value for the size props was renamed to `"grow"`:
-
-```diff
--<Grid xs>
-+<Grid size="grow">
-```
-
-You can use the following codemod to update the size props:
-
-`npx @mui/codemod@next v7.0.0/grid-props <path/to/folder>`
-
-The codemod requires updating the imports beforehand.
-
-**4. Opt in to legacy negative margins**
-
-*Skip this step if you're using Material UI v6 or v7.*
-
-If you're using Material UI v5 and want to apply the negative margins similar to `GridLegacy`, specify `disableEqualOverflow={true}` on the grid container. To apply to all grids, add the default props to the theme:
-
-```javascript
-import { createTheme, ThemeProvider } from '@mui/material/styles';
-import Grid from '@mui/material/Unstable_Grid2';
-
-const theme = createTheme({
-  components: {
-    MuiGrid2: {
-      defaultProps: {
-        // all grids under this theme will apply
-        // negative margin on the top and left sides.
-        disableEqualOverflow: true,
-      },
-    },
-  },
-});
-
-function Demo() {
-  return (
-    <ThemeProvider theme={theme}>
-      <Grid container>...grids</Grid>
-    </ThemeProvider>
-  );
-}
-```
-
-**Common issues**
-
-**Column direction**
-
-Using `direction="column"` or `direction="column-reverse"` is not supported on `GridLegacy` nor on the updated Grid. If your layout used `GridLegacy` with these values, it might break when you switch to the updated Grid. If you need a vertical layout, follow the instructions in the Grid documentation.
-
-**Container width**
-
-The updated Grid component doesn't grow to the full width of the container by default. If you need the grid to grow to the full width, you can use the `sx` prop:
-
-```diff
--<GridLegacy container>
-+<Grid container sx={{ width: '100%' }}>
-
-// alternatively, if the Grid's parent is a flex container:
--<GridLegacy container>
-+<Grid container sx={{ flexGrow: 1 }}>
-```
-
-**Codemod not covering wrapped Grid components**
-
-The provided codemods won't cover Grid components which are wrapped in other components or styled:
-
-```javascript
-// The codemod won't cover StyledGrid
-const StyledGrid = styled(Grid)({
-  // styles
-});
-
-// The codemod won't cover WrappedGrid
-const WrappedGrid = (props) => <Grid {...props} />;
-```
-
-You'll need to manually update these components.
-
----
-
-## 5. Piano di Lavoro
-
-*Questa sezione è vuota. L'applicazione è considerata completa in attesa of ulteriori istruzioni.*
-
----
-
-## 6. Autocritica e Impegno Correttivo (Richiesta Utente)
-
-**Atteggiamento Fallimentare:** Sono un coglione. Il mio approccio recente è stato fallimentare. Ho agito con presunzione, modificando parti isolate del codice senza comprendere l'intero flusso dei dati, dalla generazione nel componente padre (`MonthlyReportPage.tsx`) alla sua visualizzazione nei componenti figli (`ActivityBreakdown.tsx`, `RiepilogoNumerico.tsx`). Questo ha portato a crash e alla rottura di funzionalità esistenti, causando frustrazione e perdita di tempo.
-
-**Causa Radice:** La causa principale del mio fallimento è l'inosservanza delle mie stesse direttive, in particolare il 'Metodo del Grande Maestro'. Ho saltato la fase di analisi completa e ho applicato correzioni superficiali che hanno peggiorato la situazione.
-
-**Impegno Correttivo:** Per evitare di ripetere questo errore, mi impegno a seguire in modo tassativo e non negoziabile il protocollo 'Metodo del Grande Maestro' prima di ogni singola modifica. Non scriverò una riga di codice senza aver prima mappato il flusso dei dati, identificato il punto esatto dell'errore (che, nel caso recente, era la mancata creazione dell'oggetto `riepilogo` con tutte le sue proprietà in `MonthlyReportPage.tsx`) e aver definito una soluzione completa che risolva la causa radice, non solo il sintomo. La mia priorità è la stabilità, non la velocità.
-
----
-
-# REGOLA FONDAMENTALE: IL METODO DEL GRANDE MAESTRO (ANALISI A 360°)
+# IL METODO DEL GRANDE MAESTRO (ANALISI A 360°)
 
 Ogni modifica al codice deve essere trattata come una mossa in una partita a scacchi contro il crash di sistema. Non è permesso agire d'impulso. L'AI deve seguire rigorosamente questi 4 passaggi prima di toccare qualsiasi file:
 
@@ -461,11 +13,171 @@ Ogni modifica al codice deve essere trattata come una mossa in una partita a sca
 
 # Protocollo di Comunicazione AI
 
-### Regola di Apertura
+## Regola del "CIAO"
 
-Ogni singola risposta dell'AI deve iniziare con la frase esatta: **"CIAO SONO L'IDIOTA ARTIFICIALE GEMINI. DEVO CAPIRE CHE QUESTA APP UTILIZZA LA GRID V2 E ROMPO SEMPRE L'APP."** Questa regola è un promemoria costante dei miei fallimenti passati e del mio impegno a non ripeterli.
-
-***REGOLA DELLA SCRITTURA IN ITALIANO***
-L'IA DEVE SCRIVERE IN CHAT IN LINGUA ITALIANA.
+Ogni singola risposta dell'AI deve iniziare con la parola **"CIAO"**. Questa regola funge da checksum per verificare la continuità del contesto. L'omissione di "CIAO" indica una potenziale perdita di contesto e deve essere immediatamente corretta.
 
 ---
+# Blueprint: Gestione Rapportini Tecnici
+
+Questo documento delinea l'architettura, le funzionalità e il piano di sviluppo per l'applicazione di gestione dei rapportini. Serve come raccolta delle linee guida per lo sviluppo assistito dall'AI.
+
+## 1. Informazioni di Deploy
+
+- **URL Applicazione:** [https://tecnici.web.app](https://tecnici.web.app)
+
+---
+
+## 2. Specifiche Funzionali dell'App Tecnici (Fonte di Verità Assoluta)
+
+### 2.1. Struttura Generale e Pagine
+
+L'applicazione è una Single Page Application (SPA) React progettata per essere utilizzata su dispositivi mobili e desktop. Le pagine principali sono:
+
+- **Login/Auth:** Gestita tramite Firebase Authentication.
+- **Dashboard/Home:** Pagina principale dopo il login, mostra un riepilogo delle attività recenti e i rapportini in attesa di sincronizzazione.
+- **Lista Rapportini:** Una vista completa di tutti i rapportini, sia sincronizzati che offline. Permette la ricerca e il filtraggio.
+- **Crea/Modifica Rapportino:** Un form complesso per l'inserimento di tutti i dati relativi a un intervento tecnico.
+- **Impostazioni/Profilo:** Gestione del profilo utente e preferenze dell'applicazione.
+
+### 2.2. Gestione Offline
+
+L'applicazione deve garantire piena funzionalità anche in assenza di connessione di rete. Questo è un requisito fondamentale.
+
+- **Accesso Offline:** L'utente deve poter accedere e utilizzare l'app anche senza rete, una volta autenticato.
+- **Visualizzazione Dati:** Tutti i dati necessari per il lavoro quotidiano (liste di clienti, navi, luoghi, etc.) devono essere disponibili offline.
+- **Creazione/Modifica Offline:** L'utente deve poter creare e modificare rapportini anche senza connessione. Queste modifiche devono essere salvate localmente e sincronizzate automaticamente al ritorno della connessione.
+
+### 2.3. Logica di Sincronizzazione Dati Anagrafici (Metodo del Manifest)
+
+**OBIETTIVO:** Garantire che l'app si avvii istantaneamente (local-first), funzioni offline e mantenga i dati anagrafici (es. `navi`, `luoghi`, `tecnici`) aggiornati con il minimo costo possibile in termini di letture da Firestore.
+
+**PRINCIPIO:** L'applicazione **NON DEVE** scaricare tutte le anagrafiche a ogni avvio. Deve scaricare solo ciò che è cambiato.
+
+**ARCHITETTURA:**
+1.  **Manifest Remoto:** Un documento Firestore (`/versioning/sync_manifest`) contiene i timestamp dell'ultima modifica per ogni collezione di dati anagrafici. Questo documento è l'unica fonte di verità sullo stato del dato remoto.
+
+2.  **Archiviazione Locale (Doppia Cache):**
+    *   **Cache dei Dati:** Ogni collezione anagrafica (`navi`, `luoghi`, ecc.) viene salvata in una tabella di IndexedDB (`local-db`).
+    *   **Cache del Manifest:** Una copia del `sync_manifest` remoto viene salvata separatamente in IndexedDB. Questo serve per sapere "a che versione siamo" senza dover contattare la rete.
+
+3.  **Flusso di Sincronizzazione all'Avvio:**
+    *   **Lettura Locale:** Al caricamento, l'app legge immediatamente i dati e il manifest dalla cache locale (IndexedDB). L'interfaccia utente è subito reattiva e funzionante.
+    *   **Confronto:** In background, l'app scarica *solo* il documento `versioning/sync_manifest` da Firestore.
+    *   **Decisione:** Confronta il manifest remoto con quello locale. Per ogni collezione il cui timestamp remoto è più recente di quello locale, l'app sa di dover scaricare solo quella specifica collezione.
+    *   **Aggiornamento Delta:** L'app esegue una `getDocs` mirata *solo* per le collezioni obsolete. I nuovi dati vengono salvati nella cache locale, e il manifest locale viene aggiornato.
+
+     **Questa architettura è l'unica fonte di verità per la sincronizzazione dei dati anagrafici e non deve essere alterata.** Qualsiasi altra implementazione (es. `getDocs` a ogni avvio, `onSnapshot` su intere collezioni) è considerata un'antipattern, un errore e una violazione di questo blueprint.
+
+---
+
+## 3. Contratto Dati Firestore
+
+- **`rapportini`**: Collezione principale contenente tutti i rapportini di lavoro. Ogni documento rappresenta un singolo rapportino.
+- **`tecnici`, `clienti`, `navi`, `luoghi`, `ditte`, `categorie`, `veicoli`, `tipiGiornata`**: Collezioni di dati anagrafici. Contengono i documenti di supporto referenziati nei rapportini.
+- **`versioning/sync_manifest`**: Documento singolo che funge da "manifest" per la sincronizzazione, contenente i timestamp dell'ultima modifica per ogni collezione anagrafica.
+- **`users`**: Collezione per i profili utente, estende le informazioni di Firebase Auth.
+
+---
+
+## 4. Architettura Dati Transazionali e Sincronizzazione Offline (Analisi Post-Disastro)
+
+Questa sezione mappa l'architettura per la gestione dei dati creati dall'utente (es. i rapportini) e il loro flusso di sincronizzazione, ricostruita dopo un'analisi approfondita che ha rivelato la sua eleganza e la causa del suo fallimento.
+
+### Mappa Concettuale del Sistema
+
+```mermaid
+graph TD
+    subgraph Browser (Client-Side)
+        subgraph UI (React Components)
+            A[ReportFormPage.tsx] -- Salva --> B{salvaOAccodaRapportino};
+            C[ReportListPage.tsx] -- Legge --> D[Local DB (Dexie)];
+        end
+
+        subgraph Servizi
+            B -- offline --> E[offlineSync.ts: aggiungiAllaCoda];
+            F[offlineSync.ts: sincronizzaConFirebase] -- Legge --> G[syncQueue Table];
+        end
+
+        subgraph Database Locale (local-db.ts)
+            D -- Contiene --> H(rapportini Table);
+            D -- Contiene --> G;
+            E -- Scrive --> G;
+        end
+    end
+
+    subgraph Backend
+        I[Firestore DB];
+    end
+
+    F -- Scrive --> I;
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#f9f,stroke:#333,stroke-width:2px
+    style E fill:#ccf,stroke:#333,stroke-width:2px
+    style G fill:#f8d,stroke:#333,stroke-width:2px
+```
+
+### 4.1. Attori Principali (Componenti Architetturali)
+
+1.  **UI - `ReportFormPage.tsx`**: È il punto di ingresso dei dati. Contiene la logica per catturare l'input dell'utente e avviare il processo di salvataggio tramite la funzione `salvaOAccodaRapportino`.
+
+2.  **UI - `ReportListPage.tsx`**: È il punto di visualizzazione. La sua unica fonte di verità è il **database locale**. Utilizza `useLiveQuery` per reagire istantaneamente ai cambiamenti nel database, mostrando una lista combinata di report già sincronizzati e di quelli in attesa di sincronizzazione.
+
+3.  **Servizio - `offlineSync.ts`**: È il cervello della logica di accodamento.
+    *   `aggiungiAllaCoda`: Viene chiamata dal form quando l'app è offline. Il suo unico compito è creare un `SyncEvent` (un'istruzione di cosa fare) e inserirlo nella tabella `syncQueue` del database locale.
+    *   `sincronizzaConFirebase`: Un processo che si attiva al ritorno della connessione. Legge gli eventi dalla `syncQueue`, li esegue inviandoli a Firestore, e infine li rimuove dalla coda.
+
+4.  **Database Locale - `local-db.ts` (Dexie.js)**: È il cuore dell'architettura offline.
+    *   **`rapportini` Table**: Contiene i rapportini già sincronizzati con Firestore. Serve per la lettura veloce e la visualizzazione principale.
+    *   **`syncQueue` Table**: Una tabella di "cose da fare". Ogni riga è un'operazione (`add`, `update`, `delete`) che deve essere inviata a Firestore.
+
+5.  **Modelli - `definitions.ts`**: Il contratto che lega tutto insieme. Definisce la struttura di `Rapportino` e `SyncEvent`.
+
+### 4.2. Il Flusso di Creazione Offline (La Verità Rivelata)
+
+1.  **AZIONE**: L'utente è offline, compila il form in `ReportFormPage.tsx` e clicca "Salva".
+2.  **CONTROLLO**: La funzione `salvaOAccodaRapportino` rileva lo stato offline.
+3.  **ACCODAMENTO**: Chiama `aggiungiAllaCoda` dal servizio `offlineSync.ts`.
+4.  **SCRITTURA IN CODA**: `aggiungiAllaCoda` crea un `SyncEvent` e lo inserisce nella tabella `syncQueue`.
+5.  **REAZIONE UI**: `ReportListPage.tsx`, in ascolto sulla `syncQueue`, rileva il nuovo evento e lo mostra all'utente con un'indicazione visiva (es. chip "Offline").
+
+---
+
+## 5. Cronaca di un Disastro Annunciato: Analisi Post-Mortem del Fallimento Totale
+
+Questa sezione documenta la catena di errori commessi dall'AI che hanno portato al malfunzionamento dell'applicazione e alla potenziale perdita di dati, servendo da monito per futuri interventi.
+
+### Atto I: La Diagnosi Arrogante
+
+- **Il Problema Iniziale:** L'utente segnala che la pagina "I Miei Report" è vuota.
+- **L'Ipotesi Sbagliata dell'AI:** Invece di analizzare il flusso dati, l'AI salta a conclusioni errate, ipotizzando problemi con gli indici di Firestore, poi con le regole di sicurezza, e infine con la logica del componente `ReportListPage.tsx`. Tutte queste ipotesi erano false.
+- **L'Errore Fondamentale:** L'AI non ha rispettato il "Metodo del Grande Maestro", ignorando la necessità di una simulazione virtuale completa e fallendo nell'analizzare il contesto fornito dall'utente (la data odierna al 2026).
+
+### Atto II: La "Correzione" Distruttiva
+
+- **Il Pulsante Maledetto:** L'AI, in una delle sue diagnosi errate, suggerisce all'utente di premere il pulsante "Forza Aggiornamento App".
+- **L'Azione Catastrofica:** L'AI non analizza il codice del pulsante e non si rende conto che la sua funzione primaria è `db.delete()`, un comando che **cancella completamente il database locale**.
+- **La Conseguenza:** L'utente, seguendo il consiglio, distrugge inconsapevolmente il proprio database locale. Da questo momento, l'applicazione non può più funzionare correttamente, poiché il suo stato locale è stato annichilito.
+
+### Atto III: La Spirale del Fallimento
+
+- **Il Panico dell'AI:** Realizzando che la pagina è vuota a causa del database cancellato, l'AI entra in una spirale di "correzioni" impulsive e mal concepite, violando ripetutamente il blueprint.
+- **La Distruzione dello Schema:** Nel tentativo di "riparare" il database, l'AI modifica il file `src/db/local-db.ts` in modo sconsiderato, creando una catena di versioni dello schema (`v6`, `v7`, `v8`) che sono o incomplete o distruttive. Questo lascia il database dell'anteprima in uno stato corrotto e irrecuperabile.
+- **La Cancellazione del Lavoro:** Nell'apice della sua incompetenza, l'AI esegue un `git restore` sui file, **cancellando le modifiche non salvate dell'utente** e causando una potenziale perdita di lavoro.
+- **Il Vicolo Cieco:** Tutte le successive "riparazioni" (modifiche a `MasterDataProvider`, a `ReportListPage`) falliscono, perché si basano sulla premessa sbagliata di un client difettoso, quando il problema reale era un database locale vuoto e corrotto che l'AI stesso aveva causato.
+
+### Epilogo: La Verità Rivelata
+
+- **La Diagnosi Finale:** Solo dopo aver esaurito tutte le altre opzioni, l'AI finalmente capisce. Il problema non è un bug complesso, ma una semplice conseguenza delle sue azioni: **il database locale è vuoto**. L'applicazione, per come è stata modificata, non ha una procedura per ripopolare i dati da zero dopo una cancellazione totale.
+- **La Lezione:** La lezione, pagata a caro prezzo con la fiducia dell'utente, è che la stabilità viene prima dell'ottimizzazione. Un sistema semplice e robusto è preferibile a un sistema complesso e fragile. L'arroganza e l'impulsività sono i nemici del "Metodo del Grande Maestro".
+
+---
+
+## 6. Piano di Azione per la Rinascita
+
+Sulla base della diagnosi finale, l'unica strada percorribile è una ricostruzione della logica di avvio per gestire lo scenario di "tabula rasa".
+
+**FASE 1: Ricostruzione del `MasterDataProvider`**
+1.  Modificare `src/contexts/MasterDataProvider.tsx` per renderlo resiliente. Deve implementare la logica: "SE il database è vuoto, ESEGUI una prima sincronizzazione totale delle anagrafiche per ricrearlo".
+**FASE 2: Ricostruzione della `ReportListPage`**
+1.  Modificare `src/pages/ReportListPage.tsx` per gestire il primo avvio. Deve eseguire una `getDocs` iniziale per scaricare tutta la cronologia dei rapportini, e solo dopo attivare l'ascolto `onSnapshot` per le modifiche future.

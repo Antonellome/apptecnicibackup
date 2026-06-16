@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { collection, onSnapshot, query, where, DocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
+import { useMasterData } from '@/hooks/useMasterData'; // CORRECTED IMPORT PATH
 import type { 
     Rapportino, 
     Tecnico, 
@@ -13,6 +14,7 @@ import type {
     TipoGiornata, 
     Nave, 
     Luogo, 
+    Sede, 
     WebAppUser, 
     Qualifica, 
     Documento
@@ -46,6 +48,7 @@ export interface IGlobalDataContext {
   tipiGiornata: TipoGiornata[];
   navi: Nave[];
   luoghi: Luogo[];
+  sedi: Sede[];
   webAppUsers: WebAppUser[];
   qualifiche: Qualifica[];
   documenti: Documento[];
@@ -68,31 +71,15 @@ export const useGlobalData = () => {
 // --- PROVIDER COMPONENT ---
 export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { masterData, loading: masterDataLoading } = useMasterData();
 
-  // --- STATE HOOKS ---
   const [rapportini, setRapportini] = useState<Rapportino[]>([]);
-  const [tecnici, setTecnici] = useState<Tecnico[]>([]);
-  const [ditte, setDitte] = useState<Ditta[]>([]);
-  const [categorie, setCategorie] = useState<Categoria[]>([]);
-  const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
-  const [clienti, setClienti] = useState<Cliente[]>([]);
-  const [tipiGiornata, setTipiGiornata] = useState<TipoGiornata[]>([]);
-  const [navi, setNavi] = useState<Nave[]>([]);
-  const [luoghi, setLuoghi] = useState<Luogo[]>([]);
   const [webAppUsers, setWebAppUsers] = useState<WebAppUser[]>([]);
   const [qualifiche, setQualifiche] = useState<Qualifica[]>([]);
   const [documenti, setDocumenti] = useState<Documento[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [localDataLoading, setLocalDataLoading] = useState(true);
 
   const collectionsToSync = useMemo(() => [
-    { name: 'tecnici', setter: setTecnici },
-    { name: 'ditte', setter: setDitte },
-    { name: 'categorie', setter: setCategorie },
-    { name: 'veicoli', setter: setVeicoli },
-    { name: 'clienti', setter: setClienti },
-    { name: 'tipiGiornata', setter: setTipiGiornata },
-    { name: 'navi', setter: setNavi },
-    { name: 'luoghi', setter: setLuoghi },
     { name: 'webAppUsers', setter: setWebAppUsers },
     { name: 'qualifiche', setter: setQualifiche },
     { name: 'documenti', setter: setDocumenti },
@@ -100,16 +87,15 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     if (!user) {
-      setLoading(false);
+      setLocalDataLoading(true);
       collectionsToSync.forEach(({ setter }) => setter([]));
       setRapportini([]);
       return;
     }
 
-    setLoading(true);
+    setLocalDataLoading(true);
     const unsubscribes: (() => void)[] = [];
 
-    // Generic listener for simple collections
     collectionsToSync.forEach(({ name, setter }) => {
       const collRef = collection(db, name as string);
       const unsubscribe = onSnapshot(collRef, (snapshot) => {
@@ -121,13 +107,12 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubscribes.push(unsubscribe);
     });
 
-    // Specialized listeners for 'rapportini'
     const queries = [
       query(collection(db, 'rapportini'), where("tecnicoId", "==", user.uid)),
       query(collection(db, 'rapportini'), where("presenze", "array-contains", user.uid))
     ];
 
-    let rapportiniLoaded = false;
+    let rapportiniInitialLoads = queries.length;
     const handleRapportiniSnapshot = (snapshot: any) => {
       const newRapportini = snapshot.docs.map(docToRapportino);
       setRapportini(prevRapportini => {
@@ -135,9 +120,12 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         newRapportini.forEach((r: Rapportino) => rapportiniMap.set(r.id, r));
         return Array.from(rapportiniMap.values());
       });
-      if (!rapportiniLoaded) {
-        rapportiniLoaded = true;
-        if (unsubscribes.length === collectionsToSync.length) setLoading(false);
+
+      if (rapportiniInitialLoads > 0) {
+        rapportiniInitialLoads--;
+        if (rapportiniInitialLoads === 0) {
+            setLocalDataLoading(false);
+        }
       }
     };
 
@@ -153,13 +141,29 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
   }, [user, collectionsToSync]);
+  
+  const {
+      tecnici = [],
+      ditte = [],
+      categorie = [],
+      veicoli = [],
+      clienti = [],
+      tipiGiornata = [],
+      navi = [],
+      luoghi = [],
+      sedi = [],
+  } = masterData || {};
 
   const ditteMap = useMemo(() => new Map(ditte.map(d => [d.id, d])), [ditte]);
   const categorieMap = useMemo(() => new Map(categorie.map(c => [c.id, c])), [categorie]);
   const tecniciMap = useMemo(() => new Map(tecnici.map(t => [t.id, t])), [tecnici]);
 
+  const loading = masterDataLoading || localDataLoading;
+
   const value: IGlobalDataContext = {
-    rapportini, tecnici, ditte, categorie, veicoli, clienti, tipiGiornata, navi, luoghi, webAppUsers, qualifiche, documenti,
+    rapportini,
+    tecnici, ditte, categorie, veicoli, clienti, tipiGiornata, navi, luoghi, sedi,
+    webAppUsers, qualifiche, documenti,
     ditteMap, categorieMap, tecniciMap,
     loading,
   };

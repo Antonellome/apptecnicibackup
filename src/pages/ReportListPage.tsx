@@ -73,7 +73,7 @@ const ReportListPage = () => {
 
     const rapportiniQuery = query(
         collection(firestoreDb, "rapportini"),
-        where("presenze", "array-contains", userProfile.tecnicoId),
+        where("tecnicoId", "==", userProfile.tecnicoId),
         orderBy("data", "desc")
     );
 
@@ -122,7 +122,8 @@ const ReportListPage = () => {
       .where('data')
       .between(start, end, true, true)
       .toArray();
-    const userReports = reportsInMonth.filter(r => r.presenze && r.presenze.includes(userProfile.tecnicoId));
+    // Filtra per tecnicoId. Ora usiamo il campo `tecnicoId` come principale fonte di verità.
+    const userReports = reportsInMonth.filter(r => r.tecnicoId === userProfile.tecnicoId);
     userReports.sort((a, b) => b.data.getTime() - a.data.getTime());
     return userReports;
   }, [currentMonth, userProfile]);
@@ -139,7 +140,8 @@ const ReportListPage = () => {
         .map(event => {
             const rapportinoPayload = event.payload as Rapportino;
             const rapportinoDate = rapportinoPayload.data instanceof Timestamp ? rapportinoPayload.data.toDate() : new Date(rapportinoPayload.data as any);
-            if (isSameMonth(rapportinoDate, currentMonth) && !localIds.has(event.entityId)) {
+            // Mostra eventi offline solo se appartengono al tecnico loggato e non sono ancora nel db locale
+            if (isSameMonth(rapportinoDate, currentMonth) && rapportinoPayload.tecnicoId === userProfile.tecnicoId && !localIds.has(event.entityId)) {
                 return enrichRapportino({ ...rapportinoPayload, id: event.entityId, isOffline: true }, masterData);
             }
             return null;
@@ -241,8 +243,8 @@ const ReportListPage = () => {
                     component="li" 
                     sx={{ 
                       backgroundColor: isLastOfDate ? 'primary.main' : undefined,
-                      height: isLastOfDate ? '2px' : '1px',
-                      opacity: isLastOfDate ? 0.3 : 1
+                      height: isLastOfDate ? '3px' : '1px',
+                      opacity: isLastOfDate ? 0.5 : 1
                     }} 
                   />
                 )}
