@@ -1,5 +1,15 @@
+
 {
   "projects": {
     "default": "riso-project-app"
+  },
+  "targets": {
+    "riso-project-app": {
+      "hosting": {
+        "tecnici": [
+          "tecnici"
+        ]
+      }
+    }
   }
 }

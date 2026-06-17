@@ -17,7 +17,7 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInMinutes } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, TariffaLocale, RiepilogoMese, DettaglioVoce } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, TariffaLocale, RiepilogoMese, DettaglioVoce, UserProfile, MasterData } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
@@ -29,6 +29,7 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 import { useMasterData } from '@/hooks/useMasterData';
+import MonthlyReportSkeleton from '@/components/Rapportini/MonthlyReportSkeleton';
 
 const safeConvertToDate = (dateSource: any): Date | null => {
     if (!dateSource) return null;
@@ -42,32 +43,41 @@ const safeConvertToDate = (dateSource: any): Date | null => {
     return null;
 };
 
-const MonthlyReportPage = () => {
-    const { userProfile } = useAuth();
-    const { masterData, loading: masterDataLoading } = useMasterData();
-    const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+interface MonthlyReportContentProps {
+    userProfile: UserProfile;
+    masterData: MasterData;
+    currentMonth: Date;
+    isGeneratingPdf: boolean;
+    setIsGeneratingPdf: (isGenerating: boolean) => void;
+}
+
+const MonthlyReportContent = ({ 
+    userProfile, 
+    masterData, 
+    currentMonth,
+    isGeneratingPdf,
+    setIsGeneratingPdf
+}: MonthlyReportContentProps) => {
     const { showSnackbar } = useSnackbar();
     const [pdfPreviewBlob, setPdfPreviewBlob] = useState<Blob | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
     const rapportiniLocali = useLiveQuery(() => {
-        if (!userProfile) return [];
         const start = startOfMonth(currentMonth);
         const end = endOfMonth(currentMonth);
         return db.rapportini
             .where('data').between(start, end, true, true)
             .filter(r => (r.presenze || []).includes(userProfile.tecnicoId))
             .sortBy('data');
-    }, [userProfile, currentMonth], [] as Rapportino[]);
+    }, [currentMonth, userProfile.tecnicoId]);
 
-    const rapportiniArricchiti = useMemo<EnrichedRapportino[]>(() => {
-        if (!rapportiniLocali || !masterData) return [];
+    const rapportiniArricchiti = useMemo<EnrichedRapportino[] | null>(() => {
+        if (!rapportiniLocali) return null;
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
         const naviMap = new Map(masterData.navi.map((n) => [n.id, n.nome]));
         const luoghiMap = new Map(masterData.luoghi.map((l) => [l.id, l.nome]));
         
-        return rapportiniLocali.map(report => {
+        return (rapportiniLocali as Rapportino[]).map(report => {
             const tipoGiornata = tipiGiornataMap.get(report.tipoGiornataId);
             const isDailyRate = tipoGiornata?.nome.toLowerCase().includes('ferie') || tipoGiornata?.nome.toLowerCase().includes('festivo');
 
@@ -82,7 +92,7 @@ const MonthlyReportPage = () => {
                     const diffInMin = differenceInMinutes(fine, inizio);
                     oreLavoro = Math.max(0, (diffInMin / 60) - pausaInOre);
                 } else {
-                    oreLavoro = report.dettaglioOreTecnici?.find(d => d.tecnicoId === userProfile?.tecnicoId)?.ore ?? report.oreLavoro ?? 0;
+                    oreLavoro = report.dettaglioOreTecnici?.find(d => d.tecnicoId === userProfile.tecnicoId)?.ore ?? report.oreLavoro ?? 0;
                 }
             }
 
@@ -95,11 +105,17 @@ const MonthlyReportPage = () => {
                 luogoNome: report.luogoId ? luoghiMap.get(report.luogoId) : undefined,
             } as EnrichedRapportino;
         });
-    }, [rapportiniLocali, masterData, userProfile]);
+    }, [rapportiniLocali, masterData, userProfile.tecnicoId]);
 
     const riepilogoMese = useMemo<RiepilogoMese | null>(() => {
-        if (!rapportiniArricchiti.length || !masterData) return null;
-    
+        if (!rapportiniArricchiti) return null;
+        if (rapportiniArricchiti.length === 0) return {
+          oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map(),
+          giorniLavorati: 0, giorniStraordinario: 0, giorniFerie: 0, giorniMalattia: 0,
+          giorniPermesso: 0, giorniFestivo: 0, giorniTrasferta: 0, giorniLavoratiUnici: 0,
+          oreOrdinarie: 0, oreStraordinarie: 0,
+        };
+
         const tariffe = masterData.impostazioni.tariffe as TariffaLocale[];
         const tariffeMap = new Map(tariffe.map(t => [t.id, t]));
         const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
@@ -108,7 +124,6 @@ const MonthlyReportPage = () => {
         const tipoGiornataOrdinaria = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'ordinaria')!;
         const tariffaStraordinario = tariffe.find(t => t.nome.toLowerCase() === 'straordinario');
     
-        // --- Fase 1: Aggregazione Dati Raw ---
         const dataAggregati = new Map<string, { ore: number; giorni: Set<string> }>();
         const dailyTotals = new Map<string, { oreOrdinarie: number }>();
     
@@ -123,7 +138,6 @@ const MonthlyReportPage = () => {
             voce.ore += report.oreGiorno;
             voce.giorni.add(dayKey);
 
-            // Aggregazione per sforo
             if (report.tipoGiornata.id === tipoGiornataOrdinaria.id) {
                 const daily = dailyTotals.get(dayKey) || { oreOrdinarie: 0 };
                 daily.oreOrdinarie += report.oreGiorno;
@@ -131,7 +145,6 @@ const MonthlyReportPage = () => {
             }
         }
     
-        // --- Fase 2: Calcolo e Riassegnazione Sforo ---
         let sforoTotaleOre = 0;
         const giorniSforo = new Set<string>();
     
@@ -150,22 +163,11 @@ const MonthlyReportPage = () => {
             dataAggregati.set(sforoId, { ore: sforoTotaleOre, giorni: giorniSforo });
         }
 
-        // --- Fase 3: Creazione Dettaglio Finale e Calcolo Costi ---
         const riepilogoFinale: RiepilogoMese = {
-          oreTotali: 0, 
-          costoTotale: 0, 
-          giorniTotaliLavorati: 0, 
-          dettaglio: new Map(),
-          giorniLavorati: 0,
-          giorniStraordinario: 0,
-          giorniFerie: 0,
-          giorniMalattia: 0,
-          giorniPermesso: 0,
-          giorniFestivo: 0,
-          giorniTrasferta: 0,
-          giorniLavoratiUnici: 0,
-          oreOrdinarie: 0,
-          oreStraordinarie: 0,
+          oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map(),
+          giorniLavorati: 0, giorniStraordinario: 0, giorniFerie: 0, giorniMalattia: 0,
+          giorniPermesso: 0, giorniFestivo: 0, giorniTrasferta: 0, giorniLavoratiUnici: 0,
+          oreOrdinarie: 0, oreStraordinarie: 0,
         };
         let costoTotaleAcc = 0;
         let oreTotaliAcc = 0;
@@ -202,15 +204,8 @@ const MonthlyReportPage = () => {
             costoTotaleAcc += costoVoce;
             
             riepilogoFinale.dettaglio.set(key, {
-                id: key,
-                nome,
-                colore,
-                unita,
-                oreTotali: val.ore,
-                giorni: val.giorni.size,
-                costo: costoVoce,
-                tipo: tipoGiornata?.tipo ?? 'oraria',
-                lavorativo: tipoGiornata?.lavorativo ?? false,
+                id: key, nome, colore, unita, oreTotali: val.ore, giorni: val.giorni.size,
+                costo: costoVoce, tipo: tipoGiornata?.tipo ?? 'oraria', lavorativo: tipoGiornata?.lavorativo ?? false,
                 icona: tipoGiornata?.icona ?? '',
             } as DettaglioVoce);
         });
@@ -219,24 +214,19 @@ const MonthlyReportPage = () => {
         riepilogoFinale.oreTotali = oreTotaliAcc;
         riepilogoFinale.giorniTotaliLavorati = giorniLavoratiSet.size;
     
-        return riepilogoFinale.oreTotali > 0 || riepilogoFinale.costoTotale > 0 ? riepilogoFinale : null;
+        return riepilogoFinale;
     }, [rapportiniArricchiti, masterData]);
 
-
     const reportDays = useMemo(() => {
-        return rapportiniArricchiti.map(r => r.data);
+        return rapportiniArricchiti?.map(r => r.data) ?? [];
     }, [rapportiniArricchiti]);
 
-    const handleMonthChange = (increment: number) => {
-        setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
-    };
-    
     const handleGenerateMonthlyReport = async () => {
         if (!rapportiniArricchiti || !riepilogoMese) {
             showSnackbar('Nessun dato valido da includere nel PDF.', 'info');
             return;
         }
-        const tecnico = masterData?.tecnici?.find(t => t.id === userProfile?.tecnicoId);
+        const tecnico = masterData.tecnici.find(t => t.id === userProfile.tecnicoId);
         if (!tecnico) {
             showSnackbar('Profilo tecnico non trovato.', 'error');
             return;
@@ -253,7 +243,7 @@ const MonthlyReportPage = () => {
             setIsGeneratingPdf(false);
         }
     };
-
+    
     const handleShareFromPreview = async (blob: Blob, fileName: string) => {
         try {
             await shareOrDownload(blob, fileName);
@@ -265,14 +255,16 @@ const MonthlyReportPage = () => {
         }
     };
 
-    const isNextButtonDisabled = isSameMonth(currentMonth, new Date());
+    const isCalculating = rapportiniLocali === undefined || rapportiniArricchiti === null || riepilogoMese === null;
 
-    if (masterDataLoading) {
-        return <FullScreenLoader />;
+    if (isCalculating) {
+        return <MonthlyReportSkeleton />;
     }
 
+    const hasData = riepilogoMese && (riepilogoMese.oreTotali > 0 || riepilogoMese.costoTotale > 0);
+
     return (
-        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+        <>
             <Grid container justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                 <Grid>
                     <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
@@ -286,45 +278,29 @@ const MonthlyReportPage = () => {
                             variant="outlined" 
                             startIcon={isGeneratingPdf ? <CircularProgress size={20}/> : <PdfIcon/>}
                             onClick={handleGenerateMonthlyReport}
-                            disabled={isGeneratingPdf || !riepilogoMese}
+                            disabled={isGeneratingPdf || !hasData}
                         >Genera Mensile</Button>
                         </span>
                     </Tooltip>
                 </Grid>
             </Grid>
-            <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
-                <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
-                <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
-            </Paper>
+            
             <Grid container spacing={3}>
-                 <Grid
-                     size={{
-                         xs: 12,
-                         md: 4
-                     }}>
-                     <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
-                         <Typography variant="h5" gutterBottom>Calendario</Typography>
-                         <MonthlyCalendarView currentMonth={currentMonth} reportDays={reportDays} />
-                     </Paper>
-                 </Grid>
-                 <Grid
-                     size={{
-                         xs: 12,
-                         md: 8
-                     }}>
-                    {!riepilogoMese ? (
-                        <Paper sx={{ p: 4, textAlign: 'center', height: '100%' }}>
+                <Grid size={{ xs: 12, md: 4 }}>
+                    <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+                        <Typography variant="h5" gutterBottom>Calendario</Typography>
+                        <MonthlyCalendarView currentMonth={currentMonth} reportDays={reportDays} />
+                    </Paper>
+                </Grid>
+                <Grid size={{ xs: 12, md: 8 }}>
+                    {!hasData ? (
+                        <Paper sx={{ p: 4, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                             <Typography variant="h6">Nessun dato per questo mese</Typography>
                             <Typography color="text.secondary">Non sono stati trovati rapportini per il periodo selezionato.</Typography>
                         </Paper>
                     ) : (
                         <Grid container spacing={3}>
-                            <Grid
-                                size={{
-                                    xs: 12,
-                                    lg: 6
-                                }}>
+                            <Grid size={{ xs: 12, lg: 6 }}>
                                 <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                                     <Typography variant="h5" gutterBottom>Riepilogo</Typography>
                                     <TableContainer component={Paper} variant="outlined">
@@ -347,29 +323,61 @@ const MonthlyReportPage = () => {
                                     </TableContainer>
                                 </Paper>
                             </Grid>
-                            <Grid
-                                size={{
-                                    xs: 12,
-                                    lg: 6
-                                }}>
+                            <Grid size={{ xs: 12, lg: 6 }}>
                                 <DettaglioOreTipoGiornata 
                                     dettaglio={riepilogoMese.dettaglio} 
                                     giorniTotali={riepilogoMese.giorniTotaliLavorati}
                                 />
                             </Grid>
-                            <Grid sx={{ mt: 2 }} size={12}>
+                            <Grid sx={{ mt: 2 }} size={{ xs: 12 }}>
                                 <ActivityBreakdown riepilogo={riepilogoMese} />
                             </Grid>
                         </Grid>
                     )}
                 </Grid>
             </Grid>
+
             <PdfPreviewModal
                 open={isPreviewOpen}
                 onClose={() => setIsPreviewOpen(false)}
                 pdfBlob={pdfPreviewBlob}
-                fileName={`Riepilogo_Mensile_${userProfile?.cognome}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.pdf`}
+                fileName={`Riepilogo_Mensile_${userProfile.cognome}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.pdf`}
                 onShare={handleShareFromPreview}
+            />
+        </>
+    );
+}
+
+const MonthlyReportPage = () => {
+    const { userProfile } = useAuth();
+    const { masterData, loading: masterDataLoading } = useMasterData();
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    
+    const handleMonthChange = (increment: number) => {
+        setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
+    };
+
+    const isNextButtonDisabled = isSameMonth(currentMonth, new Date());
+    
+    if (masterDataLoading || !userProfile || !masterData) {
+        return <FullScreenLoader />;
+    }
+
+    return (
+        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+             <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
+                <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
+                <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextButtonDisabled}>Mese Succ.</Button>
+            </Paper>
+
+            <MonthlyReportContent 
+                userProfile={userProfile}
+                masterData={masterData}
+                currentMonth={currentMonth}
+                isGeneratingPdf={isGeneratingPdf}
+                setIsGeneratingPdf={setIsGeneratingPdf}
             />
         </Box>
     );
