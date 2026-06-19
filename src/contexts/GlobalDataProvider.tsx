@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { collection, onSnapshot, query, where, DocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { useMasterData } from '@/hooks/useMasterData'; // CORRECTED IMPORT PATH
+import { useMasterData } from '@/hooks/useMasterData';
 import type { 
     Rapportino, 
     Tecnico, 
@@ -15,9 +15,9 @@ import type {
     Nave, 
     Luogo, 
     Sede, 
-    WebAppUser, 
     Qualifica, 
-    Documento
+    Documento,
+    UserProfile
 } from '@/models/definitions';
 
 // --- FUNZIONE DI CONVERSIONE SICURA ---
@@ -49,7 +49,7 @@ export interface IGlobalDataContext {
   navi: Nave[];
   luoghi: Luogo[];
   sedi: Sede[];
-  webAppUsers: WebAppUser[];
+  webAppUsers: UserProfile[];
   qualifiche: Qualifica[];
   documenti: Documento[];
   ditteMap: Map<string, Ditta>;
@@ -74,7 +74,7 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const { masterData, loading: masterDataLoading } = useMasterData();
 
   const [rapportini, setRapportini] = useState<Rapportino[]>([]);
-  const [webAppUsers, setWebAppUsers] = useState<WebAppUser[]>([]);
+  const [webAppUsers, setWebAppUsers] = useState<UserProfile[]>([]);
   const [qualifiche, setQualifiche] = useState<Qualifica[]>([]);
   const [documenti, setDocumenti] = useState<Documento[]>([]);
   const [localDataLoading, setLocalDataLoading] = useState(true);
@@ -86,61 +86,68 @@ export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   ], []);
 
   useEffect(() => {
-    if (!user) {
-      setLocalDataLoading(true);
-      collectionsToSync.forEach(({ setter }) => setter([]));
-      setRapportini([]);
-      return;
-    }
-
-    setLocalDataLoading(true);
-    const unsubscribes: (() => void)[] = [];
-
-    collectionsToSync.forEach(({ name, setter }) => {
-      const collRef = collection(db, name as string);
-      const unsubscribe = onSnapshot(collRef, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setter(data as any[]); 
-      }, (error) => {
-        console.error(`Error fetching ${name}:`, error);
-      });
-      unsubscribes.push(unsubscribe);
-    });
-
-    const queries = [
-      query(collection(db, 'rapportini'), where("tecnicoId", "==", user.uid)),
-      query(collection(db, 'rapportini'), where("presenze", "array-contains", user.uid))
-    ];
-
-    let rapportiniInitialLoads = queries.length;
-    const handleRapportiniSnapshot = (snapshot: any) => {
-      const newRapportini = snapshot.docs.map(docToRapportino);
-      setRapportini(prevRapportini => {
-        const rapportiniMap = new Map(prevRapportini.map((r: Rapportino) => [r.id, r]));
-        newRapportini.forEach((r: Rapportino) => rapportiniMap.set(r.id, r));
-        return Array.from(rapportiniMap.values());
-      });
-
-      if (rapportiniInitialLoads > 0) {
-        rapportiniInitialLoads--;
-        if (rapportiniInitialLoads === 0) {
-            setLocalDataLoading(false);
+    const syncData = async () => {
+        if (!user) {
+            setLocalDataLoading(true);
+            collectionsToSync.forEach(({ setter }) => setter([]));
+            setRapportini([]);
+            return () => {}; // Restituisce una funzione di cleanup vuota
         }
-      }
-    };
 
-    queries.forEach(q => {
-        const unsubscribe = onSnapshot(q, handleRapportiniSnapshot, (error) => {
-            console.error("Error fetching rapportini:", error);
+        setLocalDataLoading(true);
+        const unsubscribes: (() => void)[] = [];
+
+        collectionsToSync.forEach(({ name, setter }) => {
+            const collRef = collection(db, name as string);
+            const unsubscribe = onSnapshot(collRef, (snapshot) => {
+                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setter(data as any[]);
+            }, (error) => {
+                console.error(`Error fetching ${name}:`, error);
+            });
+            unsubscribes.push(unsubscribe);
         });
-        unsubscribes.push(unsubscribe);
-    });
-    
-    return () => {
-      unsubscribes.forEach(unsub => unsub());
+
+        const queries = [
+            query(collection(db, 'rapportini'), where("tecnicoId", "==", user.uid)),
+            query(collection(db, 'rapportini'), where("presenze", "array-contains", user.uid))
+        ];
+
+        let rapportiniInitialLoads = queries.length;
+        const handleRapportiniSnapshot = (snapshot: any) => {
+            const newRapportini = snapshot.docs.map(docToRapportino);
+            setRapportini(prevRapportini => {
+                const rapportiniMap = new Map(prevRapportini.map((r: Rapportino) => [r.id, r]));
+                newRapportini.forEach((r: Rapportino) => rapportiniMap.set(r.id, r));
+                return Array.from(rapportiniMap.values());
+            });
+
+            if (rapportiniInitialLoads > 0) {
+                rapportiniInitialLoads--;
+                if (rapportiniInitialLoads === 0) {
+                    setLocalDataLoading(false);
+                }
+            }
+        };
+
+        queries.forEach(q => {
+            const unsubscribe = onSnapshot(q, handleRapportiniSnapshot, (error) => {
+                console.error("Error fetching rapportini:", error);
+            });
+            unsubscribes.push(unsubscribe);
+        });
+
+        return () => {
+            unsubscribes.forEach(unsub => unsub());
+        };
     };
 
-  }, [user, collectionsToSync]);
+    const cleanupPromise = syncData();
+
+    return () => {
+        cleanupPromise.then(cleanup => cleanup());
+    };
+}, [user, collectionsToSync]);
   
   const {
       tecnici = [],

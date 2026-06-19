@@ -133,8 +133,6 @@ export interface UserProfile {
     categoria?: { id: string, nome: string } | string;
 }
 
-export interface WebAppUser extends UserProfile {}
-
 // =================================================================
 // SISTEMA (Sync, Offline, Notifiche)
 // =================================================================
@@ -167,8 +165,6 @@ export interface Notifica extends FirebaseDoc {
     sent: boolean;
     target: { type: 'user' | 'category' | 'all'; id: string; name: string; };
 }
-
-export interface AppNotification extends Notifica {}
 
 // =================================================================
 // MODELLI ARRICCHITI E CALCOLATI

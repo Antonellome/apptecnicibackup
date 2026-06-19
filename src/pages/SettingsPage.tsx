@@ -7,7 +7,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { TariffaLocale } from '@/models/definitions';
+import { TariffaLocale, UserProfile } from '@/models/definitions';
 import { useMasterData } from '@/hooks/useMasterData';
 import { ForceUpdateButton } from '@/components/ForceUpdateButton';
 
@@ -66,36 +66,33 @@ interface TariffaRowProps {
 }
 
 const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChange }) => {
-    const [inputValue, setInputValue] = useState(tariffa.costo.toFixed(2));
-    const [isEditing, setIsEditing] = useState(false);
+    const [inputValue, setInputValue] = useState<string | null>(null);
+    const isEditing = inputValue !== null;
 
-    useEffect(() => {
-        if (!isEditing) {
-            setInputValue(tariffa.costo.toFixed(2));
+    const handleFocus = () => {
+        setInputValue(tariffa.costo.toFixed(2));
+    };
+
+    const handleBlur = () => {
+        if (inputValue === null) return;
+        
+        let numericValue = parseFloat(inputValue.replace(',', '.'));
+        if (isNaN(numericValue)) {
+            numericValue = 0;
         }
-    }, [tariffa.costo, isEditing]);
+
+        if (numericValue !== tariffa.costo) {
+             onCostoChange(tariffa.id, numericValue);
+        }
+
+        setInputValue(null); // Esci dalla modalità di modifica
+    };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawValue = e.target.value;
         if (/^[0-9,.]*$/.test(rawValue)) {
             setInputValue(rawValue);
         }
-    };
-
-    const handleBlur = () => {
-        setIsEditing(false);
-        let numericValue = parseFloat(inputValue.replace(',', '.'));
-        if (isNaN(numericValue)) {
-            numericValue = 0;
-        }
-        setInputValue(numericValue.toFixed(2));
-        if (numericValue !== tariffa.costo) {
-             onCostoChange(tariffa.id, numericValue);
-        }
-    };
-
-    const handleFocus = () => {
-        setIsEditing(true);
     };
 
     return (
@@ -105,7 +102,7 @@ const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChang
                 <TextField
                     type="text"
                     size="small"
-                    value={inputValue}
+                    value={isEditing ? inputValue : tariffa.costo.toFixed(2)}
                     onChange={handleInputChange}
                     onFocus={handleFocus}
                     onBlur={handleBlur}
@@ -129,7 +126,7 @@ const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
-    const { masterData, loading: masterDataLoading, updateTariffe } = useMasterData() as any; // <-- CARICHIAMO updateTariffe DAL CONTESTO
+    const { masterData, loading: masterDataLoading, updateTariffe } = useMasterData() as any;
 
     const [state, dispatch] = useReducer(settingsReducer, initialState);
     const { tariffe, isSaving, isDirty } = state;
@@ -144,8 +141,6 @@ const SettingsPage: React.FC = () => {
         dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { id, costo } });
     };
     
-    // RIMOSSO handleSetDirty perché l'update gestisce isDirty
-    
     const handleSalva = async () => {
         if (!updateTariffe) {
             showSnackbar('Funzione di aggiornamento non disponibile.', 'error');
@@ -154,10 +149,7 @@ const SettingsPage: React.FC = () => {
         dispatch({ type: 'SET_SAVING', payload: true });
 
         try {
-            // ======== LA CHIAMATA ORA PASSA DAL CONTESTO CENTRALE! ========
             await updateTariffe(tariffe);
-            // ================================================================
-
             showSnackbar('Tariffe salvate e applicate con successo!', 'success');
             dispatch({ type: 'SAVE_SUCCESS' });
         } catch (error) {
@@ -197,7 +189,7 @@ const SettingsPage: React.FC = () => {
         <Box sx={{ maxWidth: 800, mx: 'auto', p: { xs: 2, sm: 3 } }}>
             <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>Impostazioni</Typography>
 
-            <Accordion elevation={3} sx={{ mb: 4 }}>
+            <Accordion elevation={3} sx={{ mb: 4 }} defaultExpanded>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography variant="h6">Guida App Tecnici</Typography>
                 </AccordionSummary>
@@ -205,15 +197,15 @@ const SettingsPage: React.FC = () => {
                     <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2, mb: 2 }}>
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Installazione App</Typography>
                         <Typography paragraph>
-                            Per un accesso più rapido, puoi installare questa applicazione sulla schermata principale del tuo dispositivo, come se fosse un'app nativa.
+                            Per un accesso più rapido, puoi installare questa applicazione sulla schermata principale del tuo dispositivo, come se fosse un&apos;app nativa.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Android:</Typography>
                         <Typography paragraph>
-                            Apri il menu del browser (i tre puntini in alto a destra) e seleziona "Installa app" o "Aggiungi a schermata Home".
+                            Apri il menu del browser (i tre puntini in alto a destra) e seleziona &quot;Installa app&quot; o &quot;Aggiungi a schermata Home&quot;.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>iOS (iPhone/iPad):</Typography>
                         <Typography paragraph>
-                            Tocca il pulsante di condivisione (il quadrato con la freccia verso l'alto) nella barra di navigazione di Safari e scorri fino a trovare "Aggiungi a Home".
+                            Tocca il pulsante di condivisione (il quadrato con la freccia verso l&apos;alto) nella barra di navigazione di Safari e scorri fino a trovare &quot;Aggiungi a Home&quot;.
                         </Typography>
                     </Box>
 
@@ -221,7 +213,7 @@ const SettingsPage: React.FC = () => {
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Funzionalità delle Pagine</Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Home:</Typography>
                         <Typography paragraph>
-                            La pagina principale da cui puoi navigare verso tutte le sezioni principali dell'app.
+                            La pagina principale da cui puoi navigare verso tutte le sezioni principali dell&apos;app.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Nuovo Report:</Typography>
                         <Typography paragraph>
@@ -237,18 +229,18 @@ const SettingsPage: React.FC = () => {
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Notifiche:</Typography>
                         <Typography paragraph>
-                            Leggi le comunicazioni importanti inviate dall'azienda.
+                            Leggi le comunicazioni importanti inviate dall&apos;azienda.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Check-in:</Typography>
                         <Typography paragraph>
-                            Registra l'inizio e la fine delle tue attività giornaliere.
+                            Registra l&apos;inizio e la fine delle tue attività giornaliere.
                         </Typography>
                     </Box>
 
                     <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2 }}>
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Modalità Offline</Typography>
                         <Typography paragraph>
-                            L'applicazione è progettata per funzionare anche senza una connessione a Internet. Puoi continuare a creare report e utilizzare le altre funzionalità. I dati verranno sincronizzati automaticamente non appena il dispositivo tornerà online.
+                            L&apos;applicazione è progettata per funzionare anche senza una connessione a Internet. Puoi continuare a creare report e utilizzare le altre funzionalità. I dati verranno sincronizzati automaticamente non appena il dispositivo tornerà online.
                         </Typography>
                     </Box>
                 </AccordionDetails>
@@ -295,7 +287,7 @@ const SettingsPage: React.FC = () => {
              <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
                 <Typography variant="h6" gutterBottom>Manutenzione App</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Se riscontri problemi o l'app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
+                    Se riscontri problemi o l&apos;app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
                     <strong>Attenzione: questa operazione può cancellare i dati non ancora sincronizzati con il server, come i report creati offline.</strong>
                 </Typography>
                 <ForceUpdateButton />

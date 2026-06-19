@@ -191,11 +191,14 @@ const ReportFormPage: React.FC = () => {
     }, [isMultiDay, sortedTipiGiornata]);
 
     useEffect(() => {
-        if (!isEditMode && tecnicoScrivente) {
-            const nomeTecnico = `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim();
-            setDettaglioOre([createInitialDettaglio(tecnicoScrivente.id, nomeTecnico)]);
-            setPageLoading(false);
-        }
+        const initializeForm = async () => {
+            if (!isEditMode && tecnicoScrivente) {
+                const nomeTecnico = `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim();
+                setDettaglioOre([createInitialDettaglio(tecnicoScrivente.id, nomeTecnico)]);
+                setPageLoading(false);
+            }
+        };
+        initializeForm();
     }, [isEditMode, tecnicoScrivente]);
 
     useEffect(() => {
@@ -287,11 +290,15 @@ const ReportFormPage: React.FC = () => {
             }
         };
 
-        if (isEditMode) {
-            loadReportData();
-        } else {
-            setPageLoading(false);
-        }
+        const runEffect = async () => {
+            if (isEditMode) {
+                await loadReportData();
+            } else {
+                setPageLoading(false);
+            }
+        };
+    
+        runEffect();
     }, [reportId, isEditMode, isOfflineMode, collectionsLoading, loggedInTecnicoId, navigate, showSnackbar, tecnici, tipiGiornata]);
 
     useEffect(() => {

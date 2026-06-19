@@ -6,7 +6,7 @@ import refreshPlugin from "eslint-plugin-react-refresh";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "logica master non modificare/**", "apps/**", "*.cjs", "eslint.config.js", "functions/lib/**"],
+    ignores: ["dist/**", "build/**", "logica master non modificare/**", "apps/**", "*.cjs", "eslint.config.js", "functions/lib/**"],
   },
   ...tseslint.configs.recommended,
   {

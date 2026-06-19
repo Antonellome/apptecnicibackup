@@ -50,7 +50,7 @@ async function loadDataFromCache(): Promise<MasterData | null> {
     const data: { [key: string]: any[] } = {};
     localAnagrafiche.forEach(item => { data[item.id] = item.data; });
     
-    let impostazioni = await db.tariffe_locali.get('main');
+    const impostazioni = await db.tariffe_locali.get('main');
     if (!impostazioni) {
         const newImpostazioni = await createDefaultImpostazioni(data.tipiGiornata || []);
         return { ...data, impostazioni: newImpostazioni } as MasterData;
@@ -92,7 +92,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
                 console.error("SYNC_TRIGGER: Errore durante l'avvio della sincronizzazione offline.", err);
             });
         }
-    }, [isOnline, user?.uid]);
+    }, [isOnline, user]);
 
     const initializeAndSync = useCallback(async () => {
         setLoading(true);
@@ -160,13 +160,25 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     
     useEffect(() => {
         let unsubscribe: (() => void) | undefined;
-        if (!authLoading && user) {
-            initializeAndSync().then(unsub => { if (unsub) unsubscribe = unsub; });
-        } else if (!authLoading && !user) {
-            setMasterData(null); 
-            setLoading(false);
-        }
-        return () => { if (unsubscribe) unsubscribe(); };
+        const runSync = async () => {
+            if (!authLoading && user) {
+                const unsub = await initializeAndSync();
+                if (unsub) {
+                    unsubscribe = unsub;
+                }
+            } else if (!authLoading && !user) {
+                setMasterData(null); 
+                setLoading(false);
+            }
+        };
+
+        runSync();
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+        };
     }, [authLoading, user, initializeAndSync]);
 
     const contextValue = useMemo(() => ({
@@ -185,7 +197,7 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
             <Box sx={{ p: 4, m: 2, border: '1px solid red', borderRadius: 2 }}>
                 <Alert severity="error"><Typography variant="h6">Errore Critico</Typography></Alert>
                 <Typography>{error.message || "Impossibile caricare i dati essenziali."}</Typography>
-                <Button variant="contained" color="error" onClick={() => window.location.reload()} sx={{ mt: 2 }}>Ricarica l'app</Button>
+                <Button variant="contained" color="error" onClick={() => window.location.reload()} sx={{ mt: 2 }}>Ricarica l&apos;app</Button>
             </Box>
         );
     }

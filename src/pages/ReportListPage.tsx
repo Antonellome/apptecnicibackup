@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -11,10 +11,10 @@ import {
   Divider,
   Chip
 } from '@mui/material';
-import { CloudQueue, Sync, WifiOff } from '@mui/icons-material';
+import { Cloud, CloudQueue, Sync, WifiOff } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, isSameMonth, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, Timestamp, orderBy } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
 import { db as localDb } from '@/db/local-db';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -23,7 +23,7 @@ import { useMasterData } from '@/hooks/useMasterData';
 import { Rapportino, EnrichedRapportino, MasterData } from '@/models/definitions';
 import FullScreenLoader from '@/components/FullScreenLoader';
 
-const enrichRapportino = (rapportino: Partial<Rapportino> & { id: string, isOffline?: boolean }, masterData: MasterData): Omit<EnrichedRapportino, 'isClickable'> => {
+const enrichRapportino = (rapportino: Rapportino, masterData: MasterData): Omit<EnrichedRapportino, 'isClickable'> => {
     const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
     const naviMap = new Map(masterData.navi.map((n) => [n.id, n.nome]));
     const luoghiMap = new Map(masterData.luoghi.map((l) => [l.id, l.nome]));
@@ -49,6 +49,7 @@ const ReportListPage = () => {
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [syncState, setSyncState] = useState({ loading: false, error: null as string | null });
+  const [initialSyncComplete, setInitialSyncComplete] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -64,11 +65,12 @@ const ReportListPage = () => {
     };
   }, []);
 
-  useEffect(() => {
+  const syncEngine = useCallback(async () => {
     if (!isOnline || !userProfile?.tecnicoId) {
       setSyncState({ loading: false, error: isOnline ? "Profilo utente non caricato." : "Sei offline. I dati non possono essere sincronizzati." });
-      return;
+      return () => {}; // No-op cleanup
     }
+    
     setSyncState({ loading: true, error: null });
 
     const rapportiniQuery = query(
@@ -77,90 +79,116 @@ const ReportListPage = () => {
         orderBy("data", "desc")
     );
 
+    if (!initialSyncComplete) {
+      try {
+        const initialSnapshot = await getDocs(rapportiniQuery);
+        const initialPuts = initialSnapshot.docs.map(doc => {
+            const data = doc.data();
+            const date = data.data instanceof Timestamp ? data.data.toDate() : new Date(data.data as any);
+            return { id: doc.id, ...data, data: date, isOffline: false } as Rapportino;
+        });
+
+        await localDb.transaction('rw', localDb.rapportini, async () => {
+            await localDb.rapportini.bulkPut(initialPuts);
+        });
+        
+        console.log(`INITIAL_SYNC: ${initialPuts.length} reports successfully loaded into local DB.`);
+        setInitialSyncComplete(true);
+
+      } catch (err: any) {
+        console.error("INITIAL_SYNC_FAILED: ", err);
+        setSyncState({ loading: false, error: `Errore nel caricamento iniziale: ${err.message}` });
+        return () => {};
+      }
+    }
+
     const unsubscribe = onSnapshot(rapportiniQuery, (snapshot) => {
         const changes = snapshot.docChanges();
+        if (changes.length === 0) {
+            setSyncState({ loading: false, error: null });
+            return;
+        }
+
         const puts: Rapportino[] = [];
         const deletes: string[] = [];
 
         for (const change of changes) {
             if (change.type === 'removed') {
                 deletes.push(change.doc.id);
-            } else {
+            } else { 
                 const data = change.doc.data();
                 const date = data.data instanceof Timestamp ? data.data.toDate() : new Date(data.data as any);
-                puts.push({ id: change.doc.id, ...data, data: date } as Rapportino);
+                puts.push({ id: change.doc.id, ...data, data: date, isOffline: false } as Rapportino);
             }
         }
         
         localDb.transaction('rw', localDb.rapportini, async () => {
-          if (puts.length > 0) {
-              await localDb.rapportini.bulkPut(puts);
-          }
-          if (deletes.length > 0) {
-              await localDb.rapportini.bulkDelete(deletes);
-          }
+          if (puts.length > 0) await localDb.rapportini.bulkPut(puts);
+          if (deletes.length > 0) await localDb.rapportini.bulkDelete(deletes);
         }).then(() => {
           setSyncState({ loading: false, error: null });
         }).catch(err => {
-          console.error("Dexie transaction failed: ", err);
+          console.error("DEXIE_TRANSACTION_FAILED: ", err);
           setSyncState({ loading: false, error: `Errore nell'aggiornamento locale: ${err.message}` });
         });
 
     }, (err) => {
-        console.error("Firestore Snapshot Error: ", err);
-        setSyncState({ loading: false, error: `Impossibile sincronizzare. Visualizzazione dati locali.` });
+        console.error("FIRESTORE_SNAPSHOT_ERROR: ", err);
+        setSyncState({ loading: false, error: `Sincronizzazione fallita. Visualizzando dati locali.` });
     });
 
     return () => unsubscribe();
-  }, [userProfile, isOnline]);
+  }, [userProfile, isOnline, initialSyncComplete]);
 
-  const localRapportini = useLiveQuery(async () => {
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    const runSync = async () => {
+        const unsub = await syncEngine();
+        if (unsub) {
+            cleanup = unsub;
+        }
+    };
+
+    runSync();
+
+    return () => {
+        if (cleanup) {
+            cleanup();
+        }
+    };
+}, [syncEngine]);
+
+
+  const rapportiniDelMese = useLiveQuery(async () => {
     if (!userProfile?.tecnicoId) return [];
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
+    
     const reportsInMonth = await localDb.rapportini
       .where('data')
       .between(start, end, true, true)
       .toArray();
-    // Filtra per tecnicoId. Ora usiamo il campo `tecnicoId` come principale fonte di verità.
+
     const userReports = reportsInMonth.filter(r => r.tecnicoId === userProfile.tecnicoId);
     userReports.sort((a, b) => b.data.getTime() - a.data.getTime());
     return userReports;
   }, [currentMonth, userProfile]);
 
-  const offlineSyncEvents = useLiveQuery(() => localDb.syncQueue.where('type').equals('rapportino').toArray(), []);
+  const offlineSyncEventsCount = useLiveQuery(() => localDb.syncQueue.where('type').equals('rapportino').count(), []);
 
- const displayedRapportini = useMemo(() => {
-    if (!masterData || !userProfile || !localRapportini) return [];
+  const displayedRapportini = useMemo(() => {
+    if (!masterData || !userProfile || !rapportiniDelMese) return [];
+    return rapportiniDelMese.map(r => enrichRapportino(r, masterData));
+  }, [rapportiniDelMese, masterData, userProfile]);
 
-    const enrichedLocal = localRapportini.map(r => enrichRapportino(r, masterData));
-    const localIds = new Set(localRapportini.map(r => r.id));
+  const isLoading = masterDataLoading || rapportiniDelMese === undefined;
 
-    const offlineUnsynced = (offlineSyncEvents || [])
-        .map(event => {
-            const rapportinoPayload = event.payload as Rapportino;
-            const rapportinoDate = rapportinoPayload.data instanceof Timestamp ? rapportinoPayload.data.toDate() : new Date(rapportinoPayload.data as any);
-            // Mostra eventi offline solo se appartengono al tecnico loggato e non sono ancora nel db locale
-            if (isSameMonth(rapportinoDate, currentMonth) && rapportinoPayload.tecnicoId === userProfile.tecnicoId && !localIds.has(event.entityId)) {
-                return enrichRapportino({ ...rapportinoPayload, id: event.entityId, isOffline: true }, masterData);
-            }
-            return null;
-        })
-        .filter((r): r is Omit<EnrichedRapportino, 'isClickable'> => r !== null);
-
-    const all = [...enrichedLocal, ...offlineUnsynced];
-    all.sort((a, b) => b.data.getTime() - a.data.getTime());
-    return all;
-}, [localRapportini, offlineSyncEvents, masterData, userProfile, currentMonth]);
-
-  const isLoading = masterDataLoading || localRapportini === undefined;
-
-  if (isLoading) {
+  if (isLoading && !initialSyncComplete) {
       return <FullScreenLoader />;
   }
 
   if (masterDataError) {
-      return <Box sx={{ p: 4, textAlign: 'center' }}><Alert severity="error">Errore critico nel caricamento dei dati anagrafici. Impossibile continuare.</Alert></Box>;
+      return <Box sx={{ p: 4, textAlign: 'center' }}><Alert severity="error">{masterDataError}</Alert></Box>;
   }
 
   const handleMonthChange = (increment: number) => {
@@ -168,13 +196,13 @@ const ReportListPage = () => {
   };
 
   const handleReportClick = (report: { id: string, isOffline?: boolean }) => {
-    const path = report.isOffline ? `/report/edit-offline/${report.id}` : `/report/edit/${report.id}`;
+    const path = report.id.startsWith('local-') ? `/report/edit-offline/${report.id}` : `/report/edit/${report.id}`;
     navigate(path);
   };
 
   const renderOre = (report: Omit<EnrichedRapportino, 'isClickable'>) => {
     if (report.oraInizio && report.oraFine) {
-        return `${report.oraInizio} - ${report.oraFine} (P: ${report.pausa || '0h'})`;
+        return `${report.oraInizio} - ${report.oraFine} (P: ${report.pausa || 0}m)`;
     }
     if (report.oreLavoro) {
         return `Totale: ${report.oreLavoro}h`;
@@ -190,9 +218,9 @@ const ReportListPage = () => {
       </Box>
 
       {syncState.loading && <Chip icon={<Sync />} label="Sincronizzazione in corso..." color="info" sx={{ mb: 2, width: '100%' }} />}
-      {syncState.error && !isOnline && <Alert severity="warning" icon={<WifiOff/>} sx={{ mb: 2 }}>{syncState.error}</Alert>}
+      {!isOnline && <Alert severity="warning" icon={<WifiOff/>} sx={{ mb: 2 }}>Sei offline. Le modifiche saranno sincronizzate appena tornerà la connessione.</Alert>}
       {syncState.error && isOnline && <Alert severity="warning" sx={{ mb: 2 }}>{syncState.error}</Alert>}
-      {offlineSyncEvents && offlineSyncEvents.length > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEvents.length} report non sincronizzati`} color="warning" sx={{ mb: 2, width: '100%' }}/>}
+      {offlineSyncEventsCount > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEventsCount} ${offlineSyncEventsCount > 1 ? 'report in attesa' : 'report in attesa'}`} color="warning" sx={{ mb: 2, width: '100%' }}/>}
 
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
@@ -227,7 +255,7 @@ const ReportListPage = () => {
                         {/* Destra */}
                         <Box sx={{ flex: '0 0 30%', textAlign: 'right' }}>
                             <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1}}>
-                                {report.isOffline && <Chip label="Offline" size="small" color="info" variant="outlined" />}
+                                {report.isOffline && <Chip icon={<Cloud />} label="Locale" size="small" color="info" variant="outlined" />}
                                 <Typography variant="body2" sx={{ fontWeight: '500' }}>
                                     {report.tipoGiornata?.nome}
                                 </Typography>
@@ -252,7 +280,7 @@ const ReportListPage = () => {
               )
             })
           ) : (
-            (localRapportini && localRapportini.length === 0 && !syncState.loading) && (
+            (rapportiniDelMese && rapportiniDelMese.length === 0 && !syncState.loading) && (
               <Typography sx={{ textAlign: 'center', p: 4, fontStyle: 'italic', color: 'text.secondary' }}>
                 Nessun report trovato per il mese selezionato.
               </Typography>
