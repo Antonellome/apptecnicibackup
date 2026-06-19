@@ -182,6 +182,7 @@ export interface EnrichedRapportino extends Rapportino {
     luogoNome?: string;
     tecnicoScrivente?: Tecnico;
     isClickable?: boolean;
+    oreDisplay?: string;
 }
 
 export interface DayInfo {
