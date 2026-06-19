@@ -2,14 +2,20 @@ import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Box, IconButton, Tooltip } from '@mui/material';
 import { Notifications, Settings, Logout, Home } from '@mui/icons-material';
+import { useAuth } from '@/hooks/useAuth';
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
+    const { logout } = useAuth();
 
-    // CIAO: OBBEDISCO. Rimuovo la logica di logout rotta. 
-    // Ora il pulsante reindirizza semplicemente al login.
-    const handleLogout = () => {
-        navigate('/login');
+    const handleLogout = async () => {
+        try {
+            await logout();
+            navigate('/login');
+        } catch (error) {
+            console.error("Errore durante il logout:", error);
+            // Gestisci l'errore, magari mostrando una notifica all'utente
+        }
     };
 
     return (

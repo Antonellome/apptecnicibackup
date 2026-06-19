@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Box, AppBar, Toolbar, Typography, IconButton, Alert } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, IconButton, Alert, Tooltip } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 
 // Icone
@@ -9,6 +8,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
+import { Notifications } from '@mui/icons-material';
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
@@ -29,41 +29,31 @@ const MainLayout: React.FC = () => {
         };
     }, []);
 
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
+    const handleLogout = async () => {
+        try {
+            await logout();
+            navigate('/login');
+        } catch (error) {
+            console.error("Errore durante il logout:", error);
+        }
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'background.default' }}>
-            <AppBar position="sticky" sx={{ backgroundColor: '#0D47A1' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            <AppBar position="static" enableColorOnDark>
                 <Toolbar>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <Typography variant="h6" noWrap component="div">
-                            R.I.S.O. App Tecnici
-                        </Typography>
-                        <Typography variant="body2" noWrap component="div" sx={{ opacity: 0.8 }}>
-                            Report Individuali Sincronizzati Online
-                        </Typography>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="h6" component="div">R.I.S.O. App Tecnici</Typography>
+                        <Typography variant="caption">Report Individuali Sincronizzati Online</Typography>
                     </Box>
 
-                    <Box sx={{ flexGrow: 1 }} />
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <IconButton title="Home" color="inherit" onClick={() => navigate('/')}>
-                            <HomeIcon />
-                        </IconButton>
-
-                        <IconButton title="Impostazioni" color="inherit" onClick={() => navigate('/impostazioni')}>
-                            <SettingsIcon />
-                        </IconButton>
-                        <IconButton title="Logout" color="inherit" onClick={handleLogout}>
-                            <LogoutIcon />
-                        </IconButton>
-                    </Box>
+                    <Tooltip title="Home"><IconButton color="inherit" onClick={() => navigate('/')}><HomeIcon /></IconButton></Tooltip>
+                    <Tooltip title="Notifiche"><IconButton color="inherit" onClick={() => navigate('/notifiche')}><Notifications /></IconButton></Tooltip>
+                    <Tooltip title="Impostazioni"><IconButton color="inherit" onClick={() => navigate('/impostazioni')}><SettingsIcon /></IconButton></Tooltip>
+                    <Tooltip title="Logout"><IconButton color="inherit" onClick={handleLogout}><LogoutIcon /></IconButton></Tooltip>
                 </Toolbar>
             </AppBar>
-            
+
             {!isOnline && (
                 <Alert
                     severity="warning"
@@ -79,12 +69,12 @@ const MainLayout: React.FC = () => {
                     Sei offline. Le funzionalità potrebbero essere limitate.
                 </Alert>
             )}
-
-            <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%', boxSizing: 'border-box' }}>
+            
+            <Box component="main" sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 }, width: '100%', boxSizing: 'border-box' }}>
                 <Outlet />
             </Box>
         </Box>
     );
-}
+};
 
 export default MainLayout;

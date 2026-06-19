@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 import { Box, Typography, Divider } from '@mui/material';
 import type { Tecnico, FormField, Ditta, Categoria } from '@/models/definitions';
 import { useMasterData } from '@/hooks/useMasterData';
-import { safeGetDayjs } from '@/utils/dateUtils';
 import logo from '@/assets/react.svg';
 
 interface PrintableTechnicianListProps {
@@ -52,8 +51,28 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
         }
 
         if (field.type === 'date') {
-            const date = safeGetDayjs(value as string);
-            return date ? date.format('DD/MM/YYYY') : null;
+            if (!value) return null;
+            try {
+                let dateValue = value;
+                if (typeof dateValue === 'object' && dateValue !== null && typeof dateValue.toDate === 'function') {
+                    dateValue = dateValue.toDate();
+                }
+
+                const date = new Date(dateValue as string | number | Date);
+
+                if (isNaN(date.getTime())) {
+                    return null;
+                }
+
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = date.getFullYear();
+                
+                return `${day}/${month}/${year}`;
+            } catch (error) {
+                console.error("Failed to parse date:", value, error);
+                return null;
+            }
         }
         
         if (field.name === 'dittaId') return ditteMap?.get(value as string)?.nome || null;

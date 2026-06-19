@@ -2,15 +2,12 @@
 import React, { useRef, useEffect } from 'react';
 import {
     Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
     Box,
-    Button,
-    IconButton
+    IconButton,
+    Tooltip
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
+import ClearIcon from '@mui/icons-material/Clear';
 import ReplayIcon from '@mui/icons-material/Replay';
 import SignaturePad from 'react-signature-pad-wrapper';
 
@@ -27,8 +24,10 @@ const SignatureDialog: React.FC<SignatureDialogProps> = ({
 }) => {
     const sigCanvas = useRef<SignaturePad>(null);
 
+    // Pulisce il canvas quando il dialogo si apre
     useEffect(() => {
         if (open && sigCanvas.current) {
+            // Un piccolo timeout per assicurarsi che il canvas sia visibile prima di pulirlo
             setTimeout(() => sigCanvas.current?.clear(), 100); 
         }
     }, [open]);
@@ -38,78 +37,98 @@ const SignatureDialog: React.FC<SignatureDialogProps> = ({
     };
 
     const handleSave = () => {
-        if (sigCanvas.current) {
-            if (sigCanvas.current.isEmpty()) {
-                onClose();
-                return;
-            }
+        if (sigCanvas.current && !sigCanvas.current.isEmpty()) {
             const signatureData = sigCanvas.current.toDataURL('image/png');
             onSave(signatureData);
+        } else {
+            // Se non c'è firma, consideralo come un annullamento o non salvare nulla
+            onClose();
         }
+    };
+
+    const handleClose = () => {
+        onClose();
     };
 
     return (
         <Dialog
             fullScreen
             open={open}
-            onClose={onClose}
+            onClose={handleClose}
             PaperProps={{
                 sx: {
-                    backgroundColor: '#f5f5f5', // Sfondo grigio chiaro per la leggibilità
+                    // Layout principale per contenere il canvas e i controlli
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: 'row', // Layout orizzontale
+                    backgroundColor: '#fff', // Sfondo bianco pulito
+                    overflow: 'hidden' // Nasconde lo scroll
                 }
             }}
         >
-            <DialogTitle sx={{ 
-                backgroundColor: 'primary.main', 
-                color: 'white', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center' 
-            }}>
-                Apponi la tua Firma
-                <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
-                    <CloseIcon />
-                </IconButton>
-            </DialogTitle>
-
-            <DialogContent sx={{ p: 0, flexGrow: 1, display: 'flex' }}>
-                <Box sx={{ border: '2px dashed #ccc', borderRadius: '4px', width: '100%', height: '100%' }}>
-                    <SignaturePad
-                        ref={sigCanvas}
-                        options={{ penColor: '#000000' }}
-                        canvasProps={{
-                            style: {
-                                width: '100%',
-                                height: '100%',
-                                background: 'transparent'
-                            }
-                        }}
-                    />
+            {/* Contenitore principale per il SignaturePad */}
+            <Box sx={{ flexGrow: 1, position: 'relative' }}>
+                <SignaturePad
+                    ref={sigCanvas}
+                    options={{
+                        penColor: '#000000', // Colore della penna
+                        backgroundColor: '#ffffff' // Sfondo del canvas stesso
+                    }}
+                    canvasProps={{
+                        style: {
+                            width: '100%',
+                            height: '100%',
+                        }
+                    }}
+                />
+                
+                {/* Barra delle icone posizionata verticalmente a destra */}
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(255, 255, 255, 0.5)', // Sfondo traslucido
+                        padding: '10px',
+                        gap: '15px',
+                        borderLeft: '1px solid #eee'
+                    }}
+                >
+                    <Tooltip title="Salva" placement="left">
+                        <IconButton
+                            onClick={handleSave}
+                            sx={{ color: 'green', backgroundColor: 'rgba(0, 255, 0, 0.1)' }}
+                            size="large"
+                        >
+                            <CheckIcon fontSize="large"/>
+                        </IconButton>
+                    </Tooltip>
+                    
+                    <Tooltip title="Pulisci" placement="left">
+                        <IconButton
+                            onClick={handleClear}
+                            sx={{ color: 'blue', backgroundColor: 'rgba(0, 0, 255, 0.1)' }}
+                            size="large"
+                        >
+                            <ReplayIcon fontSize="large"/>
+                        </IconButton>
+                    </Tooltip>
+                    
+                    <Tooltip title="Annulla" placement="left">
+                        <IconButton
+                            onClick={handleClose}
+                            sx={{ color: 'red', backgroundColor: 'rgba(255, 0, 0, 0.1)' }}
+                            size="large"
+                        >
+                            <ClearIcon fontSize="large"/>
+                        </IconButton>
+                    </Tooltip>
                 </Box>
-            </DialogContent>
-
-            <DialogActions sx={{ justifyContent: 'space-around', p: 2, backgroundColor: 'background.paper' }}>
-                <Button
-                    variant="outlined"
-                    color="secondary"
-                    onClick={handleClear}
-                    startIcon={<ReplayIcon />}
-                    size="large"
-                >
-                    Pulisci
-                </Button>
-                <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleSave}
-                    startIcon={<CheckIcon />}
-                    size="large"
-                >
-                    Salva Firma
-                </Button>
-            </DialogActions>
+            </Box>
         </Dialog>
     );
 };
