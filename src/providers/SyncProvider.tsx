@@ -1,31 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+
+import React, { useState, useEffect, ReactNode, useCallback } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { useAuth } from '@/hooks/useAuth'; // ++ CORREZIONE: L'import era sbagliato, puntava a ./AuthContext
-
-// --- TIPI E INTERFACCE ---
-export interface SyncManifest {
-  [collectionName: string]: number;
-}
-
-export interface SyncCollectionStatus {
-  isSyncing: boolean;
-  needsUpdate: boolean;
-  lastChecked: number | null;
-}
-
-interface SyncStatus {
-  [collectionName: string]: SyncCollectionStatus;
-}
-
-interface SyncContextType {
-  syncStatus: SyncStatus;
-  manifest: SyncManifest;
-  checkForUpdates: (collectionName: string) => Promise<void>;
-  updateLocalSyncTimestamp: (collectionName: string, version: number) => void;
-}
-
-const SyncContext = createContext<SyncContextType | undefined>(undefined);
+import { useAuth } from '@/hooks/useAuth';
+import { SyncContext, SyncStatus, SyncManifest } from '../contexts/SyncContext';
 
 // --- UTILS PER LOCAL STORAGE ---
 const LOCAL_STORAGE_KEY = 'app_sync_timestamps';
@@ -107,13 +85,4 @@ export const SyncProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const value = { syncStatus, manifest, checkForUpdates, updateLocalSyncTimestamp };
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
-};
-
-// --- CUSTOM HOOK ---
-export const useSync = () => {
-  const context = useContext(SyncContext);
-  if (context === undefined) {
-    throw new Error('useSync deve essere utilizzato all\'interno di un SyncProvider');
-  }
-  return context;
 };

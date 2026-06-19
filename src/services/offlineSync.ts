@@ -1,5 +1,5 @@
 import { db } from '@/db/local-db';
-import { collection, doc, addDoc, runTransaction, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
 import { Rapportino, SyncEvent } from '@/models/definitions';
 
@@ -71,12 +71,14 @@ export const sincronizzaConFirebase = async () => {
   for (const syncEvent of rapportiniDaSincronizzare) {
     if (!syncEvent.id) continue;
 
-    const { entityId, payload } = syncEvent;
+    const payload = syncEvent.payload as Rapportino;
+    const { entityId } = syncEvent;
+
     const rapportinoDaInviare: Omit<Rapportino, 'id' | 'isOffline'> = {
-      ...(payload as Omit<Rapportino, 'id'>),
-      veicoloId: (payload as Rapportino).veicoloId || 'Nessuno',
-      naveId: (payload as Rapportino).naveId || 'Nessuna',
-      luogoId: (payload as Rapportino).luogoId || 'Nessuno',
+      ...payload,
+      veicoloId: payload.veicoloId || 'Nessuno',
+      naveId: payload.naveId || 'Nessuna',
+      luogoId: payload.luogoId || 'Nessuno',
       updatedAt: new Date(),
     };
 

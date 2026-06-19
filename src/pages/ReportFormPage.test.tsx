@@ -7,9 +7,9 @@ import { BrowserRouter } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore'; // Import collection
 
 // ============== PROVIDERS & THEME SETUP (CORRECTED) ============== 
-import { ThemeProvider } from '@/contexts/ThemeContext';
-import { SnackbarProvider } from '@/contexts/SnackbarContext';
-import { NotificationProvider } from '@/contexts/NotificationContext';
+import { ThemeProvider } from '@/providers/ThemeProvider';
+import { SnackbarProvider } from '@/providers/SnackbarProvider';
+import { NotificationProvider } from '@/providers/NotificationProvider';
 
 // Helper to render components with all necessary providers
 const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -68,13 +68,9 @@ vi.mock('@/hooks/useLocalData', () => ({
 }));
 
 // 4. Snackbar Context
-vi.mock('@/contexts/SnackbarContext', async (importOriginal) => {
-    const actual = await importOriginal() as any;
-    return {
-        ...actual,
-        useSnackbar: () => ({ showSnackbar: vi.fn() }),
-    }
-});
+vi.mock('@/hooks/useSnackbar', () => ({
+    useSnackbar: () => ({ showSnackbar: vi.fn() }),
+}));
 
 // 5. Firebase / Offline Sync
 vi.mock('@/firebase', () => ({}));

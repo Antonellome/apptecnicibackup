@@ -7,7 +7,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { TariffaLocale, UserProfile } from '@/models/definitions';
+import { TariffaLocale } from '@/models/definitions';
 import { useMasterData } from '@/hooks/useMasterData';
 import { ForceUpdateButton } from '@/components/ForceUpdateButton';
 

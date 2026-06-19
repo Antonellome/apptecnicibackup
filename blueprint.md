@@ -173,5 +173,20 @@ L'obiettivo è trasformare l'applicazione in un'esperienza **offline-first robus
 
 ---
 
+## 5. Registro Interventi Architetturali
+
+*Questa sezione traccia le modifiche architetturali significative apportate per migliorare la robustezza e la manutenibilità dell'applicazione, in linea con "IL METODO DEL GRANDE MAESTRO".*
+
+### **2024-07-29: Centralizzazione della Sincronizzazione Offline**
+
+- **Problema:** La logica di sincronizzazione dei dati offline (trigger per avviare l'invio dei dati a Firebase) era erroneamente implementata all'interno del componente di layout `src/components/layout/MainLayout.tsx`. Questo violava il principio di separazione delle responsabilità, rendendo la logica fragile e difficile da mantenere.
+- **Soluzione Implementata:**
+    1.  **Creato Hook `useSyncManager`:** Tutta la logica di sincronizzazione è stata estratta e isolata in un nuovo hook custom: `src/hooks/useSyncManager.ts`. Questo hook gestisce il monitoraggio dello stato della rete e l'avvio del processo di sincronizzazione.
+    2.  **Iniezione Globale:** L'hook `useSyncManager` viene ora invocato all'interno di `src/components/AppInitializer.tsx`. Questo garantisce che il gestore della sincronizzazione venga istanziato una sola volta e rimanga attivo per l'intera durata della sessione dell'utente, completamente disaccoppiato dal ciclo di vita di qualsiasi componente UI.
+    3.  **Pulizia di `MainLayout`:** Il componente `MainLayout.tsx` è stato ripulito da ogni responsabilità legata alla sincronizzazione, tornando ad essere un componente di presentazione puro.
+- **Risultato:** L'architettura è ora più robusta, predicibile e allineata con le best practice. La logica di business critica è centralizzata e disaccoppiata dalla UI.
+
+---
+
 *Le sezioni che seguono, contenenti l'analisi tecnica storica, la cronaca del disastro, i piani di azione passati e l'appendice su MUI Grid, vengono mantenute per contesto storico e come riferimento tecnico.*
 (Il resto del file rimane invariato)

@@ -48,6 +48,8 @@ export interface Rapportino extends FirebaseDoc {
   updatedAt: Date;
   isMultiDay?: boolean;
   oreLavoro?: number; // Campo legacy per retrocompatibilità
+  isOffline?: boolean;
+  giorni?: { [key: string]: Giorno }; // Aggiunto per compatibilità con il componente Calendar
 }
 
 // =================================================================
@@ -174,7 +176,6 @@ export interface EnrichedRapportino extends Rapportino {
     tecnico?: Tecnico;
     tipoGiornata?: TipoGiornata;
     veicolo?: Veicolo;
-    isOffline: boolean;
     isEditable: boolean;
     oreGiorno: number;
     naveNome?: string;

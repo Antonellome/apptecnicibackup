@@ -1,9 +1,9 @@
 
 import React from 'react';
-import { useAuth } from '@/hooks/useAuth'; // Corretto: Importa dal percorso corretto dell'hook
-import { MasterDataProvider } from '../contexts/MasterDataProvider';
-import { GlobalDataProvider } from '../contexts/GlobalDataProvider';
-import { NotificationProvider } from '../contexts/NotificationContext';
+import { useAuth } from '@/hooks/useAuth';
+import { MasterDataProvider } from '../providers/MasterDataProvider';
+import { GlobalDataProvider } from '../providers/GlobalDataProvider';
+import { NotificationProvider } from '../providers/NotificationProvider';
 
 interface ProvidersWrapperProps {
     children: React.ReactNode;

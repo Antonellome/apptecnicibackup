@@ -13,7 +13,6 @@ export interface TariffaLocaleCache {
     timestamp: Date;
 }
 
-// Aggiungo l'interfaccia per la cache del manifest, come richiesto dall'architettura
 export interface SyncManifestCache {
   id: 'main';
   data: SyncManifest;
@@ -24,17 +23,15 @@ export class AppLocalDB extends Dexie {
   tariffe_locali!: Table<TariffaLocaleCache, string>;
   syncQueue!: Table<SyncEvent, number>;
   rapportini!: Table<Rapportino, string>;
-  // Dichiaro la nuova tabella
   sync_manifest!: Table<SyncManifestCache, string>;
 
   constructor() {
     super('AppLocalDB');
     
-    // Le versioni sono cumulative e non vanno modificate.
     this.version(1).stores({
         anagrafiche: 'id',
         tariffe_locali: 'id',
-        rapportini_mensili: 'id', // Obsoleta
+        rapportini_mensili: 'id', 
     });
 
     this.version(2).stores({
@@ -44,13 +41,17 @@ export class AppLocalDB extends Dexie {
       rapportini: 'id, data, tecnicoId',
     });
 
-    // VERSIONE 3: Aggiungo la tabella sync_manifest per allineare il db al blueprint.
     this.version(3).stores({
         anagrafiche: 'id',
         tariffe_locali: 'id',
         syncQueue: '++id, type',
         rapportini: 'id, data, tecnicoId',
-        sync_manifest: 'id' // <-- La tabella che risolve l'errore
+        sync_manifest: 'id'
+    });
+
+    // VERSIONE 4: Aggiungo indice composto per ottimizzare le query dei report per utente/mese.
+    this.version(4).stores({
+      rapportini: 'id, [tecnicoId+data], tecnicoId, data'
     });
 
     this.open().catch(err => {

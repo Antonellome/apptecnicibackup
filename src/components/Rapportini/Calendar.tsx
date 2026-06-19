@@ -1,3 +1,4 @@
+
 import { Paper, Typography, Grid, Box, Tooltip } from '@mui/material';
 import { getDaysInMonth, startOfMonth, format, getDay } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -17,8 +18,7 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
     const weekDays = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 
     const renderDay = (day: number) => {
-        // @ts-expect-error - Il campo 'giorni' non è standard nel tipo Rapportino, ma viene aggiunto dinamicamente.
-        const giornoData: Giorno | undefined = rapportino?.giorni[String(day)];
+        const giornoData: Giorno | undefined = rapportino?.giorni?.[String(day)];
         const tipoGiorno = giornoData ? tipiGiornata.get(giornoData.tipo) : null;
 
         const isToday = format(new Date(), 'd') === String(day) && format(new Date(), 'M') === format(selectedDate, 'M');
@@ -40,7 +40,6 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
                 <Box>
                     <Typography variant="body2"><strong>{tipoGiorno?.nome || 'Lavorato'}</strong></Typography>
                     <Typography variant="caption">Ore: {giornoData.ore}</Typography>
-                    {/* @ts-expect-error - Il campo 'straordinari' non è standard nel tipo Giorno. */}
                     {giornoData.straordinari > 0 && <Typography variant="caption"><br />Straordinari: {giornoData.straordinari}</Typography>}
                     {giornoData.trasferta !== 'No' && <Typography variant="caption"><br />Trasferta: {giornoData.trasferta}</Typography>}
                 </Box>
@@ -82,15 +81,15 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
             </Typography>
             <Grid container spacing={0.5}>
                 {weekDays.map(day => (
-                    <Grid item xs={12 / 7} key={day} sx={{ textAlign: 'center', fontWeight: 'bold', mb: 1 }}>
+                    <Grid size={12 / 7} key={day} sx={{ textAlign: 'center', fontWeight: 'bold', mb: 1 }}>
                         <Typography variant="caption" color="text.secondary">{day}</Typography>
                     </Grid>
                 ))}
                 {Array.from({ length: startingDayIndex }).map((_, i) => (
-                    <Grid item xs={12/7} key={`empty-${i}`} />
+                    <Grid size={12/7} key={`empty-${i}`} />
                 ))}
                 {Array.from({ length: daysInMonth }).map((_, i) => (
-                    <Grid item xs={12 / 7} key={i}>
+                    <Grid size={12 / 7} key={i}>
                         {renderDay(i + 1)}
                     </Grid>
                 ))}

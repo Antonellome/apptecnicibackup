@@ -1,64 +1,33 @@
 
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Box, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, IconButton, Alert } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
-
-// Servizi, DB e Context
-import { db } from '@/db/local-db'; // Percorso corretto
-import { sincronizzaConFirebase } from '@/services/offlineSync';
-import { useSnackbar } from '@/contexts/SnackbarContext';
 
 // Icone
 import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
     const { logout } = useAuth();
-    const { showSnackbar } = useSnackbar();
-    const isSyncing = useRef(false);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-    const handleSync = useCallback(async (isManualTrigger = false) => {
-        if (isSyncing.current) {
-            if (isManualTrigger) showSnackbar("Sincronizzazione già in corso.", "info");
-            return;
-        }
-        if (!navigator.onLine) {
-            if (isManualTrigger) showSnackbar('Impossibile sincronizzare: sei offline.', 'warning');
-            return;
-        }
-        
-        const count = await db.syncQueue.count();
-        if (count === 0) {
-            if (isManualTrigger) showSnackbar('Nessun dato da sincronizzare.', 'success');
-            return;
-        }
-
-        isSyncing.current = true;
-        if (isManualTrigger) showSnackbar('Sincronizzazione avviata...', 'info');
-        
-        try {
-            await sincronizzaConFirebase();
-            if (isManualTrigger) showSnackbar(`Sincronizzazione completata! ${count} record inviati.`, 'success');
-        } catch (error) { 
-            showSnackbar('Errore durante la sincronizzazione.', 'error');
-            console.error("Errore di sincronizzazione:", error);
-        } finally {
-            isSyncing.current = false;
-        }
-    }, [showSnackbar]);
-
-    // Effetto per la sincronizzazione automatica al ritorno online
+    // Monitora lo stato della connessione per visualizzare il banner
     useEffect(() => {
-        const onOnline = () => handleSync(false);
-        onOnline(); // Tenta una sincronizzazione all'avvio del componente se online
-        window.addEventListener('online', onOnline);
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
         return () => {
-            window.removeEventListener('online', onOnline);
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
         };
-    }, [handleSync]);
+    }, []);
 
     const handleLogout = () => {
         logout();
@@ -67,7 +36,7 @@ const MainLayout: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'background.default' }}>
-            <AppBar position="static" sx={{ backgroundColor: '#0D47A1' }}>
+            <AppBar position="sticky" sx={{ backgroundColor: '#0D47A1' }}>
                 <Toolbar>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                         <Typography variant="h6" noWrap component="div">
@@ -95,7 +64,23 @@ const MainLayout: React.FC = () => {
                 </Toolbar>
             </AppBar>
             
-            <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%' }}>
+            {!isOnline && (
+                <Alert
+                    severity="warning"
+                    iconMapping={{ warning: <WifiOffIcon fontSize="inherit" /> }}
+                    sx={{ 
+                        borderRadius: 0, 
+                        justifyContent: 'center', 
+                        backgroundColor: 'warning.dark',
+                        color: 'common.white',
+                        fontWeight: 'bold'
+                    }}
+                >
+                    Sei offline. Le funzionalità potrebbero essere limitate.
+                </Alert>
+            )}
+
+            <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%', boxSizing: 'border-box' }}>
                 <Outlet />
             </Box>
         </Box>

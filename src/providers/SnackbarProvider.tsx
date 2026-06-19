@@ -1,19 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+
+import React, { useState, ReactNode } from 'react';
 import { Snackbar, Alert, AlertColor } from '@mui/material';
-
-interface SnackbarContextType {
-  showSnackbar: (message: string, severity?: AlertColor, action?: React.ReactNode) => void;
-}
-
-const SnackbarContext = createContext<SnackbarContextType | undefined>(undefined);
-
-export const useSnackbar = () => {
-  const context = useContext(SnackbarContext);
-  if (!context) {
-    throw new Error('useSnackbar must be used within a SnackbarProvider');
-  }
-  return context;
-};
+import { SnackbarContext } from '../contexts/SnackbarContext';
 
 interface SnackbarProviderProps {
   children: ReactNode;
@@ -37,8 +25,6 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
       return;
     }
     setOpen(false);
-    // Resettiamo l'azione dopo che l'animazione di chiusura è iniziata/finita
-    // Lo stato verrà comunque sovrascritto alla prossima chiamata di showSnackbar
   };
 
   return (
@@ -46,7 +32,7 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
       {children}
       <Snackbar 
         open={open} 
-        autoHideDuration={action ? null : 6000} // Se c'è un'azione di sistema (come aggiorna), non chiudere automaticamente
+        autoHideDuration={action ? null : 6000} 
         onClose={handleClose}
         action={action}
       >

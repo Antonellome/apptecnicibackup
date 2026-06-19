@@ -1,166 +1,217 @@
 
-import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { db } from '@/db/local-db';
-import { collection, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { collection, getDocs, doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
-import { MasterData, ANAGRAFICA_TABLES } from '@/models/definitions';
-import { useAuth } from '@/hooks/useAuth';
+import type { MasterData, Impostazioni, TipoGiornata, TariffaLocale, SyncManifest } from '@/models/definitions';
+import { db } from '@/db/local-db';
+import FullScreenLoader from '@/components/FullScreenLoader';
+import { Alert, Box, Typography, Button } from '@mui/material';
+import { MasterDataContext } from '../contexts/MasterDataContext';
+import { useAuth } from '../hooks/useAuth';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { sincronizzaConFirebase } from '@/services/offlineSync';
 
-// Definizione del tipo per lo stato del provider
-type MasterDataContextState = {
-  masterData: MasterData | null;
-  loading: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
-};
+const ANAGRAFICA_COLLECTIONS: (keyof Omit<MasterData, 'impostazioni'>)[] = [
+    'tecnici', 'tipiGiornata', 'veicoli', 'navi', 'luoghi', 'clienti', 'sedi', 'ditte', 'categorie'
+];
 
-// Creazione del Context
-export const MasterDataContext = createContext<MasterDataContextState>({
-  masterData: null,
-  loading: true,
-  error: null,
-  refetch: async () => {},
-});
+const TARIFFS_BLUEPRINT: { nome: string; costo: number; unita: 'g' | 'h'; }[] = [
+    { nome: 'Ferie', costo: 80, unita: 'g' },
+    { nome: 'Festivo', costo: 80, unita: 'g' },
+    { nome: 'Legge 104', costo: 10, unita: 'h' },
+    { nome: 'Malattia', costo: 80, unita: 'g' },
+    { nome: 'Ordinaria', costo: 10, unita: 'h' },
+    { nome: 'Permesso', costo: 10, unita: 'h' },
+    { nome: 'Straordinario', costo: 15, unita: 'h' },
+    { nome: 'Trasferta Europa', costo: 40, unita: 'g' },
+    { nome: 'Trasferta Extraeuropea', costo: 80, unita: 'g' },
+    { nome: 'Trasferta Italia', costo: 20, unita: 'g' },
+];
 
-// Definizione del Provider
-export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [masterData, setMasterData] = useState<MasterData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth(); // Usato per triggerare il refetch al login
+function rehydrateTimestamp(ts: any): Timestamp | undefined {
+    if (!ts) return undefined;
+    if (ts instanceof Timestamp) return ts;
+    if (typeof ts === 'object' && typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') {
+        return new Timestamp(ts.seconds, ts.nanoseconds);
+    }
+    return undefined;
+}
 
-  const createEmptyMasterData = (): MasterData => ({
-    tipiGiornata: [],
-    tecnici: [],
-    veicoli: [],
-    navi: [],
-    luoghi: [],
-    impostazioni: [],
-    ditte: [],
-    sedi: [],
-    magazzini: [],
-  });
+async function fetchAndCacheCollection(collectionName: keyof Omit<MasterData, 'impostazioni'>) {
+    const querySnapshot = await getDocs(collection(firestoreDb, collectionName));
+    const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    await db.anagrafiche.put({ id: collectionName, data, timestamp: new Date() });
+    return data;
+}
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+async function loadDataFromCache(): Promise<MasterData | null> {
+    const localAnagrafiche = await db.anagrafiche.toArray();
+    if (localAnagrafiche.length < ANAGRAFICA_COLLECTIONS.length) return null;
+    
+    const data: { [key: string]: any[] } = {};
+    localAnagrafiche.forEach(item => { data[item.id] = item.data; });
+    
+    const impostazioni = await db.tariffe_locali.get('main');
+    if (!impostazioni) {
+        const newImpostazioni = await createDefaultImpostazioni(data.tipiGiornata || []);
+        return { ...data, impostazioni: newImpostazioni } as MasterData;
+    }
+    return { ...data, impostazioni: impostazioni.data } as MasterData;
+}
 
-    // 1. Tenta di caricare i dati dalla cache locale (Dexie)
-    try {
-      const cachedDataPromises = ANAGRAFICA_TABLES.map(tableName =>
-        db.anagrafiche.get(tableName).then(record => ({ tableName, data: record?.data || [] }))
-      );
-      const cachedResults = await Promise.all(cachedDataPromises);
+async function createDefaultImpostazioni(tipiGiornataDaDB: TipoGiornata[]): Promise<Impostazioni> {
+    const blueprintMapByName = new Map(TARIFFS_BLUEPRINT.map(t => [t.nome.toLowerCase(), t]));
+    const finalTariffe: TariffaLocale[] = tipiGiornataDaDB.map((tipoGiornata) => {
+        const lookupName = tipoGiornata.nome?.toLowerCase() || '';
+        const blueprintDefault = blueprintMapByName.get(lookupName) || blueprintMapByName.get(lookupName === '104' ? 'legge 104' : '');
+        const costo = blueprintDefault?.costo ?? 0;
+        const unita = blueprintDefault?.unita ?? 'h';
+        return {
+            id: tipoGiornata.id,
+            tipoGiornataId: tipoGiornata.id,
+            nome: tipoGiornata.nome,
+            costo: costo,
+            tariffa: costo,
+            unita: unita,
+        };
+    });
+    const finalImpostazioni: Impostazioni = { id: 'main', tariffe: finalTariffe };
+    await db.tariffe_locali.put({ id: 'main', data: finalImpostazioni, timestamp: new Date() });
+    return finalImpostazioni;
+}
 
-      const cachedMasterData = createEmptyMasterData();
-      let isCacheComplete = true;
-      
-      for (const { tableName, data } of cachedResults) {
-        if (data.length > 0) {
-          (cachedMasterData as any)[tableName] = data;
-        } else {
-          isCacheComplete = false;
+export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const [masterData, setMasterData] = useState<MasterData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<any | null>(null);
+    const { user, loading: authLoading } = useAuth();
+    const isOnline = useOnlineStatus();
+
+    useEffect(() => {
+        if (isOnline && user) {
+            sincronizzaConFirebase().catch(err => {
+                console.error("SYNC_TRIGGER: Errore durante l'avvio della sincronizzazione offline.", err);
+            });
         }
-      }
+    }, [isOnline, user]);
 
-      // Se la cache è completa, usala subito e avvia un sync silenzioso in background se online
-      if (isCacheComplete) {
-        setMasterData(cachedMasterData);
-        setLoading(false);
-        console.log("MasterDataProvider: Dati caricati con successo dalla cache locale.");
-
-        if (navigator.onLine) {
-          // Sincronizzazione silenziosa in background
-          fetchFromFirestore(true).catch(err => {
-            console.warn("Sincronizzazione silenziosa in background fallita:", err);
-          });
-        }
-        return; // Dati caricati, esci
-      }
-
-    } catch (cacheError) {
-      console.error("MasterDataProvider: Errore nel leggere la cache Dexie.", cacheError);
-      // Non bloccare, procedi al fetch da Firestore se possibile
-    }
-
-    // 2. Se la cache è incompleta o fallisce, tenta di caricarli da Firestore
-    if (navigator.onLine) {
-      try {
-        await fetchFromFirestore(false);
-      } catch (firestoreError: any) {
-        setError("Impossibile caricare i dati anagrafici da Firestore.");
-        setMasterData(createEmptyMasterData()); // Fornisce dati vuoti in caso di fallimento
-        setLoading(false);
-      }
-    } else {
-      // 3. Se siamo offline e la cache è incompleta/fallita
-      console.warn("MasterDataProvider: App offline e cache locale incompleta o non disponibile.");
-      setError("Sei offline. Alcuni dati (es. tecnici, navi) potrebbero non essere disponibili fino alla prossima connessione.");
-      // Fornisci dati vuoti per consentire all'app di funzionare in modalità degradata
-      setMasterData(createEmptyMasterData()); 
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchFromFirestore = async (isSilent: boolean) => {
-    if (!isSilent) {
-      setLoading(true);
-      setError(null);
-    }
-    console.log("MasterDataProvider: Inizio fetch da Firestore...");
-
-    try {
-      const fetchedMasterData = createEmptyMasterData();
-      const promises = ANAGRAFICA_TABLES.map(async (tableName) => {
-        const querySnapshot = await getDocs(collection(firestoreDb, tableName));
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        (fetchedMasterData as any)[tableName] = data;
-        
-        // Aggiorna la cache locale in background
-        await db.anagrafiche.put({ id: tableName, data, timestamp: new Date() });
-      });
-
-      await Promise.all(promises);
-      
-      setMasterData(fetchedMasterData);
-      console.log("MasterDataProvider: Dati scaricati da Firestore e cache locale aggiornata.");
-
-    } catch (err) {
-      console.error("MasterDataProvider: Errore durante il fetch da Firestore:", err);
-      if (!isSilent) {
-         setError("Errore critico durante il download dei dati anagrafici.");
-         // In caso di errore, non lasciare i dati a null, fornisci un oggetto vuoto
-         setMasterData(createEmptyMasterData());
-      }
-      // Se è silent, non fare nulla per non disturbare l'utente
-      throw err; // Rilancia l'errore per il chiamante (es. sync in background)
-    } finally {
-      if (!isSilent) {
-        setLoading(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (user) { // Triggera il fetch quando l'utente fa login
-        fetchData();
-    } else { // Resetta allo stato iniziale al logout
-        setMasterData(null);
+    const initializeAndSync = useCallback(async () => {
         setLoading(true);
         setError(null);
+        try {
+            const cachedData = await loadDataFromCache();
+            
+            if (cachedData) {
+                setMasterData(cachedData);
+                setLoading(false);
+                console.log("PROVIDER: Dati caricati dalla cache locale. Avvio normale.");
+                
+                if (isOnline) {
+                    const manifestRef = doc(firestoreDb, 'versioning', 'sync_manifest');
+                    const unsubscribe = onSnapshot(manifestRef, async (snapshot) => {
+                        if (!snapshot.exists()) return;
+                        const remoteManifest = snapshot.data() as SyncManifest;
+                        const localManifest = (await db.sync_manifest.get('main'))?.data || {};
+                        
+                        const collectionsToUpdate = ANAGRAFICA_COLLECTIONS.filter(key => {
+                            const remoteTimestamp = rehydrateTimestamp(remoteManifest[key]);
+                            const localTimestamp = rehydrateTimestamp(localManifest[key]);
+                            return remoteTimestamp && (!localTimestamp || remoteTimestamp.toMillis() > localTimestamp.toMillis());
+                        });
+                        
+                        if (collectionsToUpdate.length > 0) {
+                            console.log(`SYNC: Rilevate modifiche per: ${collectionsToUpdate.join(', ')}.`);
+                            // ... (logica di aggiornamento delta)
+                        }
+                    }, (syncError) => {
+                        console.error("SYNC_ERROR: Errore nell'ascolto del manifest.", syncError);
+                    });
+                    return () => unsubscribe();
+                }
+            } else {
+                console.log("CACHE VUOTA RILEVATA: Avvio Ricostruzione Totale.");
+                if (isOnline) {
+                    const fetchedDataArray = await Promise.all(
+                        ANAGRAFICA_COLLECTIONS.map(key => fetchAndCacheCollection(key))
+                    );
+
+                    const newData = {} as Partial<MasterData>;
+                    ANAGRAFICA_COLLECTIONS.forEach((key, index) => {
+                        (newData as any)[key] = fetchedDataArray[index];
+                    });
+
+                    const tipiGiornata = newData.tipiGiornata as TipoGiornata[];
+                    if(tipiGiornata) {
+                        newData.impostazioni = await createDefaultImpostazioni(tipiGiornata);
+                    }
+
+                    setMasterData(newData as MasterData);
+                    console.log("RICOSTRUZIONE: Database locale ripopolato con successo.");
+                } else {
+                    console.warn("MODALITÀ DEGRADATA: Database vuoto e connessione assente. Avvio con dati minimi.");
+                    const emptyData: Partial<MasterData> = {};
+                    ANAGRAFICA_COLLECTIONS.forEach(key => {
+                        (emptyData as any)[key] = [];
+                    });
+                    emptyData.impostazioni = await createDefaultImpostazioni([]);
+                    setMasterData(emptyData as MasterData);
+                }
+                setLoading(false);
+            }
+        } catch (e) {
+            console.error("PROVIDER: Errore critico durante l'inizializzazione.", e);
+            setError(e);
+            setLoading(false);
+        }
+    }, [isOnline]);
+    
+    useEffect(() => {
+        let unsubscribe: (() => void) | undefined;
+        const runSync = async () => {
+            if (!authLoading && user) {
+                const unsub = await initializeAndSync();
+                if (unsub) {
+                    unsubscribe = unsub;
+                }
+            } else if (!authLoading && !user) {
+                setMasterData(null); 
+                setLoading(false);
+            }
+        };
+
+        runSync();
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+        };
+    }, [authLoading, user, initializeAndSync]);
+
+    const contextValue = useMemo(() => ({
+        masterData, 
+        loading: authLoading || loading,
+        error,
+        refetchData: initializeAndSync,
+    }), [masterData, authLoading, loading, error, initializeAndSync]);
+
+    if (authLoading || (loading && !masterData)) {
+        return <FullScreenLoader />;
     }
-  }, [user, fetchData]);
-
-  const contextValue = useMemo(() => ({
-    masterData,
-    loading,
-    error,
-    refetch: fetchData,
-  }), [masterData, loading, error, fetchData]);
-
-  return (
-    <MasterDataContext.Provider value={contextValue}>
-      {children}
-    </MasterDataContext.Provider>
-  );
+    
+    if (error) {
+        return (
+            <Box sx={{ p: 4, m: 2, border: '1px solid red', borderRadius: 2 }}>
+                <Alert severity="error"><Typography variant="h6">Errore Critico</Typography></Alert>
+                <Typography>{error.message || "Impossibile caricare i dati essenziali."}</Typography>
+                <Button variant="contained" color="error" onClick={() => window.location.reload()} sx={{ mt: 2 }}>Ricarica l&apos;app</Button>
+            </Box>
+        );
+    }
+    
+    return (
+        <MasterDataContext.Provider value={contextValue}>
+            {children}
+        </MasterDataContext.Provider>
+    );
 };

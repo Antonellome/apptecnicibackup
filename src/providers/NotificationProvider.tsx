@@ -11,19 +11,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { AppNotification } from '@/models/definitions'; // <-- UNICA FONTE DI VERITÀ
-import { NotificationContext, NotificationContextType } from './NotificationContextDefinition';
+import { Notifica } from '@/models/definitions'; // <-- Corretto da AppNotification a Notifica
+import { NotificationContext, NotificationContextType } from '../contexts/NotificationContextDefinition';
 
-// --- Rimossa interfaccia locale FirebaseNotification ---
-
-// Aggiungiamo le proprietà che provengono da Firestore ma non sono in AppNotification
-type FirestoreNotification = AppNotification & {
+type FirestoreNotification = Notifica & {
   readBy?: Record<string, { readAt: Timestamp; tecnicoName: string }>;
-  // createdAt potrebbe essere un Timestamp di Firestore
   createdAt: Timestamp | Date;
 }
-
-// --- useReducer Implementation ---
 
 interface State {
   allNotifications: FirestoreNotification[];
@@ -102,7 +96,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       try {
         const allDocs = snapshot.docs.map(doc => {
           const data = doc.data();
-          // Normalizziamo il campo body a message per coerenza
           const message = data.message || data.body || '';
           return {
             id: doc.id,
@@ -164,12 +157,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const visibleNotifications = useMemo(() => {
     return state.allNotifications
       .filter(n => !state.hiddenIds.includes(n.id))
-      .map(n => ({ ...n } as AppNotification)); // Il cast ora è sicuro
+      .map(n => ({ ...n } as Notifica)); // Il cast ora è sicuro
   }, [state.allNotifications, state.hiddenIds]);
 
   const unreadCount = useMemo(() => {
     if (!userUid) return 0;
-    // Ora usiamo il tipo corretto `FirestoreNotification` che ha `readBy`
     return state.allNotifications
         .filter(n => !state.hiddenIds.includes(n.id))
         .filter(n => !n.readBy || !n.readBy[userUid]).length;

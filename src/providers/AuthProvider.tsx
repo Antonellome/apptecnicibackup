@@ -5,7 +5,7 @@ import { getToken } from 'firebase/messaging';
 import { auth, db, messaging } from '@/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '@/models/definitions';
-import { AuthContext, AuthContextType } from './AuthContextDefinition';
+import { AuthContext, AuthContextType } from '../contexts/AuthContextDefinition';
 import FullScreenLoader from '../components/FullScreenLoader';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

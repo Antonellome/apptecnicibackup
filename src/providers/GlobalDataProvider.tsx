@@ -1,24 +1,16 @@
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, where, DocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
 import type { 
     Rapportino, 
-    Tecnico, 
-    Ditta, 
-    Categoria, 
-    Veicolo, 
-    Cliente, 
-    TipoGiornata, 
-    Nave, 
-    Luogo, 
-    Sede, 
-    Qualifica, 
-    Documento,
-    UserProfile
+    UserProfile,
+    Qualifica,
+    Documento
 } from '@/models/definitions';
+import { GlobalDataContext, IGlobalDataContext } from '../contexts/GlobalDataContext';
 
 // --- FUNZIONE DI CONVERSIONE SICURA ---
 const docToRapportino = (doc: DocumentSnapshot): Rapportino => {
@@ -34,38 +26,6 @@ const docToRapportino = (doc: DocumentSnapshot): Rapportino => {
         createdAt,
         updatedAt,
     } as Rapportino;
-};
-
-
-// --- CONTEXT INTERFACE ---
-export interface IGlobalDataContext {
-  rapportini: Rapportino[];
-  tecnici: Tecnico[];
-  ditte: Ditta[];
-  categorie: Categoria[];
-  veicoli: Veicolo[];
-  clienti: Cliente[];
-  tipiGiornata: TipoGiornata[];
-  navi: Nave[];
-  luoghi: Luogo[];
-  sedi: Sede[];
-  webAppUsers: UserProfile[];
-  qualifiche: Qualifica[];
-  documenti: Documento[];
-  ditteMap: Map<string, Ditta>;
-  categorieMap: Map<string, Categoria>;
-  tecniciMap: Map<string, Tecnico>;
-  loading: boolean;
-}
-
-const GlobalDataContext = createContext<IGlobalDataContext | undefined>(undefined);
-
-export const useGlobalData = () => {
-  const context = useContext(GlobalDataContext);
-  if (!context) {
-    throw new Error('useGlobalData must be used within a GlobalDataProvider');
-  }
-  return context;
 };
 
 // --- PROVIDER COMPONENT ---

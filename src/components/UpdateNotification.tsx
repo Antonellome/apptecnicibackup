@@ -1,18 +1,17 @@
-import React from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 function UpdateNotification() {
   const {
-    offlineReady: [offlineReady, setOfflineReady],
+    offlineReady: [, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
-      // eslint-disable-next-line no-console
+       
       console.log('SW Registered:', r);
     },
     onRegisterError(error) {
-      // eslint-disable-next-line no-console
+       
       console.log('SW registration error:', error);
     },
   });

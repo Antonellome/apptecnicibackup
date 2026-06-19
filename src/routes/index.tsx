@@ -12,7 +12,8 @@ import ReportListPage from '@/pages/ReportListPage';
 import SettingsPage from '@/pages/SettingsPage';
 import MonthlyReportPage from '@/pages/MonthlyReportPage';
 import CheckinPage from '@/pages/CheckinPage';
-import ReportFormPage from '@/pages/ReportFormPage';
+import EditReportPage from '@/pages/EditReportPage';
+import EditOfflineReportPage from '@/pages/EditOfflineReportPage';
 import NotifichePage from '@/pages/NotifichePage';
 
 export const router = createBrowserRouter([
@@ -22,8 +23,8 @@ export const router = createBrowserRouter([
         children: [
             { path: '', element: <HomePage /> },
             { path: 'nuovo-report', element: <NuovoReportPage /> },
-            { path: 'report/edit/:reportId', element: <ReportFormPage /> },
-            { path: 'report/edit-offline/:reportId', element: <ReportFormPage /> },
+            { path: 'report/edit/:reportId', element: <EditReportPage /> },
+            { path: 'report/edit-offline/:reportId', element: <EditOfflineReportPage /> },
             { path: 'lista-report', element: <ReportListPage /> },
             { path: 'impostazioni', element: <SettingsPage /> },
             { path: 'report-mensile', element: <MonthlyReportPage /> },

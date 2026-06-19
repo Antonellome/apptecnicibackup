@@ -1,12 +1,12 @@
 
 import { RouterProvider } from 'react-router-dom';
 import { router } from './routes/index';
-import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { SnackbarProvider } from './contexts/SnackbarContext';
-import { NotificationProvider } from './contexts/NotificationContext';
-import { MasterDataProvider } from './contexts/MasterDataProvider';
-import { GlobalDataProvider } from './contexts/GlobalDataProvider';
+import { AuthProvider } from './providers/AuthProvider';
+import { ThemeProvider } from './providers/ThemeProvider';
+import { SnackbarProvider } from './providers/SnackbarProvider';
+import { NotificationProvider } from './providers/NotificationProvider';
+import { MasterDataProvider } from './providers/MasterDataProvider';
+import { GlobalDataProvider } from './providers/GlobalDataProvider';
 import CssBaseline from '@mui/material/CssBaseline';
 import { GlobalStyles } from '@mui/material';
 import PWAUpdater from './components/PWAUpdater';

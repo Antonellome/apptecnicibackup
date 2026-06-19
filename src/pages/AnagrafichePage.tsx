@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { useGlobalData } from '@/contexts/GlobalDataProvider';
+import { useGlobalData } from '@/hooks/useGlobalData';
 
 // Definiamo le colonne per ogni tipo di anagrafica
 const columnsConfig: Record<string, GridColDef[]> = {
@@ -36,11 +36,19 @@ const columnsConfig: Record<string, GridColDef[]> = {
 };
 
 // Un tipo per mappare le chiavi alle nostre anagrafiche
-type DataKey = keyof Omit<ReturnType<typeof useGlobalData>, 'loading'>;
+type DataKey = keyof Omit<ReturnType<typeof useGlobalData>, 'loading' | 'error'>;
 
 const AnagrafichePage = () => {
   const { tipo } = useParams<{ tipo: string }>();
-  const { loading, ...data } = useGlobalData();
+  const { loading, error, ...data } = useGlobalData();
+
+  if (error) {
+    return (
+        <Box sx={{ p: 3 }}>
+            <Alert severity="error">{error.message}</Alert>
+        </Box>
+    );
+  }
 
   // Se il tipo non è valido o non è una chiave dei nostri dati, mostra un errore.
   if (!tipo || !(tipo in columnsConfig)) {

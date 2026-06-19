@@ -242,8 +242,7 @@ const ReportFormPage: React.FC = () => {
                 let reportData: Rapportino | null = null;
 
                 if (isOfflineMode) {
-                     const syncEvent = await db.syncQueue.where('entityId').equals(reportId).first();
-                     if (syncEvent) reportData = syncEvent.payload as Rapportino;
+                    reportData = await db.rapportini.get(reportId) as Rapportino | null;
                 } else {
                     const localReport = await db.rapportini.get(reportId);
                     if (localReport) {
@@ -269,8 +268,7 @@ const ReportFormPage: React.FC = () => {
                     const isWithinGracePeriod = today.getDate() <= 3;
 
                     if (isOfflineMode) {
-                        setIsReadOnly(true);
-                        setLockReason("Questo report è in attesa di sincronizzazione e non può essere modificato.");
+                        // La modifica è ora permessa in offline mode, non impostiamo isReadOnly a true
                     } else if (!isCreator) {
                         setIsReadOnly(true);
                         setLockReason("Questo report non può essere modificato perché non sei il tecnico creatore.");
