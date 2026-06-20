@@ -128,6 +128,45 @@ Permette al tecnico di comunicare la propria posizione.
     3.  Un'icona/chip su ogni singolo report in attesa nella lista.
 *   **Report Mensili Offline:** La pagina deve leggere i dati solo dal DB locale (`rapportini` table in Dexie).
 
+### 2.9. Logica di Calcolo Report Mensile (Fonte di Verità)
+
+Questa sezione espande e formalizza la logica di calcolo per la pagina dei Report Mensili, diventando la fonte di verità assoluta per tutti i conteggi.
+
+#### **Regole Generali**
+
+Per ogni rapportino del mese selezionato, il sistema deve applicare le seguenti regole:
+
+1.  **Identificazione del Tipo di Giornata:**
+    *   **Lavoro Orario:** Definito da `rapportino.tipoGiornataId` (es. Ordinaria, Straordinario).
+    *   **Trasferta:** Definita da `rapportino.trasfertaId` (se presente). La trasferta è un costo **aggiuntivo** e non influisce sul calcolo delle ore.
+    *   **Non Lavorativo:** Se `tipoGiornata.nome` include "ferie", "malattia", "legge 104". In questi casi, le ore vengono considerate 8 di default e viene applicata solo una tariffa giornaliera.
+
+2.  **Calcolo Ore e Costi:**
+    *   **Giornata Ordinaria:** Le ore lavorate (`oreLavorate`) vengono suddivise:
+        *   `oreOrdinarie = min(oreLavorate, 8)`
+        *   `oreStraordinarie = max(oreLavorate - 8, 0)`
+        *   Il costo è `(oreOrdinarie * tariffaOraria) + (oreStraordinarie * tariffaStraordinaria)`.
+    *   **Giornata Straordinaria/Festiva:** Tutte le `oreLavorate` sono considerate straordinarie e calcolate con `oreLavorate * tariffaStraordinaria`.
+    *   **Aggiunta Costo Trasferta:** Se `trasfertaId` è presente, al costo totale delle ore viene **aggiunta** la `tariffaGiornaliera` fissa corrispondente a quel tipo di trasferta.
+
+3.  **Retrocompatibilità:**
+    *   Per i vecchi report creati prima della "Gestione Flessibile della Trasferta", se `tipoGiornataId` si riferisce a un vecchio tipo di trasferta (es. "Trasferta Italia"), il sistema deve:
+        1.  Calcolare il costo delle ore come una **Giornata Ordinaria**.
+        2.  **Aggiungere** la tariffa giornaliera fissa associata a quel vecchio tipo di trasferta.
+
+#### **Tabella Dimostrativa dei Calcoli**
+
+| Caso d'Uso                 | `tipoGiornataId`  | `trasfertaId`     | Ore Lavorate | Tariffa Ore                     | Tariffa Trasferta | Costo Totale                            | Note                                      |
+| :------------------------- | :---------------- | :---------------- | :----------- | :------------------------------ | :---------------- | :-------------------------------------- | :---------------------------------------- |
+| Lavoro standard            | Ordinaria         | -                 | 8            | 8 * T_ord                       | 0                 | 8 * T_ord                               |                                           |
+| Lavoro con straordinario   | Ordinaria         | -                 | 10           | (8 * T_ord) + (2 * T_str)       | 0                 | (8 * T_ord) + (2 * T_str)               | Split 8/2 ore                             |
+| Lavoro straordinario       | Straordinario     | -                 | 6            | 6 * T_str                       | 0                 | 6 * T_str                               | Tutte le ore sono straordinarie           |
+| Lavoro in trasferta        | Ordinaria         | Trasferta Italia  | 9            | (8 * T_ord) + (1 * T_str)       | T_giorn_trasf     | (8\*T_ord)+(1\*T_str)+T_giorn_trasf     | Ore + costo fisso trasferta             |
+| Straordinario in trasferta | Straordinario     | Trasferta Italia  | 7            | 7 * T_str                       | T_giorn_trasf     | (7 * T_str) + T_giorn_trasf             | Ore straordinarie + costo fisso trasferta |
+| Ferie                      | Ferie             | -                 | 8 (default)  | T_giorn_ferie                   | 0                 | T_giorn_ferie                           | Costo giornaliero fisso                  |
+| Vecchio report trasferta   | Trasferta Italia  | -                 | 9            | (8 * T_ord) + (1 * T_str)       | T_giorn_trasf     | (8\*T_ord)+(1\*T_str)+T_giorn_trasf     | Logica di retrocompatibilità              |
+
+
 ---
 ## 3. Piano di Correzione Definitivo (Versione "Total Offline")
 
