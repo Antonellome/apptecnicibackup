@@ -8,7 +8,6 @@ import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
-import { Notifications } from '@mui/icons-material';
 
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
@@ -40,7 +39,7 @@ const MainLayout: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <AppBar position="static" enableColorOnDark>
+            <AppBar position="static" sx={{ backgroundColor: '#0D47A1' }}>
                 <Toolbar>
                     <Box sx={{ flexGrow: 1 }}>
                         <Typography variant="h6" component="div">R.I.S.O. App Tecnici</Typography>
@@ -48,7 +47,6 @@ const MainLayout: React.FC = () => {
                     </Box>
 
                     <Tooltip title="Home"><IconButton color="inherit" onClick={() => navigate('/')}><HomeIcon /></IconButton></Tooltip>
-                    <Tooltip title="Notifiche"><IconButton color="inherit" onClick={() => navigate('/notifiche')}><Notifications /></IconButton></Tooltip>
                     <Tooltip title="Impostazioni"><IconButton color="inherit" onClick={() => navigate('/impostazioni')}><SettingsIcon /></IconButton></Tooltip>
                     <Tooltip title="Logout"><IconButton color="inherit" onClick={handleLogout}><LogoutIcon /></IconButton></Tooltip>
                 </Toolbar>
