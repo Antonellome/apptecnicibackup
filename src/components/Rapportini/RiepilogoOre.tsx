@@ -8,6 +8,16 @@ interface Props {
 
 const RiepilogoOre = ({ riepilogo }: Props) => {
 
+    const getGiorniTrasferta = (): number => {
+        let total = 0;
+        for (const voce of riepilogo.dettaglio.values()) {
+            if (voce.nome.toLowerCase().includes('trasferta')) {
+                total += voce.giorni;
+            }
+        }
+        return total;
+    }
+
     const summaryItems = [
         { 
             icon: <AccessTime color="primary" />, 
@@ -28,7 +38,7 @@ const RiepilogoOre = ({ riepilogo }: Props) => {
         { 
             icon: <FlightTakeoff sx={{ color: 'info.main' }}/>, 
             label: 'Giorni di Trasferta', 
-            value: `${riepilogo.giorniTrasferta} gg` 
+            value: `${getGiorniTrasferta()} gg` 
         },
     ];
 

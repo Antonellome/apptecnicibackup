@@ -14,7 +14,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Cloud, WifiOff, CloudQueue } from '@mui/icons-material';
-import { format, startOfMonth, endOfMonth, isSameMonth, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 import { db as localDb } from '@/db/local-db';
@@ -149,7 +149,16 @@ const ReportListPage = () => {
                 const prevReport = index > 0 ? displayedRapportini[index - 1] : null;
 
                 const showDivider = index > 0;
-                const isDateChanged = prevReport && !isSameDay(report.data, prevReport.data);
+                let isDateChanged = false;
+                if (prevReport && report.data && prevReport.data) {
+                    const d1 = report.data;
+                    const d2 = prevReport.data;
+                    if (d1 instanceof Date && !isNaN(d1.getTime()) && d2 instanceof Date && !isNaN(d2.getTime())) {
+                        isDateChanged = d1.getFullYear() !== d2.getFullYear() ||
+                                        d1.getMonth() !== d2.getMonth() ||
+                                        d1.getDate() !== d2.getDate();
+                    }
+                }
 
                 return (
                     <Fragment key={report.id}>

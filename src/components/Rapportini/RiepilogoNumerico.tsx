@@ -24,13 +24,23 @@ interface RiepilogoNumericoProps {
 }
 
 const RiepilogoNumerico: React.FC<RiepilogoNumericoProps> = ({ riepilogo }) => {
+
+  const getGiorniByNome = (nome: string): number => {
+    for (const voce of riepilogo.dettaglio.values()) {
+      if (voce.nome.toLowerCase() === nome.toLowerCase()) {
+        return voce.giorni;
+      }
+    }
+    return 0;
+  }
+
   const items = [
-    { label: 'Giorni Lavorati', value: riepilogo.giorniLavorati, icon: <FaBriefcase color="#1976d2" /> },
-    { label: 'Giorni Straordinario', value: riepilogo.giorniStraordinario, icon: <FaPlaneDeparture color="#f57c00" /> },
-    { label: 'Giorni di Ferie', value: riepilogo.giorniFerie, icon: <FaBed color="#4caf50" /> },
-    { label: 'Giorni di Malattia', value: riepilogo.giorniMalattia, icon: <FaProcedures color="#d32f2f" /> },
-    { label: 'Giorni di Permesso', value: riepilogo.giorniPermesso, icon: <FaCoffee color="#795548" /> },
-    { label: 'Festivi Goduti', value: riepilogo.giorniFestivo, icon: <FaStarOfLife color="#ffeb3b" /> },
+    { label: 'Giorni Lavorati', value: getGiorniByNome('ordinaria'), icon: <FaBriefcase color="#1976d2" /> },
+    { label: 'Giorni Straordinario', value: getGiorniByNome('straordinario'), icon: <FaPlaneDeparture color="#f57c00" /> },
+    { label: 'Giorni di Ferie', value: getGiorniByNome('ferie'), icon: <FaBed color="#4caf50" /> },
+    { label: 'Giorni di Malattia', value: getGiorniByNome('malattia'), icon: <FaProcedures color="#d32f2f" /> },
+    { label: 'Giorni di Permesso', value: getGiorniByNome('permesso'), icon: <FaCoffee color="#795548" /> },
+    { label: 'Festivi Goduti', value: getGiorniByNome('festivo'), icon: <FaStarOfLife color="#ffeb3b" /> },
   ];
 
   return (
@@ -51,8 +61,8 @@ const RiepilogoNumerico: React.FC<RiepilogoNumericoProps> = ({ riepilogo }) => {
           <ListItemIcon sx={{ minWidth: 32 }}>
             <FaRegCalendarCheck color="#000" />
           </ListItemIcon>
-          <ListItemText primary="Totale Giorni Lavorati (Unici)" primaryTypographyProps={{ fontWeight: 'bold'}} />
-          <Typography variant="h6" fontWeight="bold">{riepilogo.giorniLavoratiUnici}</Typography>
+          <ListItemText primary="Totale Giorni di Presenza" primaryTypographyProps={{ fontWeight: 'bold'}} />
+          <Typography variant="h6" fontWeight="bold">{riepilogo.giorniTotaliLavorati}</Typography>
         </ListItem>
       </List>
     </Paper>

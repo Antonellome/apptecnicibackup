@@ -139,7 +139,6 @@ export interface UserProfile {
 // SISTEMA (Sync, Offline, Notifiche)
 // =================================================================
 
-// Aggiunta dell'interfaccia mancante SyncManifest
 export interface SyncManifest {
   [key: string]: Timestamp;
 }
@@ -202,30 +201,23 @@ export interface RiepilogoMensile {
     [key: string]: DayInfo;
 }
 
-export interface DettaglioVoce extends TipoGiornata {
+export interface DettaglioVoce {
+  id: string;
+  nome: string;
+  colore: string;
+  unita: 'h' | 'g';
   oreTotali: number;
   giorni: number;
   costo: number;
-  unita: 'h' | 'g';
+  giorniSet?: Set<string>; // Proprietà opzionale per i calcoli interni
 }
 
 export interface RiepilogoMese {
   oreTotali: number;
   costoTotale: number;
   giorniTotaliLavorati: number;
-  // Contatori specifici per tipo di giornata
-  giorniLavorati: number;
-  giorniStraordinario: number;
-  giorniFerie: number;
-  giorniMalattia: number;
-  giorniPermesso: number;
-  giorniFestivo: number;
-  giorniTrasferta: number;
-  giorniLavoratiUnici: number; // Giorni unici in cui si è lavorato (escl. trasferte)
-  // Contatori specifici per ore
   oreOrdinarie: number;
   oreStraordinarie: number;
-  // Mappa dettagliata per la visualizzazione
   dettaglio: Map<string, DettaglioVoce>;
 }
 
