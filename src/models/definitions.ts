@@ -29,7 +29,7 @@ export interface Rapportino extends FirebaseDoc {
   data: Date;
   tecnicoId: string; // ID del tecnico che ha creato il report
   tipoGiornataId: string;
-  isTrasferta: boolean;
+  trasfertaId?: string; // ID del tipo di trasferta (se applicabile)
   oraInizio: string;
   oraFine: string;
   pausa: number;

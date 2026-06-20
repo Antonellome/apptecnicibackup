@@ -18,7 +18,7 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInMinutes } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, UserProfile, MasterData, RiepilogoMese, Impostazioni } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, UserProfile, MasterData, RiepilogoMese, Impostazioni, TipoGiornata } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import ActivityBreakdown from '@/components/Rapportini/ActivityBreakdown';
@@ -43,6 +43,9 @@ const safeConvertToDate = (dateSource: any): Date | null => {
     }
     return null;
 };
+
+// Funzione helper per determinare se un tipo di giornata è una trasferta (per retrocompatibilità)
+const isLegacyTrasferta = (tipo: TipoGiornata | undefined) => tipo?.nome.toLowerCase().includes('trasferta');
 
 interface MonthlyReportContentProps {
     userProfile: UserProfile;
@@ -102,133 +105,144 @@ const MonthlyReportContent = ({
     }, [rapportiniLocali, masterData, userProfile.tecnicoId]);
 
     const riepilogoMese = useMemo<RiepilogoMese | null>(() => {
-    if (!rapportiniArricchiti || !masterData) return null;
-
-    const TIPO_ORDINARIA_ID = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'ordinaria')?.id;
-    const TIPO_STRAORDINARIA_ID = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'straordinario')?.id;
-    const SFORO_ID = 'virtual-sforo-straordinario';
+        if (!rapportiniArricchiti || !masterData) return null;
     
-    const TARIFFE_MAP = new Map((masterData.impostazioni as Impostazioni).tariffe.map(t => [t.id, t]));
-    const TIPI_GIORNATA_MAP = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
-
-    if (!TIPO_ORDINARIA_ID || !TIPO_STRAORDINARIA_ID) {
-        console.error("Tipi giornata base (Ordinaria, Straordinario) non trovati!");
-        return null;
-    }
-
-    const riepilogo: RiepilogoMese = {
-        oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map(),
-        oreOrdinarie: 0, oreStraordinarie: 0,
-    };
-
-    masterData.tipiGiornata.forEach(tipo => {
-        riepilogo.dettaglio.set(tipo.id, {
-            id: tipo.id, nome: tipo.nome, colore: tipo.colore, 
-            unita: tipo.tipo === 'giornaliera' ? 'g' : 'h', 
-            oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
-        });
-    });
-    riepilogo.dettaglio.set(SFORO_ID, {
-        id: SFORO_ID, nome: 'Straordinario (>8h)', colore: TIPI_GIORNATA_MAP.get(TIPO_STRAORDINARIA_ID)?.colore || '#ff8c00',
-        unita: 'h', oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
-    });
-
-    if (rapportiniArricchiti.length === 0) {
-        riepilogo.dettaglio.forEach(voce => { voce.giorni = voce.giorniSet?.size || 0; delete voce.giorniSet; });
-        return riepilogo;
-    }
+        const TIPO_ORDINARIA_ID = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'ordinaria')?.id;
+        const TIPO_STRAORDINARIA_ID = masterData.tipiGiornata.find(t => t.nome.toLowerCase() === 'straordinario')?.id;
+        const SFORO_ID = 'virtual-sforo-straordinario';
+        
+        const TARIFFE_MAP = new Map((masterData.impostazioni as Impostazioni).tariffe.map(t => [t.id, t]));
+        const TIPI_GIORNATA_MAP = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
     
-    const dailyData = new Map<string, { orePerSforo: number, tipiPresenti: Set<string> }>();
-    const allDaysOfPresence = new Set<string>();
-
-    for (const report of rapportiniArricchiti) {
-        if (!report.tipoGiornata) continue;
-        const dayKey = format(report.data, 'yyyy-MM-dd');
-        allDaysOfPresence.add(dayKey);
-
-        let daySummary = dailyData.get(dayKey);
-        if (!daySummary) {
-            daySummary = { orePerSforo: 0, tipiPresenti: new Set() };
-            dailyData.set(dayKey, daySummary);
+        if (!TIPO_ORDINARIA_ID || !TIPO_STRAORDINARIA_ID) {
+            console.error("Tipi giornata base (Ordinaria, Straordinario) non trovati!");
+            return null;
         }
-
-        daySummary.tipiPresenti.add(report.tipoGiornata.id);
-
-        const nomeTipo = report.tipoGiornata.nome.toLowerCase();
-        if (report.tipoGiornata.id === TIPO_ORDINARIA_ID || nomeTipo.includes('trasferta')) {
-            daySummary.orePerSforo += report.oreGiorno;
-        } else {
-            const voce = riepilogo.dettaglio.get(report.tipoGiornata.id);
-            if (voce) {
-                voce.oreTotali += report.oreGiorno;
+    
+        const riepilogo: RiepilogoMese = {
+            oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map(),
+            oreOrdinarie: 0, oreStraordinarie: 0,
+        };
+    
+        masterData.tipiGiornata.forEach(tipo => {
+            riepilogo.dettaglio.set(tipo.id, {
+                id: tipo.id, nome: tipo.nome, colore: tipo.colore, 
+                unita: tipo.tipo === 'giornaliera' ? 'g' : 'h', 
+                oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
+            });
+        });
+        riepilogo.dettaglio.set(SFORO_ID, {
+            id: SFORO_ID, nome: 'Straordinario (>8h)', colore: TIPI_GIORNATA_MAP.get(TIPO_STRAORDINARIA_ID)?.colore || '#ff8c00',
+            unita: 'h', oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
+        });
+    
+        if (rapportiniArricchiti.length === 0) {
+            riepilogo.dettaglio.forEach(voce => { voce.giorni = voce.giorniSet?.size || 0; delete voce.giorniSet; });
+            return riepilogo;
+        }
+        
+        const dailyData = new Map<string, { orePerSforo: number, tipiPresenti: Set<string>, trasfertaId?: string }>();
+        const allDaysOfPresence = new Set<string>();
+    
+        for (const report of rapportiniArricchiti) {
+            if (!report.tipoGiornata) continue;
+            const dayKey = format(report.data, 'yyyy-MM-dd');
+            allDaysOfPresence.add(dayKey);
+    
+            let daySummary = dailyData.get(dayKey);
+            if (!daySummary) {
+                daySummary = { orePerSforo: 0, tipiPresenti: new Set() };
+                dailyData.set(dayKey, daySummary);
+            }
+    
+            daySummary.tipiPresenti.add(report.tipoGiornata.id);
+            if(report.trasfertaId) {
+                daySummary.tipiPresenti.add(report.trasfertaId);
+            }
+    
+            // Logica per calcolo ore (sforo) e gestione retrocompatibilità
+            if (report.tipoGiornata.id === TIPO_ORDINARIA_ID) {
+                daySummary.orePerSforo += report.oreGiorno;
+            } else if (isLegacyTrasferta(report.tipoGiornata)) {
+                 // VECCHIO MODELLO: la trasferta contribuisce allo sforo
+                daySummary.orePerSforo += report.oreGiorno;
+            } else {
+                // Tutti gli altri tipi (Straordinario, Malattia, etc.) vengono accumulati separatamente
+                const voce = riepilogo.dettaglio.get(report.tipoGiornata.id);
+                if (voce) {
+                    voce.oreTotali += report.oreGiorno;
+                }
             }
         }
-    }
-
-    dailyData.forEach((summary, dayKey) => {
-        const sforo = Math.max(0, summary.orePerSforo - 8);
-        const oreOrdinarieEffettive = summary.orePerSforo - sforo;
-        
-        const voceOrdinaria = riepilogo.dettaglio.get(TIPO_ORDINARIA_ID)!;
-        voceOrdinaria.oreTotali += oreOrdinarieEffettive;
-        
-        if (sforo > 0) {
-            const voceSforo = riepilogo.dettaglio.get(SFORO_ID)!;
-            voceSforo.oreTotali += sforo;
-            if(voceSforo.giorniSet) voceSforo.giorniSet.add(dayKey);
-        }
-
-        summary.tipiPresenti.forEach(tipoId => {
-            const voce = riepilogo.dettaglio.get(tipoId);
-            if (voce && voce.giorniSet) voce.giorniSet.add(dayKey);
+    
+        dailyData.forEach((summary, dayKey) => {
+            const sforo = Math.max(0, summary.orePerSforo - 8);
+            const oreOrdinarieEffettive = summary.orePerSforo - sforo;
+            
+            const voceOrdinaria = riepilogo.dettaglio.get(TIPO_ORDINARIA_ID)!;
+            voceOrdinaria.oreTotali += oreOrdinarieEffettive;
+            
+            if (sforo > 0) {
+                const voceSforo = riepilogo.dettaglio.get(SFORO_ID)!;
+                voceSforo.oreTotali += sforo;
+                if(voceSforo.giorniSet) voceSforo.giorniSet.add(dayKey);
+            }
+    
+            summary.tipiPresenti.forEach(tipoId => {
+                const voce = riepilogo.dettaglio.get(tipoId);
+                if (voce && voce.giorniSet) voce.giorniSet.add(dayKey);
+            });
         });
-    });
+    
+        let costoTotaleFinale = 0;
+        const tariffaSforo = TARIFFE_MAP.get(TIPO_STRAORDINARIA_ID);
+    
+        riepilogo.dettaglio.forEach(voce => {
+            voce.giorni = voce.giorniSet?.size || 0;
+            delete voce.giorniSet;
+    
+            let costoUnitario = 0;
+            if (voce.id === SFORO_ID) {
+                costoUnitario = tariffaSforo?.costo ?? 0;
+            } else {
+                const tariffa = TARIFFE_MAP.get(voce.id);
+                costoUnitario = tariffa?.costo ?? 0;
+            }
+            
+            const tipoGiornataInfo = TIPI_GIORNATA_MAP.get(voce.id);
 
-    let costoTotaleFinale = 0;
-    const tariffaSforo = TARIFFE_MAP.get(TIPO_STRAORDINARIA_ID);
+            if (isLegacyTrasferta(tipoGiornataInfo) || tipoGiornataInfo?.tipo === 'giornaliera') {
+                 // Le trasferte (nuove o vecchie) e i tipi 'giornaliera' (Ferie, Malattia) hanno un costo per giorno
+                voce.costo = voce.giorni * costoUnitario;
+            } else {
+                // Tutti gli altri tipi hanno un costo orario
+                voce.costo = voce.oreTotali * costoUnitario;
+            }
 
-    riepilogo.dettaglio.forEach(voce => {
-        voce.giorni = voce.giorniSet?.size || 0;
-        delete voce.giorniSet;
-
-        let costoUnitario = 0;
-        if (voce.id === SFORO_ID) {
-            costoUnitario = tariffaSforo?.costo ?? 0;
-        } else {
-            const tariffa = TARIFFE_MAP.get(voce.id);
-            costoUnitario = tariffa?.costo ?? 0;
-        }
+            costoTotaleFinale += voce.costo;
+        });
+    
+        const oreOrdinarieFinali = riepilogo.dettaglio.get(TIPO_ORDINARIA_ID)!.oreTotali;
+        const oreStraordinarioEsplicito = riepilogo.dettaglio.get(TIPO_STRAORDINARIA_ID)?.oreTotali || 0;
+        const oreStraordinarioSforo = riepilogo.dettaglio.get(SFORO_ID)!.oreTotali;
+        riepilogo.oreStraordinarie = oreStraordinarioEsplicito + oreStraordinarioSforo;
         
-        const nomeVoceLower = voce.nome.toLowerCase();
-        if ((voce.unita === 'g' && !nomeVoceLower.includes('trasferta')) || nomeVoceLower === 'ferie' || nomeVoceLower === 'festivo') {
-             voce.costo = (voce.oreTotali / 8) * costoUnitario;
-        } else if (nomeVoceLower.includes('trasferta')) {
-            voce.costo = voce.giorni * costoUnitario;
-        } else {
-            voce.costo = voce.oreTotali * costoUnitario;
-        }
-        costoTotaleFinale += voce.costo;
-    });
-
-    const oreOrdinarieFinali = riepilogo.dettaglio.get(TIPO_ORDINARIA_ID)!.oreTotali;
-    const oreStraordinarioEsplicito = riepilogo.dettaglio.get(TIPO_STRAORDINARIA_ID)?.oreTotali || 0;
-    const oreStraordinarioSforo = riepilogo.dettaglio.get(SFORO_ID)!.oreTotali;
-    riepilogo.oreStraordinarie = oreStraordinarioEsplicito + oreStraordinarioSforo;
+        let oreComplessive = 0;
+        riepilogo.dettaglio.forEach(voce => {
+            // Sommiamo le ore solo se non è una trasferta (il cui costo è giornaliero)
+            const tipoInfo = TIPI_GIORNATA_MAP.get(voce.id);
+            if (!isLegacyTrasferta(tipoInfo)) {
+                oreComplessive += voce.oreTotali;
+            }
+        });
+        
+        riepilogo.costoTotale = costoTotaleFinale;
+        riepilogo.oreTotali = oreComplessive;
+        riepilogo.giorniTotaliLavorati = allDaysOfPresence.size;
+        riepilogo.oreOrdinarie = oreOrdinarieFinali;
     
-    let oreComplessive = 0;
-    riepilogo.dettaglio.forEach(voce => {
-        if (!voce.nome.toLowerCase().includes('trasferta')) {
-            oreComplessive += voce.oreTotali;
-        }
-    });
-    
-    riepilogo.costoTotale = costoTotaleFinale;
-    riepilogo.oreTotali = oreComplessive;
-    riepilogo.giorniTotaliLavorati = allDaysOfPresence.size;
-    riepilogo.oreOrdinarie = oreOrdinarieFinali;
-
-    return riepilogo;
-}, [rapportiniArricchiti, masterData]);
+        return riepilogo;
+    }, [rapportiniArricchiti, masterData]);
 
     const reportDays = useMemo(() => {
         if (!rapportiniArricchiti) return [];

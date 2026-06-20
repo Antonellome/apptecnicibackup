@@ -114,6 +114,8 @@ const ReportFormPage: React.FC = () => {
     });
 
     const [tipoGiornataId, setTipoGiornataId] = useState('');
+    const [trasfertaId, setTrasfertaId] = useState(''); // Nuovo stato per l'ID della trasferta
+    const [includeTrasferta, setIncludeTrasferta] = useState(false); // Nuovo stato per lo switch
     const [isLavorativo, setIsLavorativo] = useState(true);
     const [veicoloId, setVeicoloId] = useState('');
     const [naveId, setNaveId] = useState('');
@@ -173,22 +175,25 @@ const ReportFormPage: React.FC = () => {
       [tecnici]
     );
 
-    const sortedTipiGiornata = useMemo(() =>
-        [...tipiGiornata].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')),
-      [tipiGiornata]
-    );
+    // Tipi giornata filtrati per lavoro e trasferta
+    const { tipiGiornataLavorativi, tipiGiornataTrasferta } = useMemo(() => {
+        const lavorativi = tipiGiornata.filter(t => !t.nome.toLowerCase().includes('trasferta'));
+        const trasferte = tipiGiornata.filter(t => t.nome.toLowerCase().includes('trasferta'));
+        return { tipiGiornataLavorativi: lavorativi, tipiGiornataTrasferta: trasferte };
+    }, [tipiGiornata]);
+
 
     const otherTecnicos = useMemo(() => sortedTecnici.filter(t => t.id !== loggedInTecnicoId), [sortedTecnici, loggedInTecnicoId]);
     const altriTecniciIds = useMemo(() => dettaglioOre.filter(d => d.tecnicoId !== loggedInTecnicoId).map(d => d.tecnicoId), [dettaglioOre, loggedInTecnicoId]);
     const selectedTecnicos = useMemo(() => otherTecnicos.filter(t => altriTecniciIds.includes(t.id)), [altriTecniciIds, otherTecnicos]);
 
     const tipiGiornataFiltrati = useMemo(() => {
-        const sourceList = sortedTipiGiornata;
+        const sourceList = tipiGiornataLavorativi;
         if (isMultiDay) {
             return sourceList.filter(t => MULTI_DAY_ALLOWED_KEYWORDS.some(keyword => (t?.nome || '').toLowerCase().includes(keyword)));
         }
         return sourceList;
-    }, [isMultiDay, sortedTipiGiornata]);
+    }, [isMultiDay, tipiGiornataLavorativi]);
 
     useEffect(() => {
         const initializeForm = async () => {
@@ -210,6 +215,8 @@ const ReportFormPage: React.FC = () => {
             setOriginalReport(report);
             setDataInizio(reportDate);
             setTipoGiornataId(report.tipoGiornataId || '');
+            setTrasfertaId(report.trasfertaId || '');
+            setIncludeTrasferta(!!report.trasfertaId);
             setVeicoloId(report.veicoloId || '');
             setNaveId(report.naveId || '');
             setLuogoId(report.luogoId || '');
@@ -392,7 +399,7 @@ const ReportFormPage: React.FC = () => {
             oreLavoro: dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0),
             tecnicoId: loggedInTecnicoId,
             tipoGiornataId: tipoGiornataId,
-            isTrasferta: false, 
+            trasfertaId: includeTrasferta ? trasfertaId : undefined,
             oraInizio: scriventeDettaglio?.oraInizio || '',
             oraFine: scriventeDettaglio?.oraFine || '',
             pausa: scriventeDettaglio?.pausa || 0,
@@ -493,7 +500,7 @@ const ReportFormPage: React.FC = () => {
                 oreLavoro: 8,
                 tecnicoId: loggedInTecnicoId,
                 tipoGiornataId,
-                isTrasferta: false,
+                trasfertaId: undefined, // Le giornate multiple non hanno trasferta
                 oraInizio: '', 
                 oraFine: '', 
                 pausa: 0, 
@@ -718,6 +725,25 @@ const ReportFormPage: React.FC = () => {
                                     {tipiGiornataFiltrati.map(t => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
                                 </Select>
                             </FormControl>
+                            <FormControlLabel
+                                control={<Switch checked={includeTrasferta} onChange={(e) => setIncludeTrasferta(e.target.checked)} />}
+                                label="Aggiungi Trasferta"
+                                disabled={disableActions}
+                            />
+                            {includeTrasferta && (
+                                <FormControl fullWidth required disabled={disableActions} sx={{ mt: 2 }}>
+                                    <InputLabel id="tipo-trasferta-label">Tipo di Trasferta</InputLabel>
+                                    <Select
+                                        labelId="tipo-trasferta-label"
+                                        id="tipo-trasferta-select"
+                                        value={trasfertaId}
+                                        label="Tipo di Trasferta"
+                                        onChange={e => setTrasfertaId(e.target.value as string)}
+                                    >
+                                        {tipiGiornataTrasferta.map(t => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
+                                    </Select>
+                                </FormControl>
+                            )}
                         </Grid>
                     </Section>
 

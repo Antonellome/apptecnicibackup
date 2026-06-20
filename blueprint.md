@@ -188,5 +188,38 @@ L'obiettivo è trasformare l'applicazione in un'esperienza **offline-first robus
 
 ---
 
-*Le sezioni che seguono, contenenti l'analisi tecnica storica, la cronaca del disastro, i piani di azione passati e l'appendice su MUI Grid, vengono mantenute per contesto storico e come riferimento tecnico.*
-(Il resto del file rimane invariato)
+## 6. Modifica Strutturale: Gestione Flessibile della Trasferta
+
+*Questa sezione definisce una modifica architetturale chiave per disaccoppiare il calcolo delle trasferte dal tipo di giornata lavorativa, aumentando la flessibilità e l'accuratezza del sistema.*
+
+### **Razionale**
+
+Il modello precedente legava la trasferta a un `tipoGiornata` specifico (es. "Trasferta Italia"). Questo impediva di registrare correttamente scenari complessi, come un giorno di "Straordinario" o "Festivo" che si svolgeva anche in trasferta. La nuova logica rende la trasferta una **proprietà aggiuntiva** di qualsiasi giornata.
+
+### **Piano di Implementazione**
+
+#### **Passo 1: Aggiornamento del Modello Dati (`src/models/definitions.ts`)**
+
+*   L'interfaccia `Rapportino` viene estesa con un nuovo campo opzionale:
+    ```typescript
+    trasfertaId?: string;
+    ```
+*   Questo campo conterrà l'ID del `tipoGiornata` di trasferta selezionato (es. l'ID di `t_italia`).
+*   Il campo `tipoGiornataId` continuerà a rappresentare la natura del lavoro orario (es. `t_ordinaria`, `t_straordinaria`).
+
+#### **Passo 2: Modifica al Form di Inserimento (`ReportFormPage.tsx`)**
+
+*   Sotto al selettore `Tipo Giornata`, viene aggiunto uno **Switch** con etichetta **"Aggiungi Trasferta"**.
+*   Se lo Switch è **acceso**, appare un secondo selettore **"Tipo di Trasferta"**.
+*   Questo nuovo selettore viene popolato dinamicamente con i soli `tipiGiornata` la cui natura è "trasferta" (identificati tramite una proprietà nel modello o per convenzione sul nome).
+*   La selezione del primo selettore popola `tipoGiornataId`, mentre quella del secondo (se attivo) popola `trasfertaId`.
+
+#### **Passo 3: Riscrittura della Logica di Calcolo (`MonthlyReportPage.tsx`)**
+
+*   La logica di calcolo del riepilogo mensile viene aggiornata per gestire tre scenari, garantendo la **piena retrocompatibilità**:
+    1.  **Nuovo Report (con Trasferta):** Se `rapportino.trasfertaId` è presente, il costo totale della giornata è:
+        `Costo Ore (basato su tipoGiornataId) + Tariffa Fissa Giornaliera (basata su trasfertaId)`.
+    2.  **Nuovo Report (senza Trasferta):** Se `rapportino.trasfertaId` è assente, il calcolo procede normalmente basandosi solo su `tipoGiornataId`.
+    3.  **Vecchio Report (Retrocompatibilità):** Se il `rapportino.tipoGiornataId` si riferisce a un vecchio tipo "Trasferta" (es. "Trasferta Italia"), il sistema applica la logica di calcolo precedente a quel report, assicurando che i dati storici non vengano alterati.
+
+---
