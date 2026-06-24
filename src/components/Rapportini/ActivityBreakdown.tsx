@@ -18,8 +18,7 @@ const ActivityBreakdown: React.FC<ActivityBreakdownProps> = ({ riepilogo }) => {
     const getSortOrder = (nome: string) => {
         const lowerNome = nome.toLowerCase();
         if (lowerNome === 'ordinaria') return 0;
-        if (lowerNome === 'straordinario (>8h)') return 1;
-        if (lowerNome === 'straordinario') return 2;
+        if (lowerNome === 'straordinario') return 1;
         return 3;
     };
 

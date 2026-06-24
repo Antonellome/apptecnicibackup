@@ -19,6 +19,13 @@ export const rapportinoConverter: FirestoreDataConverter<Rapportino> = {
         const { id, ...data } = rapportino;
         const firestoreData: DocumentData = { ...data };
 
+        // Rimuove i campi con valore undefined (Firestore non accetta undefined)
+        Object.keys(firestoreData).forEach(key => {
+            if (firestoreData[key] === undefined) {
+                delete firestoreData[key];
+            }
+        });
+
         // Converte i campi Date in Timestamp di Firestore
         Object.keys(firestoreData).forEach(key => {
             if (firestoreData[key] instanceof Date) {
@@ -45,6 +52,7 @@ export const rapportinoConverter: FirestoreDataConverter<Rapportino> = {
             data: rawData.data instanceof Timestamp ? rawData.data.toDate() : new Date(),
             tecnicoId: rawData.tecnicoId || '',
             tipoGiornataId: rawData.tipoGiornataId || '',
+            trasfertaId: rawData.trasfertaId || undefined,
             isTrasferta: rawData.isTrasferta === true,
             oraInizio: rawData.oraInizio || '',
             oraFine: rawData.oraFine || '',

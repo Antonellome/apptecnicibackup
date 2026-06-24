@@ -175,10 +175,11 @@ const ReportFormPage: React.FC = () => {
       [tecnici]
     );
 
-    // Tipi giornata filtrati per lavoro e trasferta
+    // Tipi giornata filtrati per lavoro e trasferta. Preferiamo usare il campo `categoria` se presente,
+    // altrimenti ricadiamo nel vecchio controllo sul nome (compatibilità retroattiva).
     const { tipiGiornataLavorativi, tipiGiornataTrasferta } = useMemo(() => {
-        const lavorativi = tipiGiornata.filter(t => !t.nome.toLowerCase().includes('trasferta'));
-        const trasferte = tipiGiornata.filter(t => t.nome.toLowerCase().includes('trasferta'));
+        const trasferte = tipiGiornata.filter(t => (t as any).categoria === 'trasferta' || (t.nome || '').toLowerCase().includes('trasferta'));
+        const lavorativi = tipiGiornata.filter(t => ((t as any).categoria !== 'trasferta') && !(t.nome || '').toLowerCase().includes('trasferta'));
         return { tipiGiornataLavorativi: lavorativi, tipiGiornataTrasferta: trasferte };
     }, [tipiGiornata]);
 
@@ -457,10 +458,13 @@ const ReportFormPage: React.FC = () => {
                         const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
                         transaction.update(reportRef, dataWithId);
                     });
+                    await db.rapportini.put({ ...reportData, id: reportId, isOffline: false });
+                    finalId = reportId;
                 } else {
                     const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
                     const docRef = await addDoc(collectionRef, dataWithId);
                     finalId = docRef.id;
+                    await db.rapportini.put({ ...reportData, id: finalId, isOffline: false });
                 }
             } else {
                 finalId = await aggiungiAllaCoda(reportData, reportId);
@@ -493,6 +497,7 @@ const ReportFormPage: React.FC = () => {
         try {
             const giorniDaCreare = eachDayOfInterval({ start: startOfDay(dataInizio), end: startOfDay(dataFine) });
             const nomeTipoGiornata = tipiGiornata.find(t => t.id === tipoGiornataId)?.nome || 'Evento';
+            const rapportiniLocaliCreati: Rapportino[] = [];
 
             const createReportObject = (giorno: Date): Omit<Rapportino, 'id'> => ({
                 nome: `Rapportino del ${format(giorno, 'dd/MM/yyyy')} - ${nomeTipoGiornata}`,
@@ -532,9 +537,14 @@ const ReportFormPage: React.FC = () => {
                 const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
                 giorniDaCreare.forEach(giorno => {
                     const reportRef = doc(collectionRef);
-                    batch.set(reportRef, { ...createReportObject(giorno), id: reportRef.id });
+                    const reportObject = { ...createReportObject(giorno), id: reportRef.id };
+                    batch.set(reportRef, reportObject);
+                    rapportiniLocaliCreati.push({ ...reportObject, isOffline: false });
                 });
                 await batch.commit();
+                if (rapportiniLocaliCreati.length > 0) {
+                    await db.rapportini.bulkPut(rapportiniLocaliCreati);
+                }
             } else {
                 for (const giorno of giorniDaCreare) {
                     await aggiungiAllaCoda(createReportObject(giorno));

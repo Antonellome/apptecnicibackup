@@ -4,16 +4,14 @@ import { type DettaglioVoce } from '@/models/definitions';
 
 interface Props {
     dettaglio: Map<string, DettaglioVoce>;
-    giorniTotali: number;
 }
 
-const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
+const DettaglioOreTipoGiornata = ({ dettaglio }: Props) => {
     
     const getSortOrder = (nome: string) => {
         const lowerNome = nome.toLowerCase();
         if (lowerNome === 'ordinaria') return 0;
-        if (lowerNome === 'straordinario (>8h)') return 1;
-        if (lowerNome === 'straordinario') return 2;
+        if (lowerNome === 'straordinario') return 1;
         return 3;
     };
 
@@ -26,7 +24,11 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
         return a.nome.localeCompare(b.nome);
     });
 
-    const totalOre = sortedDettaglio.reduce((acc, item) => acc + item.oreTotali, 0);
+    const righeOre = sortedDettaglio.filter((voce) => !voce.nome.toLowerCase().includes('trasferta'));
+    const righeTrasferta = sortedDettaglio.filter((voce) => voce.nome.toLowerCase().includes('trasferta'));
+
+    const totalOre = righeOre.reduce((acc, item) => acc + item.oreTotali, 0);
+    const totaleGiorniTrasferta = righeTrasferta.reduce((acc, item) => acc + item.giorni, 0);
 
     if (sortedDettaglio.length === 0) {
         return (
@@ -43,7 +45,7 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
                 <Typography variant="h5" gutterBottom component="div" sx={{ flexGrow: 1 }}>
                     Dettaglio Attività
                 </Typography>
-                <Tooltip title="Le ore sono calcolate in base alla tipologia di giornata. La colonna 'Presenze' indica il numero di giornate uniche in cui compare quel tipo di attività.">
+                <Tooltip title="Le ore sono calcolate in base alla tipologia di giornata. Le trasferte sono riportate separatamente con il conteggio giorni.">
                     <HelpOutline color="action" />
                 </Tooltip>
             </Box>
@@ -52,13 +54,12 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
                     <TableHead sx={{ backgroundColor: 'background.default' }}>
                         <TableRow>
                             <TableCell sx={{ fontWeight: 'bold' }}>Tipo Attività</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>Presenze</TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'bold' }}>Tot. Ore</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {sortedDettaglio.map((voce) => {
-                            if (voce.oreTotali <= 0 && voce.giorni <= 0) return null; 
+                        {righeOre.map((voce) => {
+                            if (voce.oreTotali <= 0 && voce.giorni <= 0) return null;
                             return (
                             <TableRow key={voce.id}>
                                 <TableCell component="th" scope="row">
@@ -75,7 +76,6 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
                                     <Typography variant="body2">{voce.nome}</Typography>
                                 </Box>
                                 </TableCell>
-                                <TableCell align="center">{voce.giorni > 0 ? voce.giorni : '-'}</TableCell>
                                  <TableCell align="right">{voce.oreTotali > 0 ? voce.oreTotali.toFixed(2) : '-'}</TableCell>
                             </TableRow>
                         )})}
@@ -83,12 +83,60 @@ const DettaglioOreTipoGiornata = ({ dettaglio, giorniTotali }: Props) => {
                      <TableFooter sx={{ backgroundColor: 'background.default' }}>
                         <TableRow>
                             <TableCell sx={{ fontWeight: 'bold' }}>Totale</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>{giorniTotali}</TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'bold' }}>{totalOre.toFixed(2)}</TableCell>
                         </TableRow>
                     </TableFooter>
                 </Table>
             </TableContainer>
+
+            <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Trasferte (giorni)</Typography>
+                {righeTrasferta.filter(voce => voce.giorni > 0).length === 0 ? (
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                        <Typography variant="body2" color="text.secondary">Nessuna trasferta nel periodo.</Typography>
+                    </Paper>
+                ) : (
+                    <TableContainer component={Paper} variant="outlined">
+                        <Table size="small">
+                            <TableHead sx={{ backgroundColor: 'background.default' }}>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 'bold' }}>Tipo Trasferta</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>Giorni</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {righeTrasferta
+                                    .filter(voce => voce.giorni > 0)
+                                    .map((voce) => (
+                                        <TableRow key={`trasferta-${voce.id}`}>
+                                            <TableCell component="th" scope="row">
+                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                    <Box sx={{ 
+                                                        width: 12,
+                                                        height: 12,
+                                                        borderRadius: '50%',
+                                                        backgroundColor: voce.colore || '#90caf9',
+                                                        border: `1px solid ${voce.colore || '#90caf9'}`,
+                                                        mr: 1,
+                                                        flexShrink: 0
+                                                    }} />
+                                                    <Typography variant="body2">{voce.nome}</Typography>
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell align="right">{voce.giorni}</TableCell>
+                                        </TableRow>
+                                    ))}
+                            </TableBody>
+                            <TableFooter sx={{ backgroundColor: 'background.default' }}>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 'bold' }}>Totale trasferte</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>{totaleGiorniTrasferta}</TableCell>
+                                </TableRow>
+                            </TableFooter>
+                        </Table>
+                    </TableContainer>
+                )}
+            </Box>
         </Paper>
     );
 };

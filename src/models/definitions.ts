@@ -73,14 +73,16 @@ export interface Cliente extends FirebaseDoc { nome: string; }
 export interface Sede extends FirebaseDoc { nome: string; indirizzo: string; }
 
 export interface TipoGiornata extends FirebaseDoc { 
-    nome: string; 
-    descrizione?: string; 
-    tariffa?: number; 
-    tipo: 'oraria' | 'giornaliera';
-    colore: string;
-    sigla?: string;
-    lavorativo: boolean;
-    icona: string;
+  nome: string; 
+  descrizione?: string; 
+  tariffa?: number; 
+  tipo: 'oraria' | 'giornaliera';
+  colore: string;
+  sigla?: string;
+  lavorativo: boolean;
+  icona: string;
+  /** Categoria informativa: 'normale'|'trasferta'|'ferie'|'malattia'|'altro' */
+  categoria?: 'normale' | 'trasferta' | 'ferie' | 'malattia' | 'altro' | string;
 }
 
 export interface Veicolo extends FirebaseDoc { 

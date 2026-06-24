@@ -16,13 +16,15 @@ import {
 import { Cloud, WifiOff, CloudQueue } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, isSameMonth, isAfter } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
+import { db as firestoreDb } from '@/firebase';
 import { db as localDb } from '@/db/local-db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
 import { Rapportino, EnrichedRapportino, MasterData } from '@/models/definitions';
 import FullScreenLoader from '@/components/FullScreenLoader';
+import { rapportinoConverter } from '@/utils/converters';
 
 const ReportListPage = () => {
   const navigate = useNavigate();
@@ -76,22 +78,71 @@ const ReportListPage = () => {
   }, []);
 
   useEffect(() => {
-      if (userProfile?.tecnicoId) {
-          localDb.rapportini
-              .where('tecnicoId').equals(userProfile.tecnicoId)
-              .last()
-              .then(latestReport => {
-                  if (latestReport) {
-                      const latestDate = latestReport.data instanceof Date ? latestReport.data : new Date(latestReport.data);
-                      setLatestReportDate(latestDate);
-                      setCurrentMonth(latestDate);
-                  } else {
-                      // Nessun report nel DB, non impostiamo nessun mese e l'UI mostrerà "Nessun report"
-                      setCurrentMonth(null);
-                  }
-              });
-      }
-  }, [userProfile?.tecnicoId]);
+      if (!userProfile?.tecnicoId) return;
+
+      let cancelled = false;
+
+      const bootstrapReports = async () => {
+        const localCount = await localDb.rapportini.where('tecnicoId').equals(userProfile.tecnicoId).count();
+
+        if (localCount === 0 && isOnline) {
+          const rapportiniRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
+          const [creatiDaMe, presenti] = await Promise.all([
+            getDocs(query(rapportiniRef, where('tecnicoId', '==', userProfile.tecnicoId))),
+            getDocs(query(rapportiniRef, where('presenze', 'array-contains', userProfile.tecnicoId))),
+          ]);
+
+          const merged = new Map<string, Rapportino>();
+          creatiDaMe.forEach(docSnap => merged.set(docSnap.id, { ...docSnap.data(), id: docSnap.id }));
+          presenti.forEach(docSnap => merged.set(docSnap.id, { ...docSnap.data(), id: docSnap.id }));
+
+          const reportsToStore = Array.from(merged.values()).map(report => ({
+            ...report,
+            isOffline: report.isOffline || false,
+          }));
+
+          if (reportsToStore.length > 0) {
+            await localDb.rapportini.bulkPut(reportsToStore);
+          }
+
+          const latestRemoteReport = reportsToStore.reduce<Rapportino | null>((latest, report) => {
+            if (!latest) return report;
+            const latestDate = latest.data instanceof Date ? latest.data : new Date(latest.data as any);
+            const reportDate = report.data instanceof Date ? report.data : new Date(report.data as any);
+            return reportDate > latestDate ? report : latest;
+          }, null);
+
+          if (!cancelled && latestRemoteReport) {
+            const latestDate = latestRemoteReport.data instanceof Date ? latestRemoteReport.data : new Date(latestRemoteReport.data as any);
+            setLatestReportDate(latestDate);
+            setCurrentMonth(latestDate);
+          }
+          return;
+        }
+
+        const latestReport = await localDb.rapportini
+          .where('tecnicoId').equals(userProfile.tecnicoId)
+          .last();
+
+        if (cancelled) return;
+
+        if (latestReport) {
+          const latestDate = latestReport.data instanceof Date ? latestReport.data : new Date(latestReport.data as any);
+          setLatestReportDate(latestDate);
+          setCurrentMonth(latestDate);
+        } else {
+          setCurrentMonth(null);
+        }
+      };
+
+      bootstrapReports().catch(error => {
+        console.error('Errore nel bootstrap dei rapportini locali:', error);
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [userProfile?.tecnicoId, isOnline]);
 
   const rapportiniDelMese = useLiveQuery(() => {
     if (!userProfile?.tecnicoId || !currentMonth) return [];
