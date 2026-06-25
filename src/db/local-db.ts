@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Impostazioni, Rapportino, SyncEvent, SyncManifest } from '@/models/definitions';
+import { Impostazioni, Rapportino, SyncEvent, SyncManifest, Tecnico, Ditta, Categoria, Veicolo, Cliente, TipoGiornata, Nave, Luogo, Sede, UserProfile, Qualifica, Documento } from '@/models/definitions';
 
 export interface AnagraficaCache {
   id: string; 
@@ -24,34 +24,41 @@ export class AppLocalDB extends Dexie {
   syncQueue!: Table<SyncEvent, number>;
   rapportini!: Table<Rapportino, string>;
   sync_manifest!: Table<SyncManifestCache, string>;
+  tecnici!: Table<Tecnico, string>;
+  ditte!: Table<Ditta, string>;
+  categorie!: Table<Categoria, string>;
+  veicoli!: Table<Veicolo, string>;
+  clienti!: Table<Cliente, string>;
+  tipiGiornata!: Table<TipoGiornata, string>;
+  navi!: Table<Nave, string>;
+  luoghi!: Table<Luogo, string>;
+  sedi!: Table<Sede, string>;
+  webAppUsers!: Table<UserProfile, string>;
+  qualifiche!: Table<Qualifica, string>;
+  documenti!: Table<Documento, string>;
+
 
   constructor() {
     super('AppLocalDB');
     
-    this.version(1).stores({
-        anagrafiche: 'id',
-        tariffe_locali: 'id',
-        rapportini_mensili: 'id', 
-    });
-
-    this.version(2).stores({
+    this.version(4).stores({
+      rapportini: 'id, [tecnicoId+data], tecnicoId, data',
+      tecnici: 'id',
+      ditte: 'id',
+      categorie: 'id',
+      veicoli: 'id',
+      clienti: 'id',
+      tipiGiornata: 'id',
+      navi: 'id',
+      luoghi: 'id',
+      sedi: 'id',
+      webAppUsers: 'id',
+      qualifiche: 'id',
+      documenti: 'id',
       anagrafiche: 'id',
       tariffe_locali: 'id',
       syncQueue: '++id, type',
-      rapportini: 'id, data, tecnicoId',
-    });
-
-    this.version(3).stores({
-        anagrafiche: 'id',
-        tariffe_locali: 'id',
-        syncQueue: '++id, type',
-        rapportini: 'id, data, tecnicoId',
-        sync_manifest: 'id'
-    });
-
-    // VERSIONE 4: Aggiungo indice composto per ottimizzare le query dei report per utente/mese.
-    this.version(4).stores({
-      rapportini: 'id, [tecnicoId+data], tecnicoId, data'
+      sync_manifest: 'id'
     });
 
     this.open().catch(err => {

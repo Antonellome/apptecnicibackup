@@ -15,6 +15,7 @@ import CheckinPage from '@/pages/CheckinPage';
 import EditReportPage from '@/pages/EditReportPage';
 import EditOfflineReportPage from '@/pages/EditOfflineReportPage';
 import NotifichePage from '@/pages/NotifichePage';
+import TestVisibilita from '@/pages/TestVisibilita'; // Importa la pagina di test
 
 export const router = createBrowserRouter([
     {
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
             { path: 'report-mensile', element: <MonthlyReportPage /> },
             { path: 'check-in', element: <CheckinPage /> },
             { path: 'notifiche', element: <NotifichePage /> },
+            { path: 'test-visibilita', element: <TestVisibilita /> } // Aggiungi la rotta di test
         ]
     },
     {

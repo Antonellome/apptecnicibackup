@@ -1,85 +1,40 @@
 /**
  * @file useRapportini.ts
- * @description Hook specializzato per recuperare l'elenco dei rapportini per il tecnico autenticato.
+ * @description Hook specializzato per recuperare in tempo reale i rapportini dal database locale (Dexie).
  */
 
-import { useEffect, useReducer } from 'react';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/db/local-db';
 import { useAuth } from '@/hooks/useAuth';
 import { Rapportino } from '@/models/definitions';
-
-// --- State and Reducer Definition ---
-
-interface RapportiniState {
-  rapportini: Rapportino[];
-  loading: boolean;
-  error: Error | null;
-}
-
-type Action = 
-  | { type: 'RESET' }
-  | { type: 'INIT' }
-  | { type: 'SUCCESS', payload: Rapportino[] }
-  | { type: 'ERROR', payload: Error };
-
-function rapportiniReducer(state: RapportiniState, action: Action): RapportiniState {
-    switch (action.type) {
-        case 'RESET':
-            return { rapportini: [], loading: false, error: null };
-        case 'INIT':
-            return { ...state, loading: true, error: null };
-        case 'SUCCESS':
-            return { ...state, loading: false, rapportini: action.payload };
-        case 'ERROR':
-            return { ...state, loading: false, error: action.payload, rapportini: [] };
-        default:
-            return state;
-    }
-}
+import { useMemo } from 'react';
 
 export const useRapportini = () => {
-  const { user } = useAuth();
-  const initialState: RapportiniState = {
-    rapportini: [],
-    loading: true,
-    error: null,
+  const { user, userProfile } = useAuth();
+
+  const rapportini = useLiveQuery(() => {
+    if (!user || !userProfile) return [];
+
+    console.log(`useRapportini (LiveQuery): Avvio query locale per tecnico ${userProfile.tecnicoId}`);
+
+    // Esegue la query su Dexie per trovare i rapportini in cui l'utente
+    // è il creatore (tecnicoId) o è incluso nelle presenze.
+    return db.rapportini
+      .where('tecnicoId').equals(userProfile.tecnicoId)
+      .or('presenze').equals(userProfile.tecnicoId) // Nota: 'equals' su un array multientry si comporta come 'includes'.
+      .sortBy('data'); // Ordina per data, ma potrebbe essere necessario un reverse in UI
+
+  }, [user, userProfile]);
+
+  // Dexie non ordina di default in modo decrescente, quindi lo facciamo in memoria.
+  const sortedRapportini = useMemo(() => {
+    if (!rapportini) return undefined; // Mantiene lo stato di caricamento
+    return rapportini.reverse(); // .reverse() modifica l'array originale, ma sortBy ne crea uno nuovo
+  }, [rapportini]);
+
+  return {
+    rapportini: sortedRapportini,
+    loading: sortedRapportini === undefined,
+    error: null, // useLiveQuery non espone direttamente un errore in questo modo, ma lo logga.
   };
-
-  const [state, dispatch] = useReducer(rapportiniReducer, initialState);
-
-  useEffect(() => {
-    const fetchRapportini = async () => {
-      if (!user) {
-        dispatch({ type: 'RESET' });
-        return;
-      }
-
-      console.log(`useRapportini: Avvio fetch per i rapportini dell'utente ${user.uid}`);
-      dispatch({ type: 'INIT' });
-
-      try {
-        const q = query(
-          collection(db, 'rapportini'),
-          where('partecipanti', 'array-contains', user.uid),
-          orderBy('header.dataIntervento', 'desc')
-        );
-
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Rapportino[];
-        
-        dispatch({ type: 'SUCCESS', payload: data });
-        console.log(`useRapportini: ${data.length} rapportini caricati con successo.`);
-
-      } catch (err: any) {
-        console.error('useRapportini: Errore durante il fetch dei rapportini:', err);
-        dispatch({ type: 'ERROR', payload: err });
-      } 
-    };
-
-    fetchRapportini();
-
-  }, [user]);
-
-  return state;
 };

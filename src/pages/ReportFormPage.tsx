@@ -400,7 +400,7 @@ const ReportFormPage: React.FC = () => {
             oreLavoro: dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0),
             tecnicoId: loggedInTecnicoId,
             tipoGiornataId: tipoGiornataId,
-            trasfertaId: includeTrasferta ? trasfertaId : undefined,
+            trasfertaId: includeTrasferta ? trasfertaId : null,
             oraInizio: scriventeDettaglio?.oraInizio || '',
             oraFine: scriventeDettaglio?.oraFine || '',
             pausa: scriventeDettaglio?.pausa || 0,
@@ -505,7 +505,7 @@ const ReportFormPage: React.FC = () => {
                 oreLavoro: 8,
                 tecnicoId: loggedInTecnicoId,
                 tipoGiornataId,
-                trasfertaId: undefined, // Le giornate multiple non hanno trasferta
+                trasfertaId: null,
                 oraInizio: '', 
                 oraFine: '', 
                 pausa: 0, 

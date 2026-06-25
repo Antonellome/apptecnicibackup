@@ -1,137 +1,76 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, where, DocumentSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '@/firebase';
+import React, { useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/db/local-db'; // Importa l'istanza di Dexie
 import { useAuth } from '@/hooks/useAuth';
-import { useMasterData } from '@/hooks/useMasterData';
 import type { 
     Rapportino, 
     UserProfile,
     Qualifica,
-    Documento
+    Documento,
+    Tecnico,
+    Ditta,
+    Categoria,
+    Veicolo,
+    Cliente,
+    TipoGiornata,
+    Nave,
+    Luogo,
+    Sede
 } from '@/models/definitions';
 import { GlobalDataContext, IGlobalDataContext } from '../contexts/GlobalDataContext';
 
-// --- FUNZIONE DI CONVERSIONE SICURA ---
-const docToRapportino = (doc: DocumentSnapshot): Rapportino => {
-    const data = doc.data()!;
-    const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
-    const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date();
-    const dataRapportino = data.data instanceof Timestamp ? data.data.toDate() : new Date();
-
-    return {
-        id: doc.id,
-        ...data,
-        data: dataRapportino,
-        createdAt,
-        updatedAt,
-    } as Rapportino;
-};
-
 // --- PROVIDER COMPONENT ---
 export const GlobalDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  const { masterData, loading: masterDataLoading } = useMasterData();
+  const { user, loading: authLoading } = useAuth();
 
-  const [rapportini, setRapportini] = useState<Rapportino[]>([]);
-  const [webAppUsers, setWebAppUsers] = useState<UserProfile[]>([]);
-  const [qualifiche, setQualifiche] = useState<Qualifica[]>([]);
-  const [documenti, setDocumenti] = useState<Documento[]>([]);
-  const [localDataLoading, setLocalDataLoading] = useState(true);
-
-  const collectionsToSync = useMemo(() => [
-    { name: 'webAppUsers', setter: setWebAppUsers },
-    { name: 'qualifiche', setter: setQualifiche },
-    { name: 'documenti', setter: setDocumenti },
-  ], []);
-
-  useEffect(() => {
-    const syncData = async () => {
-        if (!user) {
-            setLocalDataLoading(true);
-            collectionsToSync.forEach(({ setter }) => setter([]));
-            setRapportini([]);
-            return () => {}; // Restituisce una funzione di cleanup vuota
-        }
-
-        setLocalDataLoading(true);
-        const unsubscribes: (() => void)[] = [];
-
-        collectionsToSync.forEach(({ name, setter }) => {
-            const collRef = collection(db, name as string);
-            const unsubscribe = onSnapshot(collRef, (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setter(data as any[]);
-            }, (error) => {
-                console.error(`Error fetching ${name}:`, error);
-            });
-            unsubscribes.push(unsubscribe);
-        });
-
-        const queries = [
-            query(collection(db, 'rapportini'), where("tecnicoId", "==", user.uid)),
-            query(collection(db, 'rapportini'), where("presenze", "array-contains", user.uid))
-        ];
-
-        let rapportiniInitialLoads = queries.length;
-        const handleRapportiniSnapshot = (snapshot: any) => {
-            const newRapportini = snapshot.docs.map(docToRapportino);
-            setRapportini(prevRapportini => {
-                const rapportiniMap = new Map(prevRapportini.map((r: Rapportino) => [r.id, r]));
-                newRapportini.forEach((r: Rapportino) => rapportiniMap.set(r.id, r));
-                return Array.from(rapportiniMap.values());
-            });
-
-            if (rapportiniInitialLoads > 0) {
-                rapportiniInitialLoads--;
-                if (rapportiniInitialLoads === 0) {
-                    setLocalDataLoading(false);
-                }
-            }
-        };
-
-        queries.forEach(q => {
-            const unsubscribe = onSnapshot(q, handleRapportiniSnapshot, (error) => {
-                console.error("Error fetching rapportini:", error);
-            });
-            unsubscribes.push(unsubscribe);
-        });
-
-        return () => {
-            unsubscribes.forEach(unsub => unsub());
-        };
-    };
-
-    const cleanupPromise = syncData();
-
-    return () => {
-        cleanupPromise.then(cleanup => cleanup());
-    };
-}, [user, collectionsToSync]);
+  // --- LETTURA DATI ESCLUSIVAMENTE DA DEXIE (DATABASE LOCALE) ---
+  const rapportini = useLiveQuery(() => user ? db.rapportini.toArray() : [], [user], [] as Rapportino[]);
+  const tecnici = useLiveQuery(() => db.tecnici.toArray(), [], [] as Tecnico[]);
+  const ditte = useLiveQuery(() => db.ditte.toArray(), [], [] as Ditta[]);
+  const categorie = useLiveQuery(() => db.categorie.toArray(), [], [] as Categoria[]);
+  const veicoli = useLiveQuery(() => db.veicoli.toArray(), [], [] as Veicolo[]);
+  const clienti = useLiveQuery(() => db.clienti.toArray(), [], [] as Cliente[]);
+  const tipiGiornata = useLiveQuery(() => db.tipiGiornata.toArray(), [], [] as TipoGiornata[]);
+  const navi = useLiveQuery(() => db.navi.toArray(), [], [] as Nave[]);
+  const luoghi = useLiveQuery(() => db.luoghi.toArray(), [], [] as Luogo[]);
+  const sedi = useLiveQuery(() => db.sedi.toArray(), [], [] as Sede[]);
+  const webAppUsers = useLiveQuery(() => db.webAppUsers.toArray(), [], [] as UserProfile[]);
+  const qualifiche = useLiveQuery(() => db.qualifiche.toArray(), [], [] as Qualifica[]);
+  const documenti = useLiveQuery(() => db.documenti.toArray(), [], [] as Documento[]);
   
-  const {
-      tecnici = [],
-      ditte = [],
-      categorie = [],
-      veicoli = [],
-      clienti = [],
-      tipiGiornata = [],
-      navi = [],
-      luoghi = [],
-      sedi = [],
-  } = masterData || {};
+  // Calcola lo stato di caricamento basandosi sulla disponibilità dei dati da Dexie.
+  // useLiveQuery restituisce `undefined` mentre la query è in corso.
+  const dataLoading = 
+      rapportini === undefined || tecnici === undefined || ditte === undefined || categorie === undefined || 
+      veicoli === undefined || clienti === undefined || tipiGiornata === undefined || navi === undefined || 
+      luoghi === undefined || sedi === undefined || webAppUsers === undefined || qualifiche === undefined || 
+      documenti === undefined;
 
-  const ditteMap = useMemo(() => new Map(ditte.map(d => [d.id, d])), [ditte]);
-  const categorieMap = useMemo(() => new Map(categorie.map(c => [c.id, c])), [categorie]);
-  const tecniciMap = useMemo(() => new Map(tecnici.map(t => [t.id, t])), [tecnici]);
-
-  const loading = masterDataLoading || localDataLoading;
+  const loading = authLoading || dataLoading;
+  
+  // Creazione delle mappe memoizzate per ottimizzare le performance
+  const ditteMap = useMemo(() => new Map((ditte || []).map(d => [d.id, d])), [ditte]);
+  const categorieMap = useMemo(() => new Map((categorie || []).map(c => [c.id, c])), [categorie]);
+  const tecniciMap = useMemo(() => new Map((tecnici || []).map(t => [t.id, t])), [tecnici]);
 
   const value: IGlobalDataContext = {
-    rapportini,
-    tecnici, ditte, categorie, veicoli, clienti, tipiGiornata, navi, luoghi, sedi,
-    webAppUsers, qualifiche, documenti,
-    ditteMap, categorieMap, tecniciMap,
+    rapportini: rapportini || [],
+    tecnici: tecnici || [],
+    ditte: ditte || [],
+    categorie: categorie || [],
+    veicoli: veicoli || [],
+    clienti: clienti || [],
+    tipiGiornata: tipiGiornata || [],
+    navi: navi || [],
+    luoghi: luoghi || [],
+    sedi: sedi || [],
+    webAppUsers: webAppUsers || [],
+    qualifiche: qualifiche || [],
+    documenti: documenti || [],
+    ditteMap,
+    categorieMap,
+    tecniciMap,
     loading,
   };
 

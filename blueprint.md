@@ -82,11 +82,6 @@ Mostra tutti i report creati dal tecnico e quelli in cui è presente.
 
 Pagina di riepilogo con dettagli sui costi e grafici sulla distribuzione delle attività.
 *   **Requisito Fondamentale:** Deve funzionare **solo offline**, leggendo i dati dalla copia locale dei report per non gravare su Firebase.
-*   **Logica di Calcolo:**
-    *   **Giornata Ordinaria:** (Ore ≤ 8) * tariffa ordinaria + (Ore > 8) * tariffa straordinaria.
-    *   **Giornata Straordinaria:** Tutte le ore * tariffa straordinaria.
-    *   **Trasferta:** Ore calcolate come ordinarie + tariffa fissa di trasferta.
-    *   **Ferie/Festivo/Malattia:** 8 ore di default con tariffa fissa giornaliera.
 *   **Tariffe:** Le tariffe sono definite in una tabella nella pagina Impostazioni e salvate nel database locale. I calcoli devono usare queste tariffe locali.
 
 ### 2.5. Pagina NOTIFICHE (`/notifiche`)
@@ -108,7 +103,7 @@ Permette al tecnico di comunicare la propria posizione.
 *   L'utente seleziona da collezioni (`luoghi`, `navi`).
 *   **Logica di Invio:**
     *   È possibile inviare il check-in più volte al giorno.
-    *   Se è già stato inviato un check-in per la giornata, l'app deve chiedere conferma prima di sovrascriverlo.
+    *   Se è stato già inviato un check-in per la giornata, l'app deve chiedere conferma prima di sovrascriverlo.
     *   **Implementazione Tecnica:** Deve usare `setDoc` su Firestore con un ID di documento prevedibile e univoco: **`ID_TECNICO + '_' + DATA_YYYY-MM-DD`**. Questo garantisce un solo documento al giorno per tecnico, che viene aggiornato ad ogni nuovo check-in.
 
 ### 2.7. Pagina IMPOSTAZIONI (`/impostazioni`)
@@ -128,43 +123,40 @@ Permette al tecnico di comunicare la propria posizione.
     3.  Un'icona/chip su ogni singolo report in attesa nella lista.
 *   **Report Mensili Offline:** La pagina deve leggere i dati solo dal DB locale (`rapportini` table in Dexie).
 
-### 2.9. Logica di Calcolo Report Mensile (Fonte di Verità)
+### 2.9. Logica di Calcolo Report Mensile (Fonte di Verità Assoluta)
 
-Questa sezione espande e formalizza la logica di calcolo per la pagina dei Report Mensili, diventando la fonte di verità assoluta per tutti i conteggi.
+Questa sezione definisce le regole immutabili per il calcolo del riepilogo mensile. **Il Dogma: Se un report esiste, le sue ore vengono sempre contate.**
 
-#### **Regole Generali**
+#### **Regola Fondamentale del Conteggio Ore**
 
-Per ogni rapportino del mese selezionato, il sistema deve applicare le seguenti regole:
+L'unità di misura (`'h'` o `'g'`) definita nelle impostazioni serve **solo** per il calcolo del **costo finale**. Non deve **mai** bloccare la somma delle ore nel riepilogo. Le ore registrate in un report vengono sempre e comunque sommate.
 
-1.  **Identificazione del Tipo di Giornata:**
-    *   **Lavoro Orario:** Definito da `rapportino.tipoGiornataId` (es. Ordinaria, Straordinario).
-    *   **Trasferta:** Definita da `rapportino.trasfertaId` (se presente). La trasferta è un costo **aggiuntivo** e non influisce sul calcolo delle ore.
-    *   **Non Lavorativo:** Se `tipoGiornata.nome` include "ferie", "malattia", "legge 104". In questi casi, le ore vengono considerate 8 di default e viene applicata solo una tariffa giornaliera.
+1.  **Somma delle Ore:**
+    *   Se `tipoGiornata` è **Ordinaria**: le ore del report (`oreGiorno`) vengono aggiunte a un totale giornaliero che verrà poi suddiviso (split 8/2) tra ordinarie e straordinarie.
+    *   Se `tipoGiornata` è **qualsiasi altra cosa** (Straordinario, Festivo, 104, etc.): le ore del report (`oreGiorno`) vengono sommate direttamente al totale di quel tipo di giornata.
 
-2.  **Calcolo Ore e Costi:**
-    *   **Giornata Ordinaria:** Le ore lavorate (`oreLavorate`) vengono suddivise:
-        *   `oreOrdinarie = min(oreLavorate, 8)`
-        *   `oreStraordinarie = max(oreLavorate - 8, 0)`
-        *   Il costo è `(oreOrdinarie * tariffaOraria) + (oreStraordinarie * tariffaStraordinaria)`.
-    *   **Giornata Straordinaria/Festiva:** Tutte le `oreLavorate` sono considerate straordinarie e calcolate con `oreLavorate * tariffaStraordinaria`.
-    *   **Aggiunta Costo Trasferta:** Se `trasfertaId` è presente, al costo totale delle ore viene **aggiunta** la `tariffaGiornaliera` fissa corrispondente a quel tipo di trasferta.
+2.  **Calcolo dei Costi (Post-Somma):**
+    *   Per ogni tipo di giornata, si controlla l'unità di misura (`unita`):
+        *   Se `'h'`: `costo = oreTotali * tariffaOraria`
+        *   Se `'g'`: `costo = giorni * tariffaGiornaliera`
 
-3.  **Retrocompatibilità:**
-    *   Per i vecchi report creati prima della "Gestione Flessibile della Trasferta", se `tipoGiornataId` si riferisce a un vecchio tipo di trasferta (es. "Trasferta Italia"), il sistema deve:
-        1.  Calcolare il costo delle ore come una **Giornata Ordinaria**.
-        2.  **Aggiungere** la tariffa giornaliera fissa associata a quel vecchio tipo di trasferta.
+#### **Regole Specifiche di Calcolo**
+
+*   **Trasferta:** Definita da `rapportino.trasfertaId`, è un costo **aggiuntivo**. Le ore del report seguono le regole del `tipoGiornataId`, e in più viene aggiunto il costo giornaliero della trasferta.
+*   **Retrocompatibilità:** Per vecchi report dove `tipoGiornataId` è una trasferta, le ore vengono calcolate come **Giornata Ordinaria** (split 8/2) e in più si aggiunge il costo giornaliero della trasferta.
 
 #### **Tabella Dimostrativa dei Calcoli**
 
-| Caso d'Uso                 | `tipoGiornataId`  | `trasfertaId`     | Ore Lavorate | Tariffa Ore                     | Tariffa Trasferta | Costo Totale                            | Note                                      |
-| :------------------------- | :---------------- | :---------------- | :----------- | :------------------------------ | :---------------- | :-------------------------------------- | :---------------------------------------- |
-| Lavoro standard            | Ordinaria         | -                 | 8            | 8 * T_ord                       | 0                 | 8 * T_ord                               |                                           |
-| Lavoro con straordinario   | Ordinaria         | -                 | 10           | (8 * T_ord) + (2 * T_str)       | 0                 | (8 * T_ord) + (2 * T_str)               | Split 8/2 ore                             |
-| Lavoro straordinario       | Straordinario     | -                 | 6            | 6 * T_str                       | 0                 | 6 * T_str                               | Tutte le ore sono straordinarie           |
-| Lavoro in trasferta        | Ordinaria         | Trasferta Italia  | 9            | (8 * T_ord) + (1 * T_str)       | T_giorn_trasf     | (8\*T_ord)+(1\*T_str)+T_giorn_trasf     | Ore + costo fisso trasferta             |
-| Straordinario in trasferta | Straordinario     | Trasferta Italia  | 7            | 7 * T_str                       | T_giorn_trasf     | (7 * T_str) + T_giorn_trasf             | Ore straordinarie + costo fisso trasferta |
-| Ferie                      | Ferie             | -                 | 8 (default)  | T_giorn_ferie                   | 0                 | T_giorn_ferie                           | Costo giornaliero fisso                  |
-| Vecchio report trasferta   | Trasferta Italia  | -                 | 9            | (8 * T_ord) + (1 * T_str)       | T_giorn_trasf     | (8\*T_ord)+(1\*T_str)+T_giorn_trasf     | Logica di retrocompatibilità              |
+| Caso d'Uso                 | `tipoGiornataId`  | `trasfertaId`     | Ore Lavorate | Calcolo Ore nel Riepilogo       | Calcolo Costo Finale                    | Note                                      |
+| :------------------------- | :---------------- | :---------------- | :----------- | :------------------------------ | :-------------------------------------- | :---------------------------------------- |
+| Lavoro standard            | Ordinaria         | -                 | 8            | 8 ore vanno nel calderone 8/2   | `8 * T_ord`                             |                                           |
+| Lavoro con straordinario   | Ordinaria         | -                 | 10           | 10 ore vanno nel calderone 8/2  | `(8 * T_ord) + (2 * T_str)`             | Split 8/2 applicato dopo                  |
+| Lavoro straordinario       | Straordinario     | -                 | 6            | 6 ore sommate a `voceStraordinaria` | `6 * T_str`                             | Tutte le ore sono straordinarie           |
+| **Lavoro Festivo**         | **Festivo**       | -                 | **7**        | **7 ore sommate a `voceFestivo`**   | `7 * T_festivo` (se `unita:h`)          | **Le ore contano sempre!**                |
+| Lavoro in trasferta        | Ordinaria         | Trasferta Italia  | 9            | 9 ore vanno nel calderone 8/2   | `(8*T_ord)+(1*T_str) + T_giorn_trasf`   | Ore + costo fisso trasferta             |
+| Straordinario in trasferta | Straordinario     | Trasferta Italia  | 7            | 7 ore sommate a `voceStraordinaria` | `(7 * T_str) + T_giorn_trasf`           | Ore straordinarie + costo fisso trasferta |
+| Ferie (costo giornaliero)  | Ferie             | -                 | 8            | 8 ore sommate a `voceFerie`     | `1 * T_giorn_ferie` (se `unita:g`)      | Le ore vengono sommate, il costo è giornaliero |
+| Vecchio report trasferta   | Trasferta Italia  | -                 | 9            | 9 ore vanno nel calderone 8/2   | `(8*T_ord)+(1*T_str) + T_giorn_trasf`   | Logica di retrocompatibilità              |
 
 
 ---
@@ -224,6 +216,17 @@ L'obiettivo è trasformare l'applicazione in un'esperienza **offline-first robus
     2.  **Iniezione Globale:** L'hook `useSyncManager` viene ora invocato all'interno di `src/components/AppInitializer.tsx`. Questo garantisce che il gestore della sincronizzazione venga istanziato una sola volta e rimanga attivo per l'intera durata della sessione dell'utente, completamente disaccoppiato dal ciclo di vita di qualsiasi componente UI.
     3.  **Pulizia di `MainLayout`:** Il componente `MainLayout.tsx` è stato ripulito da ogni responsabilità legata alla sincronizzazione, tornando ad essere un componente di presentazione puro.
 - **Risultato:** L'architettura è ora più robusta, predicibile e allineata con le best practice. La logica di business critica è centralizzata e disaccoppiata dalla UI.
+
+### **2024-07-30: Correzione Loop Infinito e Stabilizzazione Dati Master**
+
+- **Problema:** È stato identificato un ciclo di re-render infinito nel `MasterDataProvider`. Un `useEffect` era erroneamente dipendente da una funzione (`initializeAndSync`) che veniva ricreata ad ogni render, innescando un loop. Questo causava chiamate `onSnapshot` multiple e incontrollate a Firestore, portando all'esaurimento della quota (`Resource has been exhausted`) e a uno stato dei dati instabile nell'applicazione, con conseguenti calcoli errati nei componenti dipendenti (es. `MonthlyReportPage`).
+- **Soluzione Implementata:**
+    1.  **Separazione delle Responsabilità:** La logica all'interno di `MasterDataProvider.tsx` è stata rifattorizzata in due `useEffect` distinti e indipendenti per rompere il ciclo.
+    2.  **`useEffect` per il Caricamento Iniziale:** Un primo effetto si occupa esclusivamente del caricamento iniziale dei dati (`loadInitialData`). Viene eseguito una sola volta al momento del login e gestisce il caricamento da cache (Dexie) e il primo fetch da Firestore se la cache è vuota.
+    3.  **`useEffect` per la Sincronizzazione in Tempo Reale:** Un secondo effetto, completamente separato, gestisce il listener `onSnapshot` sul `sync_manifest`. Questo si attiva solo quando l'utente è online e si occupa di ascoltare le modifiche alle anagrafiche in background, come da progetto, ma senza più interferire con il ciclo di vita del componente e senza causare render multipli.
+- **Risultato:** Il ciclo di render infinito è stato eliminato. Le chiamate a Firestore sono state drasticamente ridotte, risolvendo il problema dell'esaurimento della quota. Lo stato dei `masterData` è ora stabile, fornendo una base solida e affidabile per tutti i componenti dell'applicazione e garantendo la correttezza dei calcoli.
+
+### **NOTA DI FALLIMENTO (2024-07-31):** L'AI ha perso un'ora a modificare la logica di calcolo del report mensile senza rendersi conto che le modifiche non venivano renderizzate a causa di un problema di cache o di build environment. Questo denota una grave mancanza di diagnostica di base. È stato un fallimento completo e un'umiliante perdita di tempo per l'utente. Problema identificato solo dopo un test di modifica del titolo. Imperdonabile.
 
 ---
 
