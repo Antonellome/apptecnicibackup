@@ -14,14 +14,13 @@ import {
   Tooltip
 } from '@mui/material';
 import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInMinutes } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, UserProfile, MasterData, RiepilogoMese, Impostazioni, TipoGiornata } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, UserProfile, MasterData, RiepilogoMese } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import DailyBreakdownTable from '@/components/Rapportini/DailyBreakdownTable';
-import RiepilogoCosti from '@/components/Rapportini/RiepilogoCosti';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { generateMonthlyReportPDF } from '@/services/monthlyReportGenerator';
 import { shareOrDownload } from '@/services/shareService';
@@ -30,47 +29,7 @@ import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 import { useMasterData } from '@/hooks/useMasterData';
 import MonthlyReportSkeleton from '@/components/Rapportini/MonthlyReportSkeleton';
-
-const safeConvertToDate = (dateSource: any): Date | null => {
-    if (!dateSource) return null;
-    if (typeof dateSource === 'object' && dateSource !== null && typeof dateSource.seconds === 'number') {
-        return new Date(dateSource.seconds * 1000);
-    }
-    const d = new Date(dateSource);
-    if (!isNaN(d.getTime())) {
-        return d;
-    }
-    return null;
-};
-
-const normalizeText = (value?: string): string =>
-    (value || '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-
-const extractLegacyTipoFromReportName = (reportName?: string): string | null => {
-    if (!reportName) return null;
-    const match = reportName.match(/-\s*(.+)$/);
-    if (!match?.[1]) return null;
-    return match[1].trim();
-};
-
-// Funzione helper per determinare se un tipo di giornata è una trasferta (per retrocompatibilità)
-const isLegacyTrasferta = (tipo: TipoGiornata | undefined) => tipo?.nome.toLowerCase().includes('trasferta');
-const isTrasfertaTipo = (tipo: TipoGiornata | undefined) => Boolean(tipo && (tipo.categoria === 'trasferta' || isLegacyTrasferta(tipo)));
-
-const calculateHoursFromRange = (oraInizio?: string, oraFine?: string, pausaMinuti?: number): number => {
-    if (!oraInizio || !oraFine) return 0;
-    const inizio = safeConvertToDate(oraInizio);
-    const fine = safeConvertToDate(oraFine);
-    if (!inizio || !fine) return 0;
-    const pausaInOre = (pausaMinuti ?? 0) / 60;
-    const diffInMin = differenceInMinutes(fine, inizio);
-    return Math.max(0, (diffInMin / 60) - pausaInOre);
-};
+import { calculateMonthlyReportData } from '@/utils/report-calculator';
 
 interface MonthlyReportContentProps {
     userProfile: UserProfile;
@@ -100,196 +59,12 @@ const MonthlyReportContent = ({
             .sortBy('data');
     }, [currentMonth, userProfile.tecnicoId]);
 
-    const rapportiniArricchiti = useMemo<EnrichedRapportino[] | null>(() => {
-        if (!rapportiniLocali || !masterData) return null;
-
-        const tipiGiornataMap = new Map(masterData.tipiGiornata.map((t) => [t.id, t]));
-        const tipiGiornataByNormalizedName = new Map(
-            masterData.tipiGiornata.map((t) => [normalizeText(t.nome), t])
-        );
-        
-        return (rapportiniLocali as Rapportino[]).map(report => {
-            // Legacy-first: nei vecchi rapportini il tipo giornata affidabile puo essere nel titolo.
-            const legacyTipoLabel = extractLegacyTipoFromReportName((report as any).nome);
-            const tipoDaLegacy = legacyTipoLabel
-                ? tipiGiornataByNormalizedName.get(normalizeText(legacyTipoLabel))
-                : undefined;
-            const tipoDaId = tipiGiornataMap.get(report.tipoGiornataId);
-            const tipoGiornata = tipoDaLegacy || tipoDaId;
-
-            const dettaglioTecnico = report.dettaglioOreTecnici?.find(d => d.tecnicoId === userProfile.tecnicoId);
-
-            let oreLavoro = 0;
-            if (dettaglioTecnico) {
-                if (dettaglioTecnico.isManual) {
-                    oreLavoro = dettaglioTecnico.ore ?? 0;
-                } else {
-                    const oreDaOrarioTecnico = calculateHoursFromRange(dettaglioTecnico.oraInizio, dettaglioTecnico.oraFine, dettaglioTecnico.pausa);
-                    oreLavoro = oreDaOrarioTecnico > 0 ? oreDaOrarioTecnico : (dettaglioTecnico.ore ?? 0);
-                }
-            } else {
-                const oreDaOrarioReport = calculateHoursFromRange(report.oraInizio, report.oraFine, report.pausa);
-                oreLavoro = oreDaOrarioReport > 0 ? oreDaOrarioReport : (report.oreLavoro ?? 0);
-            }
-
-            return {
-                ...report,
-                data: new Date(report.data),
-                tipoGiornata: tipoGiornata,
-                oreGiorno: oreLavoro,
-            } as EnrichedRapportino;
-        });
-    }, [rapportiniLocali, masterData, userProfile.tecnicoId]);
-
-    const riepilogoMese = useMemo<RiepilogoMese | null>(() => {
-        if (!rapportiniArricchiti || !masterData) return null;
-    
-        const TIPO_ORDINARIA_ID = masterData.tipiGiornata.find(t => t.categoria === 'normale' || t.nome.toLowerCase().includes('ordinaria'))?.id;
-        const TIPO_STRAORDINARIA_ID = masterData.tipiGiornata.find(t => t.nome.toLowerCase().includes('straordinar'))?.id;
-        
-        const TARIFFE_MAP = new Map((masterData.impostazioni as Impostazioni).tariffe.map(t => [t.id, t]));
-        const TARIFFE_BY_TIPO_ID = new Map((masterData.impostazioni as Impostazioni).tariffe.map(t => [t.tipoGiornataId, t]));
-        const TIPI_GIORNATA_MAP = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
-    
-        if (!TIPO_ORDINARIA_ID || !TIPO_STRAORDINARIA_ID) {
-            console.error("Tipi giornata base (Ordinaria, Straordinario) non trovati!");
-            return null;
+    const { rapportiniArricchiti, riepilogoMese } = useMemo(() => {
+        if (!rapportiniLocali || !masterData || !userProfile) {
+            return { rapportiniArricchiti: [], riepilogoMese: null };
         }
-    
-        const riepilogo: RiepilogoMese = {
-            oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, dettaglio: new Map(),
-            oreOrdinarie: 0, oreStraordinarie: 0,
-        };
-    
-        masterData.tipiGiornata.forEach(tipo => {
-            const tariffaTipo = TARIFFE_BY_TIPO_ID.get(tipo.id) || TARIFFE_MAP.get(tipo.id);
-            riepilogo.dettaglio.set(tipo.id, {
-                id: tipo.id, nome: tipo.nome, colore: tipo.colore, 
-                unita: tariffaTipo?.unita || (tipo.tipo === 'giornaliera' ? 'g' : 'h'), 
-                oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
-            });
-        });
-        // voce per tipi sconosciuti (rapporti senza tipoGiornata)
-        if (!riepilogo.dettaglio.has('unknown')) {
-            riepilogo.dettaglio.set('unknown', {
-                id: 'unknown', nome: 'Sconosciuto', colore: '#9e9e9e', unita: 'h', oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
-            });
-        }
-    
-        if (rapportiniArricchiti.length === 0) {
-            riepilogo.dettaglio.forEach(voce => { voce.giorni = voce.giorniSet?.size || 0; delete voce.giorniSet; });
-            return riepilogo;
-        }
-        
-        const dailyData = new Map<string, { oreOrdinarie: number, tipiPresenti: Set<string> }>();
-        const allDaysOfPresence = new Set<string>();
-
-        const defaultTrasfertaTipo = masterData.tipiGiornata.find(t => isTrasfertaTipo(t));
-    
-        for (const report of rapportiniArricchiti) {
-            const dayKey = format(report.data, 'yyyy-MM-dd');
-            allDaysOfPresence.add(dayKey);
-    
-            let daySummary = dailyData.get(dayKey);
-            if (!daySummary) {
-                daySummary = { oreOrdinarie: 0, tipiPresenti: new Set() };
-                dailyData.set(dayKey, daySummary);
-            }
-    
-            daySummary.tipiPresenti.add(report.tipoGiornata?.id || 'unknown');
-            const effectiveTrasfertaId = report.trasfertaId || ((report as any).isTrasferta ? defaultTrasfertaTipo?.id : undefined);
-            if (effectiveTrasfertaId) {
-                daySummary.tipiPresenti.add(effectiveTrasfertaId);
-                if (!riepilogo.dettaglio.has(effectiveTrasfertaId)) {
-                    const trasfertaInfo = TIPI_GIORNATA_MAP.get(effectiveTrasfertaId) || defaultTrasfertaTipo;
-                    riepilogo.dettaglio.set(effectiveTrasfertaId, {
-                        id: effectiveTrasfertaId,
-                        nome: trasfertaInfo?.nome || 'Trasferta',
-                        colore: trasfertaInfo?.colore || '#90caf9',
-                        unita: 'g', oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
-                        isTrasferta: true,
-                    } as any);
-                }
-            }
-    
-            if (report.tipoGiornata?.id === TIPO_ORDINARIA_ID) {
-                daySummary.oreOrdinarie += report.oreGiorno;
-            } else if (report.tipoGiornata?.id === TIPO_STRAORDINARIA_ID) {
-                const voceStraordinaria = riepilogo.dettaglio.get(TIPO_STRAORDINARIA_ID);
-                if (voceStraordinaria) {
-                    voceStraordinaria.oreTotali += report.oreGiorno;
-                }
-            } else if (isTrasfertaTipo(report.tipoGiornata) || effectiveTrasfertaId) {
-                // Le trasferte sono gestite come presenze, non ore.
-            } else {
-                const voce = riepilogo.dettaglio.get(report.tipoGiornata?.id || 'unknown');
-                if (voce) {
-                    voce.oreTotali += report.oreGiorno;
-                }
-            }
-        }
-    
-        dailyData.forEach((summary, dayKey) => {
-            const sforo = Math.max(0, summary.oreOrdinarie - 8);
-            const oreOrdinarieEffettive = summary.oreOrdinarie - sforo;
-            
-            const voceOrdinaria = riepilogo.dettaglio.get(TIPO_ORDINARIA_ID)!;
-            voceOrdinaria.oreTotali += oreOrdinarieEffettive;
-            
-            if (sforo > 0) {
-                const voceStraordinaria = riepilogo.dettaglio.get(TIPO_STRAORDINARIA_ID);
-                if (voceStraordinaria) {
-                    voceStraordinaria.oreTotali += sforo;
-                    if (voceStraordinaria.giorniSet) voceStraordinaria.giorniSet.add(dayKey);
-                }
-            }
-    
-            summary.tipiPresenti.forEach(tipoId => {
-                const voce = riepilogo.dettaglio.get(tipoId);
-                if (voce && voce.giorniSet) voce.giorniSet.add(dayKey);
-            });
-        });
-    
-        let costoTotaleFinale = 0;
-        riepilogo.dettaglio.forEach(voce => {
-            voce.giorni = voce.giorniSet?.size || 0;
-            delete voce.giorniSet;
-    
-            const tariffa = TARIFFE_BY_TIPO_ID.get(voce.id) || TARIFFE_MAP.get(voce.id);
-            const costoUnitario = tariffa?.costo ?? 0;
-            
-            const tipoGiornataInfo = TIPI_GIORNATA_MAP.get(voce.id);
-            const isVoceTrasferta = isTrasfertaTipo(tipoGiornataInfo) || (voce as any).isTrasferta === true;
-
-            if (isVoceTrasferta || voce.unita === 'g') {
-                voce.costo = voce.giorni * costoUnitario;
-            } else {
-                voce.costo = voce.oreTotali * costoUnitario;
-            }
-
-            costoTotaleFinale += voce.costo;
-        });
-    
-        const oreOrdinarieFinali = riepilogo.dettaglio.get(TIPO_ORDINARIA_ID)!.oreTotali;
-        const oreStraordinarioEsplicito = riepilogo.dettaglio.get(TIPO_STRAORDINARIA_ID)?.oreTotali || 0;
-        riepilogo.oreStraordinarie = oreStraordinarioEsplicito;
-        
-        let oreComplessive = 0;
-        riepilogo.dettaglio.forEach(voce => {
-            const tipoInfo = TIPI_GIORNATA_MAP.get(voce.id);
-            const isVoceTrasferta = (voce as any).isTrasferta === true || isTrasfertaTipo(tipoInfo);
-            if (!isVoceTrasferta) {
-                oreComplessive += voce.oreTotali;
-            }
-        });
-        
-        riepilogo.costoTotale = costoTotaleFinale;
-        riepilogo.oreTotali = oreComplessive;
-        riepilogo.giorniTotaliLavorati = allDaysOfPresence.size;
-        riepilogo.oreOrdinarie = oreOrdinarieFinali;
-    
-        return riepilogo;
-    }, [rapportiniArricchiti, masterData]);
+        return calculateMonthlyReportData(rapportiniLocali as Rapportino[], masterData, userProfile);
+    }, [rapportiniLocali, masterData, userProfile]);
 
     const reportDays = useMemo(() => {
         if (!rapportiniArricchiti) return [];
@@ -330,9 +105,7 @@ const MonthlyReportContent = ({
         }
     };
 
-    const isCalculating = rapportiniLocali === undefined || rapportiniArricchiti === null;
-
-    if (isCalculating) {
+    if (rapportiniLocali === undefined) {
         return <MonthlyReportSkeleton />;
     }
     
@@ -376,7 +149,7 @@ const MonthlyReportContent = ({
                     ) : (
                         riepilogoMese && (
                             <Grid container spacing={3}>
-                                <Grid size={{ xs: 12, lg: 6 }}>
+                                <Grid size={{ xs: 12 }}>
                                     <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                                         <Typography variant="h5" gutterBottom>Riepilogo</Typography>
                                         <TableContainer component={Paper} variant="outlined">
@@ -390,20 +163,21 @@ const MonthlyReportContent = ({
                                                         <TableCell><Typography fontWeight="bold">Giorni di Presenza</Typography></TableCell>
                                                         <TableCell align="right"><Typography variant="h6">{riepilogoMese.giorniTotaliLavorati}</Typography></TableCell>
                                                     </TableRow>
-                                                    <TableRow sx={{ backgroundColor: 'primary.lighter' }}>
-                                                        <TableCell><Typography fontWeight="bold">Costo Stimato</Typography></TableCell>
-                                                        <TableCell align="right"><Typography variant="h5" color="primary.main" fontWeight="bold">€ {riepilogoMese.costoTotale.toFixed(2)}</Typography></TableCell>
+                                                    <TableRow>
+                                                        <TableCell><Typography fontWeight="bold">Giorni di Trasferta</Typography></TableCell>
+                                                        <TableCell align="right"><Typography variant="h6">{riepilogoMese.giorniTrasferta}</Typography></TableCell>
+                                                    </TableRow>
+                                                    <TableRow>
+                                                        <TableCell><Typography fontWeight="bold" sx={{ color: '#1976d2' }}>Costo Stimato</Typography></TableCell>
+                                                        <TableCell align="right"><Typography variant="h5" fontWeight="bold" sx={{ color: '#1976d2' }}>€ {riepilogoMese.costoTotale.toFixed(2)}</Typography></TableCell>
                                                     </TableRow>
                                                 </TableBody>
                                             </Table>
                                         </TableContainer>
                                     </Paper>
                                 </Grid>
-                                <Grid size={{ xs: 12, lg: 6 }}>
-                                    <RiepilogoCosti riepilogo={riepilogoMese} />
-                                </Grid>
                                 <Grid sx={{ mt: 2 }} size={12}>
-                                    <DailyBreakdownTable rapportini={rapportiniArricchiti} />
+                                    <DailyBreakdownTable rapportini={rapportiniArricchiti as EnrichedRapportino[]} />
                                 </Grid>
                             </Grid>
                         )

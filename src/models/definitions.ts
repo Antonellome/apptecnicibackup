@@ -218,6 +218,7 @@ export interface RiepilogoMese {
   oreTotali: number;
   costoTotale: number;
   giorniTotaliLavorati: number;
+  giorniTrasferta: number;
   oreOrdinarie: number;
   oreStraordinarie: number;
   dettaglio: Map<string, DettaglioVoce>;
