@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, ReactNode, useCallback } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { db as firestoreDb } from '@/firebase'; // Rinominato per evitare conflitti
 import { useAuth } from '@/hooks/useAuth';
 import { SyncContext, SyncStatus, SyncManifest } from '../contexts/SyncContext';
+import { syncNotifiche } from '@/services/notification-service'; // LA FUNZIONE CHIAVE
 
 // --- UTILS PER LOCAL STORAGE ---
 const LOCAL_STORAGE_KEY = 'app_sync_timestamps';
@@ -24,12 +25,29 @@ const saveTimestampToStorage = (timestamps: Record<string, number>) => {
 export const SyncProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({});
   const [manifest, setManifest] = useState<SyncManifest>({});
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth(); // Usiamo anche lo stato di caricamento dell'auth
 
   useEffect(() => {
-    if (!user) return;
+    // Non fare nulla finché l'autenticazione non è risolta E c'è un utente
+    if (authLoading || !user) {
+      console.log("[SyncProvider] In attesa che l'autenticazione sia completata...");
+      return;
+    }
 
-    const manifestRef = doc(db, 'sync_manifest', user.uid);
+    console.log("[SyncProvider] Utente autenticato. Avvio dei servizi di sincronizzazione.");
+
+    // **LA MOSSA CORRETTIVA E DEFINITIVA**
+    // Avvia la sincronizzazione delle notifiche solo dopo che l'utente è confermato.
+    syncNotifiche().then(success => {
+      if (success) {
+        console.log("[SyncProvider] Sincronizzazione notifiche iniziale completata con successo.");
+      } else {
+        console.error("[SyncProvider] Fallimento nella sincronizzazione delle notifiche iniziale.");
+      }
+    });
+
+    // La logica esistente per il manifest di sincronizzazione generale rimane.
+    const manifestRef = doc(firestoreDb, 'sync_manifest', user.uid);
     const unsubscribe = onSnapshot(manifestRef, (docSnap) => {
       if (docSnap.exists()) {
         const remoteManifest = docSnap.data() as SyncManifest;
@@ -61,7 +79,7 @@ export const SyncProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, authLoading]); // Riesegui quando l'utente o lo stato di caricamento cambiano
 
   const checkForUpdates = useCallback(async (collectionName: string) => {
     console.log(`Controllo manuale per ${collectionName}...`);

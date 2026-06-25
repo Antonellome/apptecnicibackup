@@ -9,7 +9,7 @@ import {
     CircularProgress,
     Alert,
     Container,
-    Grid,
+    Grid, // Grid v2
     Link as MuiLink
 } from '@mui/material';
 import { auth } from '@/firebase';
@@ -127,7 +127,7 @@ const LoginPage = () => {
           </Button>
           
           <Grid container justifyContent="flex-end">
-            <Grid size={12}>
+            <Grid>
               <MuiLink href="#" variant="body2" onClick={handlePasswordReset}>
                 Hai dimenticato la password?
               </MuiLink>

@@ -9,7 +9,6 @@ import { addDoc } from 'firebase/firestore'; // Import collection
 // ============== PROVIDERS & THEME SETUP (CORRECTED) ============== 
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { SnackbarProvider } from '@/providers/SnackbarProvider';
-import { NotificationProvider } from '@/providers/NotificationProvider';
 
 // Helper to render components with all necessary providers
 const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -17,9 +16,7 @@ const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) 
     <BrowserRouter>
       <ThemeProvider>
         <SnackbarProvider>
-          <NotificationProvider>
             {children}
-          </NotificationProvider>
         </SnackbarProvider>
       </ThemeProvider>
     </BrowserRouter>

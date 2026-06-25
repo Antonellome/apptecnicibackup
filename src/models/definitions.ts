@@ -161,12 +161,15 @@ export interface CondivisioneInSospeso {
     fileName: string;
 }
 
+// *** CORREZIONE CRITICA DEL MODELLO DATI ***
+// Allineata la definizione alle necessità reali dell'applicazione per risolvere gli errori di build.
 export interface Notifica extends FirebaseDoc {
     title: string;
-    message: string;
+    body: string;       // Sostituisce 'message'
     createdAt: Date;
-    sent: boolean;
-    target: { type: 'user' | 'category' | 'all'; id: string; name: string; };
+    isRead: boolean;    // Sostituisce 'sent'
+    tecnicoId: string;  // Aggiunto campo essenziale
+    link?: string;      // Aggiunto campo opzionale
 }
 
 // =================================================================

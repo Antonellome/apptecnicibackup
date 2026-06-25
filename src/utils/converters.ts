@@ -16,7 +16,8 @@ import { Rapportino, Tecnico, Veicolo, Ditta, Categoria, Documento, TipoGiornata
 export const rapportinoConverter: FirestoreDataConverter<Rapportino> = {
     toFirestore: (rapportino: WithFieldValue<Rapportino>): DocumentData => {
         // Rimuove l'ID prima di salvare, perché è gestito da Firestore
-        const { id, ...data } = rapportino;
+        const data = { ...rapportino };
+        delete (data as any).id;
         const firestoreData: DocumentData = { ...data };
 
         // Rimuove i campi con valore undefined (Firestore non accetta undefined)
@@ -83,7 +84,8 @@ export const rapportinoConverter: FirestoreDataConverter<Rapportino> = {
 
 const createGenericConverter = <T extends GenericItem>(): FirestoreDataConverter<T> => ({
     toFirestore: (data: WithFieldValue<T>): DocumentData => {
-        const { id, ...rest } = data as T;
+        const rest = { ...data };
+        delete (rest as any).id;
         const firestoreData: { [key: string]: any } = { ...rest };
 
         Object.keys(firestoreData).forEach(key => {

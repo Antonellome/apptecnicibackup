@@ -3,7 +3,6 @@ import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { MasterDataProvider } from '../providers/MasterDataProvider';
 import { GlobalDataProvider } from '../providers/GlobalDataProvider';
-import { NotificationProvider } from '../providers/NotificationProvider';
 
 interface ProvidersWrapperProps {
     children: React.ReactNode;
@@ -20,9 +19,7 @@ const ProvidersWrapper: React.FC<ProvidersWrapperProps> = ({ children }) => {
     return (
         <MasterDataProvider key={`master-${user?.uid || 'logged-out'}`}>
             <GlobalDataProvider>
-                <NotificationProvider>
-                    {children}
-                </NotificationProvider>
+                {children}
             </GlobalDataProvider>
         </MasterDataProvider>
     );

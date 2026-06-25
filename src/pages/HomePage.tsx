@@ -3,7 +3,7 @@ import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useNotifications } from '@/hooks/useNotifications'; // <-- PERCORSO CORRETTO
+import { useUnreadNotificationsCount } from '@/hooks/useUnreadNotificationsCount'; 
 import PostAddIcon from '@mui/icons-material/PostAdd';
 import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
@@ -13,7 +13,7 @@ import WhereToVoteIcon from '@mui/icons-material/WhereToVote';
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { unreadCount } = useNotifications();
+    const unreadCount = useUnreadNotificationsCount();
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
@@ -64,6 +64,7 @@ const HomePage: React.FC = () => {
                     </Typography>
                 </Box>
                 
+                {/* CORREZIONE GRUD V2: Rimossa la prop `item` e sostituita `xs` con `size` */}
                 <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ maxWidth: '500px', mb: 4 }}>
                     {dashboardItems.map((item) => (
                         <Grid key={item.title} size={6}>
