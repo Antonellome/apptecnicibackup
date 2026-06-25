@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Impostazioni, Rapportino, SyncEvent, SyncManifest, Tecnico, Ditta, Categoria, Veicolo, Cliente, TipoGiornata, Nave, Luogo, Sede, UserProfile, Qualifica, Documento } from '@/models/definitions';
+import { Impostazioni, Rapportino, SyncEvent, SyncManifest, Tecnico, Ditta, Categoria, Veicolo, Cliente, TipoGiornata, Nave, Luogo, Sede, UserProfile, Qualifica, Documento, Notifica } from '@/models/definitions';
 
 export interface AnagraficaCache {
   id: string; 
@@ -44,11 +44,37 @@ export class AppLocalDB extends Dexie {
   documenti!: Table<Documento, string>;
   impostazioni!: Table<Impostazioni, string>;
   syncState!: Table<SyncState, string>; 
+  notifiche!: Table<Notifica, string>; // NUOVA TABELLA
 
 
   constructor() {
     super('AppLocalDB');
     
+    // INCREMENTO VERSIONE A 6
+    this.version(6).stores({
+      rapportini: 'id, [tecnicoId+data], tecnicoId, data',
+      tecnici: 'id',
+      ditte: 'id',
+      categorie: 'id',
+      veicoli: 'id',
+      clienti: 'id',
+      tipiGiornata: 'id',
+      navi: 'id',
+      luoghi: 'id',
+      sedi: 'id',
+      webAppUsers: 'id',
+      qualifiche: 'id',
+      documenti: 'id',
+      anagrafiche: 'id',
+      tariffe_locali: 'id',
+      syncQueue: '++id, type',
+      sync_manifest: 'id',
+      impostazioni: 'id',
+      syncState: 'id',
+      notifiche: 'id, isRead, createdAt' // DEFINIZIONE NUOVA TABELLA
+    });
+
+    // La versione 5 rimane per compatibilità, ma non verrà usata per nuove installazioni
     this.version(5).stores({
       rapportini: 'id, [tecnicoId+data], tecnicoId, data',
       tecnici: 'id',

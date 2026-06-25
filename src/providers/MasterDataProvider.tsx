@@ -85,49 +85,75 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const { user, userProfile, loading: authLoading } = useAuth();
     const isOnline = useOnlineStatus();
 
-    const loadInitialData = useCallback(async () => {
+    const refetchData = useCallback(async () => {
+        if (!isOnline) {
+            console.warn("Impossibile forzare l'aggiornamento, sei offline.");
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
-            const cachedData = await loadDataFromCache();
-            if (cachedData) {
-                setMasterData(cachedData);
-                console.log("PROVIDER: Dati anagrafici caricati dalla cache locale.");
-            } else if (isOnline) {
-                console.log("PROVIDER: Cache anagrafiche vuota. Avvio ricostruzione totale da Firestore.");
-                const fetchedDataArray = await Promise.all(ANAGRAFICA_COLLECTIONS.map(fetchAndCacheCollection));
-                const newData = {} as Partial<MasterData>;
-                ANAGRAFICA_COLLECTIONS.forEach((key, index) => { (newData as any)[key] = fetchedDataArray[index]; });
-                const tipiGiornata = newData.tipiGiornata as TipoGiornata[];
-                if(tipiGiornata) {
-                    newData.impostazioni = await createDefaultImpostazioni(tipiGiornata);
-                }
-                setMasterData(newData as MasterData);
-                console.log("PROVIDER: Ricostruzione anagrafiche completata.");
-            } else {
-                console.warn("MODALITÀ DEGRADATA: Cache vuota e offline. Avvio con dati minimi.");
-                const emptyData: Partial<MasterData> = {};
-                ANAGRAFICA_COLLECTIONS.forEach(key => { (emptyData as any)[key] = []; });
-                emptyData.impostazioni = await createDefaultImpostazioni([]);
-                setMasterData(emptyData as MasterData);
+            console.log("PROVIDER: Forzo ricostruzione totale anagrafiche da Firestore.");
+            const fetchedDataArray = await Promise.all(ANAGRAFICA_COLLECTIONS.map(fetchAndCacheCollection));
+            const newData = {} as Partial<MasterData>;
+            ANAGRAFICA_COLLECTIONS.forEach((key, index) => { (newData as any)[key] = fetchedDataArray[index]; });
+            const tipiGiornata = newData.tipiGiornata as TipoGiornata[];
+            if(tipiGiornata) {
+                newData.impostazioni = await createDefaultImpostazioni(tipiGiornata);
             }
+            setMasterData(newData as MasterData);
         } catch (e) {
-            console.error("PROVIDER: Errore critico durante l'inizializzazione.", e);
             setError(e);
         } finally {
             setLoading(false);
         }
-    }, [isOnline]); // Dipendenza solo da isOnline per decidere se fare il fetch
+    }, [isOnline]);
 
-    // useEffect #1: Gestisce il caricamento iniziale dei dati
+    // useEffect #1: Gestisce il caricamento iniziale dei dati.
     useEffect(() => {
-        if (!authLoading && user) {
-            loadInitialData();
-        } else if (!authLoading && !user) {
-            setMasterData(null);
-            setLoading(true); // Resetta lo stato di caricamento per il prossimo login
-        }
-    }, [authLoading, user, loadInitialData]);
+        if (authLoading) return; // Attendi la fine del caricamento dell'autenticazione
+
+        const loadInitialData = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                if (user) {
+                    const cachedData = await loadDataFromCache();
+                    if (cachedData) {
+                        setMasterData(cachedData);
+                        console.log("PROVIDER: Dati anagrafici caricati dalla cache locale.");
+                    } else if (isOnline) {
+                        console.log("PROVIDER: Cache anagrafiche vuota. Avvio ricostruzione totale da Firestore.");
+                        const fetchedDataArray = await Promise.all(ANAGRAFICA_COLLECTIONS.map(fetchAndCacheCollection));
+                        const newData = {} as Partial<MasterData>;
+                        ANAGRAFICA_COLLECTIONS.forEach((key, index) => { (newData as any)[key] = fetchedDataArray[index]; });
+                        const tipiGiornata = newData.tipiGiornata as TipoGiornata[];
+                        if(tipiGiornata) {
+                            newData.impostazioni = await createDefaultImpostazioni(tipiGiornata);
+                        }
+                        setMasterData(newData as MasterData);
+                        console.log("PROVIDER: Ricostruzione anagrafiche completata.");
+                    } else {
+                        console.warn("MODALITÀ DEGRADATA: Cache vuota e offline. Avvio con dati minimi.");
+                        const emptyData: Partial<MasterData> = {};
+                        ANAGRAFICA_COLLECTIONS.forEach(key => { (emptyData as any)[key] = []; });
+                        emptyData.impostazioni = await createDefaultImpostazioni([]);
+                        setMasterData(emptyData as MasterData);
+                    }
+                } else {
+                    // Utente non loggato, resetta lo stato
+                    setMasterData(null);
+                }
+            } catch (e) {
+                console.error("PROVIDER: Errore critico durante l'inizializzazione.", e);
+                setError(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        loadInitialData();
+    }, [authLoading, user, isOnline]); // Dipendenze stabili e controllate
 
     // useEffect #2: Gestisce la sincronizzazione continua delle anagrafiche (solo online)
     useEffect(() => {
@@ -181,8 +207,8 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         masterData, 
         loading: authLoading || loading,
         error,
-        refetchData: loadInitialData,
-    }), [masterData, authLoading, loading, error, loadInitialData]);
+        refetchData: refetchData,
+    }), [masterData, authLoading, loading, error, refetchData]);
 
     if (authLoading || (loading && !masterData)) {
         return <FullScreenLoader />;

@@ -169,7 +169,7 @@ const ReportFormPage: React.FC = () => {
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [firmaFirmatarioNome, setFirmaFirmatarioNome] = useState('');
     const [firmaFirmatarioSocieta, setFirmaFirmatarioSocieta] = useState('');
-    const [firmaVettoriale, setFirmaVettoriale] = useState<string | null>(null);
+    const [firmaVettoriale, setFirmaVettoriale] = useState<string | undefined>(undefined);
 
     const getVeicoloLabel = useCallback((veicolo: Veicolo | undefined) => {
         if (!veicolo) return '';
@@ -255,7 +255,7 @@ const ReportFormPage: React.FC = () => {
             setMaterialiImpiegati(report.materialiImpiegati || '');
             setFirmaFirmatarioNome(report.firmaFirmatarioNome || '');
             setFirmaFirmatarioSocieta(report.firmaFirmatarioSocieta || '');
-            setFirmaVettoriale(report.firmaVettoriale || null);
+            setFirmaVettoriale(report.firmaVettoriale || undefined);
 
             const tipo = tipiGiornata.find(t => t.id === report.tipoGiornataId);
             setIsLavorativo(isGiornataLavorativa(tipo));
@@ -429,7 +429,7 @@ const ReportFormPage: React.FC = () => {
             oreLavoro: dettaglioOre.reduce((acc, curr) => acc + (curr.ore || 0), 0),
             tecnicoId: loggedInTecnicoId,
             tipoGiornataId: tipoGiornataId,
-            trasfertaId: includeTrasferta ? trasfertaId : null,
+            trasfertaId: includeTrasferta ? trasfertaId : undefined,
             oraInizio: scriventeDettaglio?.oraInizio || '',
             oraFine: scriventeDettaglio?.oraFine || '',
             pausa: scriventeDettaglio?.pausa || 0,
@@ -443,7 +443,7 @@ const ReportFormPage: React.FC = () => {
             materialiImpiegati: materialiImpiegati || '',
             firmaFirmatarioNome: firmaFirmatarioNome || '',
             firmaFirmatarioSocieta: firmaFirmatarioSocieta || '',
-            firmaVettoriale: firmaVettoriale || null,
+            firmaVettoriale: firmaVettoriale || undefined,
             createdAt: originalReport?.createdAt || new Date(),
             updatedAt: new Date(),
         };
@@ -535,7 +535,7 @@ const ReportFormPage: React.FC = () => {
                 oreLavoro: 8,
                 tecnicoId: loggedInTecnicoId,
                 tipoGiornataId,
-                trasfertaId: null,
+                trasfertaId: undefined,
                 oraInizio: '', 
                 oraFine: '', 
                 pausa: 0, 
@@ -557,7 +557,7 @@ const ReportFormPage: React.FC = () => {
                 materialiImpiegati: '',
                 firmaFirmatarioNome: '',
                 firmaFirmatarioSocieta: '',
-                firmaVettoriale: null,
+                firmaVettoriale: undefined,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             });

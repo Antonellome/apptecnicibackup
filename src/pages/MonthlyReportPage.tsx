@@ -17,7 +17,7 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, UserProfile, MasterData, RiepilogoMese } from '@/models/definitions';
+import { Rapportino, EnrichedRapportino, UserProfile, MasterData } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import DailyBreakdownTable from '@/components/Rapportini/DailyBreakdownTable';
