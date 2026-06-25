@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { EnrichedRapportino, TipoGiornata, Tecnico, Rapportino } from '@/models/definitions';
 
-// Duplichiamo le funzioni helper necessarie qui per mantenere il servizio di generazione autonomo
+// Funzioni helper
 const isTrasfertaTipo = (tipo: TipoGiornata | undefined) => Boolean(tipo && tipo.categoria === 'trasferta');
 const isLegacyTrasferta = (tipo: TipoGiornata | undefined, report: Rapportino): boolean => {
     return !report.trasfertaId && isTrasfertaTipo(tipo);
@@ -29,28 +29,19 @@ export const generateMonthlyReportPDF = async (
 ): Promise<Blob> => {
 
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-    // 1. INTESTAZIONE
-    const companyName = "NOME AZIENDA";
-    const companyAddress = "Via Esempio, 123 - 20100 Milano (MI)";
-    const companyContacts = "Tel: 02 123456 - Email: info@esempio.it";
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text(companyName, 20, 20);
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(companyAddress, 20, 25);
-    doc.text(companyContacts, 20, 29);
-
-    // 2. TITOLO DEL REPORT
-    const reportTitle = `${tecnico.nome} ${tecnico.cognome} - Riepilogo ${format(currentMonth, 'MMMM yyyy', { locale: it })}`;
+    // 1. TITOLO DEL REPORT
+    const reportTitle = `Report Mensile di ${tecnico.nome} ${tecnico.cognome}`;
+    const monthTitle = format(currentMonth, 'MMMM yyyy', { locale: it });
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(reportTitle, doc.internal.pageSize.getWidth() / 2, 45, { align: 'center' });
+    doc.text(reportTitle, pageWidth / 2, 20, { align: 'center' });
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(monthTitle, pageWidth / 2, 28, { align: 'center' });
 
-    // 3. LOGICA DI CALCOLO E PREPARAZIONE DATI PER LA TABELLA
+    // 2. LOGICA DI CALCOLO E PREPARAZIONE DATI PER LA TABELLA
     const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t]));
     const TIPO_ORDINARIA_ID = tipiGiornata.find(t => t.nome.toLowerCase().includes('ordinaria'))?.id;
     const TIPO_STRAORDINARIA_NOME = tipiGiornata.find(t => t.nome.toLowerCase().includes('straordinar'))?.nome || 'Straordinario';
@@ -64,24 +55,15 @@ export const generateMonthlyReportPDF = async (
 
     const summaries = Object.values(groupedByDay).map(reports => {
         const day = reports[0].data;
-        const cantiere = reports[0]?.cantiere;
-        const nave = cantiere?.nome || '';
-        const luogo = cantiere?.localita || '';
         const descrizione = reports.map(r => r.descrizioneBreve).filter(Boolean).join('; ');
 
         let insertedHours = 0, ordinarieDaSplittare = 0;
         const otherHours: { [key: string]: number } = {};
-        const activities = new Map<string, { nome: string; colore: string | undefined }>();
 
         for (const report of reports) {
             insertedHours += report.oreGiorno;
-            if(report.trasfertaId) {
-                const trasfertaTipo = tipiGiornataMap.get(report.trasfertaId);
-                if (trasfertaTipo) activities.set(trasfertaTipo.id, { nome: trasfertaTipo.nome, colore: trasfertaTipo.colore });
-            }
             const tipoG = report.tipoGiornata;
             if(tipoG) {
-               activities.set(tipoG.id, { nome: tipoG.nome, colore: tipoG.colore });
                if (isLegacyTrasferta(tipoG, report) || tipoG.id === TIPO_ORDINARIA_ID) {
                    ordinarieDaSplittare += report.oreGiorno;
                } else {
@@ -96,10 +78,7 @@ export const generateMonthlyReportPDF = async (
 
         return {
             day,
-            nave,
-            luogo,
             descrizione,
-            activities: Array.from(activities.values()),
             insertedHours,
             ordinarie: ordinarieDaSplittare - sforo,
             straordinarie: straordinarieDaSforo + straordinarioPuro,
@@ -126,26 +105,15 @@ export const generateMonthlyReportPDF = async (
         return acc;
     }, initialTotals);
 
-    // 4. GENERAZIONE DELLA TABELLA
-    const head = ['Giorno', 'Ore Ins.', 'Ord.', 'Str.', ...otherHourTypes.map(abbreviate)];
+    // 3. GENERAZIONE DELLA TABELLA
+    const head = [['Data', 'Giorno', 'Descrizione', 'Ore Ins.', 'Ord.', 'Str.', ...otherHourTypes.map(abbreviate)]];
 
     const body = summaries.map(summary => {
-        const dayInfo = format(summary.day, 'eee d', { locale: it });
-        const activityInfo = summary.activities.map(act => abbreviate(act.nome)).join(', ');
-        
-        let firstCellContent = `${dayInfo} - ${activityInfo}`;
-        if (summary.nave || summary.luogo) {
-            firstCellContent += `\n${summary.nave} - ${summary.luogo}`;
-        }
-        if (summary.descrizione) {
-            firstCellContent += `\nDesc: ${summary.descrizione}`;
-        }
-
+        const dayOfWeek = format(summary.day, 'eee', { locale: it });
         return [
-            {
-                content: firstCellContent,
-                styles: { halign: 'left' }
-            },
+            format(summary.day, 'dd/MM'),
+            dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1),
+            summary.descrizione,
             summary.insertedHours.toFixed(2),
             summary.ordinarie > 0 ? summary.ordinarie.toFixed(2) : '-',
             summary.straordinarie > 0 ? summary.straordinarie.toFixed(2) : '-',
@@ -154,7 +122,7 @@ export const generateMonthlyReportPDF = async (
     });
 
     const foot = [[
-        { content: 'Totale', styles: { halign: 'left', fontStyle: 'bold' } },
+        { content: 'Totale', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
         { content: totals.insertedHours.toFixed(2), styles: { fontStyle: 'bold' } },
         { content: totals.ordinarie.toFixed(2), styles: { fontStyle: 'bold' } },
         { content: totals.straordinarie.toFixed(2), styles: { fontStyle: 'bold' } },
@@ -162,31 +130,21 @@ export const generateMonthlyReportPDF = async (
     ]];
 
     autoTable(doc, {
-        startY: 55,
-        head: [head],
+        startY: 35,
+        head: head,
         body: body,
         foot: foot,
         theme: 'grid',
-        headStyles: {
-            fillColor: [22, 160, 133],
-            textColor: 255,
-            fontStyle: 'bold',
-        },
-        footStyles: {
-            fillColor: [241, 241, 241],
-            textColor: 0,
-            fontStyle: 'bold'
-        },
-        styles: { 
-            fontSize: 7,
-            cellPadding: 2, 
-            halign: 'right' 
-        },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [236, 240, 241], textColor: 0, fontStyle: 'bold' },
+        styles: { fontSize: 8, cellPadding: 1.5, halign: 'right' },
         columnStyles: {
-            0: { halign: 'left', cellWidth: 60 }
-        }
+            0: { cellWidth: 13, halign: 'left' }, // Data
+            1: { cellWidth: 13, halign: 'left' }, // Giorno
+            2: { cellWidth: 'auto', halign: 'left' }, // Descrizione
+        },
     });
 
-    // 5. RITORNA IL BLOB
+    // 4. RITORNA IL BLOB
     return doc.output('blob');
 };

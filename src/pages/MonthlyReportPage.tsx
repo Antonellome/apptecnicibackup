@@ -322,7 +322,7 @@ const MonthlyReportContent = ({
         }
         setIsGeneratingPdf(true);
         try {
-            const pdfBlob = await generateMonthlyReportPDF(rapportiniArricchiti, riepilogoMese, tecnico, currentMonth);
+            const pdfBlob = await generateMonthlyReportPDF(rapportiniArricchiti, masterData.tipiGiornata, tecnico, currentMonth);
             setPdfPreviewBlob(pdfBlob);
             setIsPreviewOpen(true);
         } catch (error) {
