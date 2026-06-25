@@ -53,7 +53,6 @@ export const rapportinoConverter: FirestoreDataConverter<Rapportino> = {
             tecnicoId: rawData.tecnicoId || '',
             tipoGiornataId: rawData.tipoGiornataId || '',
             trasfertaId: rawData.trasfertaId || undefined,
-            isTrasferta: rawData.isTrasferta === true,
             oraInizio: rawData.oraInizio || '',
             oraFine: rawData.oraFine || '',
             pausa: typeof rawData.pausa === 'number' ? rawData.pausa : 0,

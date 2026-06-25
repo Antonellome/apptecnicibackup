@@ -15,7 +15,6 @@ const mockRapportini: Rapportino[] = [
         data: new Date(),
         tecnicoId: 'userId1',
         tipoGiornataId: 'lavoro',
-        isTrasferta: false,
         oraInizio: '08:00',
         oraFine: '17:00',
         pausa: 60,

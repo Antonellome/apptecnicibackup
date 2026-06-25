@@ -42,7 +42,6 @@ export const generateMonthlyReportPDF = async (
     doc.text(monthTitle, pageWidth / 2, 28, { align: 'center' });
 
     // 2. LOGICA DI CALCOLO E PREPARAZIONE DATI PER LA TABELLA
-    const tipiGiornataMap = new Map(tipiGiornata.map(t => [t.id, t]));
     const TIPO_ORDINARIA_ID = tipiGiornata.find(t => t.nome.toLowerCase().includes('ordinaria'))?.id;
     const TIPO_STRAORDINARIA_NOME = tipiGiornata.find(t => t.nome.toLowerCase().includes('straordinar'))?.nome || 'Straordinario';
 
@@ -133,7 +132,7 @@ export const generateMonthlyReportPDF = async (
         startY: 35,
         head: head,
         body: body,
-        foot: foot,
+        foot: foot as any,
         theme: 'grid',
         headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
         footStyles: { fillColor: [236, 240, 241], textColor: 0, fontStyle: 'bold' },

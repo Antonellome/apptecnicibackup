@@ -192,7 +192,7 @@ const ReportPDF: React.FC<ReportPDFProps> = ({ report, ditta }) => (
                 </View>
                  <View style={styles.row}>
                     <Text style={styles.label}>Trasferta:</Text>
-                    <Text>{report.isTrasferta ? 'Sì' : 'No'}</Text>
+                    <Text>{report.trasfertaId ? 'Sì' : 'No'}</Text>
                 </View>
             </View>
 

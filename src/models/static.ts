@@ -1,0 +1,15 @@
+export const ANAGRAFICHE_COLLECTIONS = [
+    { name: 'tecnici', label: 'Tecnici' },
+    { name: 'ditte', label: 'Ditte' },
+    { name: 'categorie', label: 'Categorie' },
+    { name: 'veicoli', label: 'Veicoli' },
+    { name: 'clienti', label: 'Clienti' },
+    { name: 'tipiGiornata', label: 'Tipi Giornata' },
+    { name: 'impostazioni', label: 'Impostazioni' },
+    { name: 'navi', label: 'Navi' },
+    { name: 'luoghi', label: 'Luoghi' },
+    { name: 'sedi', label: 'Sedi' },
+    { name: 'webAppUsers', label: 'Utenti Web App' },
+    { name: 'qualifiche', label: 'Qualifiche' },
+    { name: 'documenti', label: 'Documenti' },
+];

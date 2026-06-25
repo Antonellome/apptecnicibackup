@@ -6,7 +6,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino } from '@/models/definitions';
 import { useMemo } from 'react';
 
 export const useRapportini = () => {

@@ -1,11 +1,13 @@
 
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { db } from '@/db/local-db';
-import { sincronizzaConFirebase } from '@/services/offlineSync';
+import { sincronizzaTutto } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
+import { useAuth } from './useAuth';
 
 export const useSyncManager = () => {
     const { showSnackbar } = useSnackbar();
+    const { user } = useAuth(); // Aggiunto per ottenere l'utente autenticato
     const isSyncing = useRef(false);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -25,6 +27,11 @@ export const useSyncManager = () => {
 
     // Funzione core per la sincronizzazione, ora centralizzata
     const handleSync = useCallback(async (isManualTrigger = false) => {
+        if (!user) { // Controllo per assicurarsi che l'utente sia loggato
+            if(isManualTrigger) showSnackbar("Utente non autenticato. Impossibile sincronizzare.", "error");
+            return;
+        }
+
         if (isSyncing.current) {
             if (isManualTrigger) showSnackbar("Sincronizzazione già in corso.", "info");
             return;
@@ -44,7 +51,7 @@ export const useSyncManager = () => {
         if (isManualTrigger) showSnackbar('Sincronizzazione avviata...', 'info');
         
         try {
-            await sincronizzaConFirebase();
+            await sincronizzaTutto(user.uid); // Corretto: chiamata a sincronizzaTutto con l'ID utente
             if (isManualTrigger) showSnackbar(`Sincronizzazione completata! ${count} record inviati.`, 'success');
         } catch (error) { 
             showSnackbar('Errore durante la sincronizzazione.', 'error');
@@ -52,7 +59,7 @@ export const useSyncManager = () => {
         } finally {
             isSyncing.current = false;
         }
-    }, [showSnackbar, isOnline]);
+    }, [showSnackbar, isOnline, user]);
 
     // Trigger automatico della sincronizzazione quando si torna online
     useEffect(() => {

@@ -145,7 +145,7 @@ const MonthlyReportContent = ({
         if (!rapportiniArricchiti || !masterData) return null;
     
         const TIPO_ORDINARIA_ID = masterData.tipiGiornata.find(t => t.categoria === 'normale' || t.nome.toLowerCase().includes('ordinaria'))?.id;
-        const TIPO_STRAORDINARIA_ID = masterData.tipiGiornata.find(t => t.nome.toLowerCase().includes('straordin'))?.id;
+        const TIPO_STRAORDINARIA_ID = masterData.tipiGiornata.find(t => t.nome.toLowerCase().includes('straordinar'))?.id;
         
         const TARIFFE_MAP = new Map((masterData.impostazioni as Impostazioni).tariffe.map(t => [t.id, t]));
         const TARIFFE_BY_TIPO_ID = new Map((masterData.impostazioni as Impostazioni).tariffe.map(t => [t.tipoGiornataId, t]));
@@ -187,13 +187,6 @@ const MonthlyReportContent = ({
         const defaultTrasfertaTipo = masterData.tipiGiornata.find(t => isTrasfertaTipo(t));
     
         for (const report of rapportiniArricchiti) {
-            // Accettiamo e includiamo anche rapporti senza tipoGiornata o con trasferte collegate
-            // (vengono comunque contati nei giorni di presenza e nelle voci appropriate)
-            const tipoG = report.tipoGiornata;
-            if (!tipoG) {
-                // assegna id fittizio per mantenere il conteggio
-                report.tipoGiornata = { id: 'unknown', nome: 'Sconosciuto', descrizione: undefined, tariffa: 0, tipo: 'oraria', colore: '#9e9e9e', sigla: undefined, lavorativo: true, icona: '' } as any;
-            }
             const dayKey = format(report.data, 'yyyy-MM-dd');
             allDaysOfPresence.add(dayKey);
     
@@ -203,11 +196,10 @@ const MonthlyReportContent = ({
                 dailyData.set(dayKey, daySummary);
             }
     
-            daySummary.tipiPresenti.add(report.tipoGiornata.id);
+            daySummary.tipiPresenti.add(report.tipoGiornata?.id || 'unknown');
             const effectiveTrasfertaId = report.trasfertaId || ((report as any).isTrasferta ? defaultTrasfertaTipo?.id : undefined);
             if (effectiveTrasfertaId) {
                 daySummary.tipiPresenti.add(effectiveTrasfertaId);
-                // Se la trasferta non ha una voce nel riepilogo, creala dinamicamente (conteggio presenze)
                 if (!riepilogo.dettaglio.has(effectiveTrasfertaId)) {
                     const trasfertaInfo = TIPI_GIORNATA_MAP.get(effectiveTrasfertaId) || defaultTrasfertaTipo;
                     riepilogo.dettaglio.set(effectiveTrasfertaId, {
@@ -215,25 +207,22 @@ const MonthlyReportContent = ({
                         nome: trasfertaInfo?.nome || 'Trasferta',
                         colore: trasfertaInfo?.colore || '#90caf9',
                         unita: 'g', oreTotali: 0, giorni: 0, costo: 0, giorniSet: new Set<string>(),
-                        // @ts-ignore - flag informativo per escludere le ore complessive dalle trasferte
                         isTrasferta: true,
                     } as any);
                 }
             }
     
-            // Le ore ordinarie sono soggette a soglia 8h/giorno; lo sforo confluisce nello straordinario.
-            if (report.tipoGiornata.id === TIPO_ORDINARIA_ID) {
+            if (report.tipoGiornata?.id === TIPO_ORDINARIA_ID) {
                 daySummary.oreOrdinarie += report.oreGiorno;
-            } else if (report.tipoGiornata.id === TIPO_STRAORDINARIA_ID) {
+            } else if (report.tipoGiornata?.id === TIPO_STRAORDINARIA_ID) {
                 const voceStraordinaria = riepilogo.dettaglio.get(TIPO_STRAORDINARIA_ID);
                 if (voceStraordinaria) {
                     voceStraordinaria.oreTotali += report.oreGiorno;
                 }
             } else if (isTrasfertaTipo(report.tipoGiornata) || effectiveTrasfertaId) {
-                // Le trasferte devono comparire con presenze, senza ore.
+                // Le trasferte sono gestite come presenze, non ore.
             } else {
-                // Tutti gli altri tipi (Ferie, Malattia, etc.) vengono accumulati separatamente.
-                const voce = riepilogo.dettaglio.get(report.tipoGiornata.id);
+                const voce = riepilogo.dettaglio.get(report.tipoGiornata?.id || 'unknown');
                 if (voce) {
                     voce.oreTotali += report.oreGiorno;
                 }
@@ -273,10 +262,8 @@ const MonthlyReportContent = ({
             const isVoceTrasferta = isTrasfertaTipo(tipoGiornataInfo) || (voce as any).isTrasferta === true;
 
             if (isVoceTrasferta || voce.unita === 'g') {
-                // Le trasferte e i tipi giornalieri hanno costo per giorno.
                 voce.costo = voce.giorni * costoUnitario;
             } else {
-                // Tutti gli altri tipi hanno costo orario.
                 voce.costo = voce.oreTotali * costoUnitario;
             }
 
@@ -289,7 +276,6 @@ const MonthlyReportContent = ({
         
         let oreComplessive = 0;
         riepilogo.dettaglio.forEach(voce => {
-            // Sommiamo le ore, escludendo le trasferte (solo presenze).
             const tipoInfo = TIPI_GIORNATA_MAP.get(voce.id);
             const isVoceTrasferta = (voce as any).isTrasferta === true || isTrasfertaTipo(tipoInfo);
             if (!isVoceTrasferta) {

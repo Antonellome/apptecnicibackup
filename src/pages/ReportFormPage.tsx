@@ -31,6 +31,35 @@ import { generateRapportinoPDF } from '@/services/rapportinoPDFGenerator';
 import { shareOrDownload } from '@/services/shareService';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 
+// --- FUNZIONE DI SANITIZZAZIONE ---
+/**
+ * Rimuove ricorsivamente le chiavi con valore `undefined` da un oggetto, lasciando intatti
+ * gli oggetti Date e Timestamp di Firestore, che sono trattati come valori atomici.
+ * @param obj L'oggetto da pulire.
+ * @returns Un nuovo oggetto senza chiavi `undefined`.
+ */
+function removeUndefinedKeys(obj: any): any {
+  if (obj === null || typeof obj !== 'object' || obj instanceof Date || obj instanceof Timestamp) {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefinedKeys(item)).filter(item => item !== undefined);
+  }
+
+  const newObj: { [key: string]: any } = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key) && obj[key] !== undefined) {
+      const value = removeUndefinedKeys(obj[key]);
+      if (value !== undefined) {
+        newObj[key] = value;
+      }
+    }
+  }
+  return newObj;
+}
+
+
 const NON_LAVORATIVO_KEYWORDS = ['ferie', 'malattia', 'legge 104'];
 const MULTI_DAY_ALLOWED_KEYWORDS = ['ferie', 'malattia'];
 
@@ -448,26 +477,27 @@ const ReportFormPage: React.FC = () => {
             let finalId: string | undefined | null = reportId;
             const reportData = getFullReportData();
 
-            if (!reportData) return null; 
+            if (!reportData) return null;
 
-            const dataWithId = { ...reportData, id: reportId || 'local-' + Date.now() };
+            // FIX: Sanitize the data for Firestore before any online operation
+            const sanitizedReportData = removeUndefinedKeys(reportData);
 
             if (navigator.onLine && !isOfflineMode) {
                 if (isEditMode && reportId) {
                     await runTransaction(firestoreDb, async (transaction) => {
-                        const reportRef = doc(firestoreDb, 'rapportini', reportId).withConverter(rapportinoConverter);
-                        transaction.update(reportRef, dataWithId);
+                        const reportRef = doc(firestoreDb, 'rapportini', reportId);
+                        transaction.update(reportRef, sanitizedReportData);
                     });
-                    await db.rapportini.put({ ...reportData, id: reportId, isOffline: false });
+                    await db.rapportini.put({ ...(sanitizedReportData as Rapportino), id: reportId, isOffline: false });
                     finalId = reportId;
                 } else {
-                    const collectionRef = collection(firestoreDb, 'rapportini').withConverter(rapportinoConverter);
-                    const docRef = await addDoc(collectionRef, dataWithId);
+                    const collectionRef = collection(firestoreDb, 'rapportini');
+                    const docRef = await addDoc(collectionRef, sanitizedReportData);
                     finalId = docRef.id;
-                    await db.rapportini.put({ ...reportData, id: finalId, isOffline: false });
+                    await db.rapportini.put({ ...(sanitizedReportData as Rapportino), id: finalId, isOffline: false });
                 }
             } else {
-                finalId = await aggiungiAllaCoda(reportData, reportId);
+                finalId = await aggiungiAllaCoda(sanitizedReportData, reportId);
             }
 
             showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
@@ -648,7 +678,7 @@ const ReportFormPage: React.FC = () => {
     const handleOpenSignatureModal = () => {
         if (isEditMode && firmaVettoriale && !isReadOnly) {
              if(originalReport && originalReport.firmaVettoriale) {
-                showSnackbar("La firma non può essere modificata dopo il primo salvataggio.", "warning");
+                showSnackbar("La firma non potrà più essere modificata dopo il primo salvataggio.", "warning");
                 return;
              }
         }

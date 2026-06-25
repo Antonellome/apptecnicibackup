@@ -11,10 +11,9 @@ import {
   ListItemButton,
   Divider,
   Chip,
-  CircularProgress
 } from '@mui/material';
 import { Cloud, WifiOff, CloudQueue } from '@mui/icons-material';
-import { format, startOfMonth, endOfMonth, isSameMonth, isAfter } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isAfter } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';

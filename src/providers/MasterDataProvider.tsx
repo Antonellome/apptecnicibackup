@@ -1,7 +1,7 @@
 import React, { useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { collection, getDocs, doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
-import type { MasterData, Impostazioni, TipoGiornata, TariffaLocale, SyncManifest, UserProfile } from '@/models/definitions';
+import type { MasterData, Impostazioni, TipoGiornata, TariffaLocale, SyncManifest } from '@/models/definitions';
 import { db } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box, Typography, Button } from '@mui/material';
@@ -169,13 +169,13 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
 
     // useEffect #3: Gestisce la sincronizzazione bidirezionale dei rapportini (solo online)
      useEffect(() => {
-        if (isOnline && user && userProfile?.tecnicoId) {
+        if (isOnline && user?.uid && userProfile?.tecnicoId) {
             console.log("SYNC_RAPPORTINI: Avvio sincronizzazione bidirezionale...");
             sincronizzaTutto(userProfile.tecnicoId).catch(err => {
                 console.error("SYNC_RAPPORTINI: Errore critico durante la sincronizzazione.", err);
             });
         }
-    }, [isOnline, user, userProfile]);
+    }, [isOnline, user?.uid, userProfile?.tecnicoId]);
 
     const contextValue = useMemo(() => ({
         masterData, 

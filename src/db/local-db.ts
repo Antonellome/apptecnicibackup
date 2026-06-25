@@ -18,6 +18,12 @@ export interface SyncManifestCache {
   data: SyncManifest;
 }
 
+// Definizione per la tabella che traccia lo stato della sincronizzazione
+export interface SyncState {
+    id: string; // Nome della tabella/entità, es. 'rapportini'
+    timestamp: Date; // Timestamp dell'ultima sincronizzazione
+}
+
 export class AppLocalDB extends Dexie {
   anagrafiche!: Table<AnagraficaCache, string>;
   tariffe_locali!: Table<TariffaLocaleCache, string>;
@@ -36,12 +42,14 @@ export class AppLocalDB extends Dexie {
   webAppUsers!: Table<UserProfile, string>;
   qualifiche!: Table<Qualifica, string>;
   documenti!: Table<Documento, string>;
+  impostazioni!: Table<Impostazioni, string>;
+  syncState!: Table<SyncState, string>; 
 
 
   constructor() {
     super('AppLocalDB');
     
-    this.version(4).stores({
+    this.version(5).stores({
       rapportini: 'id, [tecnicoId+data], tecnicoId, data',
       tecnici: 'id',
       ditte: 'id',
@@ -58,7 +66,9 @@ export class AppLocalDB extends Dexie {
       anagrafiche: 'id',
       tariffe_locali: 'id',
       syncQueue: '++id, type',
-      sync_manifest: 'id'
+      sync_manifest: 'id',
+      impostazioni: 'id',
+      syncState: 'id', 
     });
 
     this.open().catch(err => {

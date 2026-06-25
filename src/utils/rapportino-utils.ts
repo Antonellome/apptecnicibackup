@@ -9,7 +9,6 @@ export const getInitialRapportinoState = (tecnicoId: string): Rapportino => ({
     data: new Date(), // CORREZIONE: da Timestamp.fromDate(new Date()) a new Date()
     tecnicoId: tecnicoId,
     tipoGiornataId: '',
-    isTrasferta: false,
     oraInizio: '07:30',
     oraFine: '16:00',
     pausa: 60,
