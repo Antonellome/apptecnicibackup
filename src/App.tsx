@@ -9,8 +9,6 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { GlobalStyles } from '@mui/material';
 import ReloadPrompt from './components/ReloadPrompt';
 
-import './components/ReloadPrompt.css';
-
 function App() {
   return (
     <ThemeProvider>
