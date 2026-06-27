@@ -47,4 +47,10 @@ export default defineConfig({
     optimizeDeps: {
         include: ['trim-canvas'],
     },
+    // @ts-expect-error
+    test: {
+        globals: true,
+        environment: 'jsdom',
+        setupFiles: 'src/tests/setup.ts',
+    },
 });

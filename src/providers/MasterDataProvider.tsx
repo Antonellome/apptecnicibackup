@@ -1,5 +1,5 @@
 import React, { useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { collection, getDocs, doc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, onSnapshot, Timestamp, query, where } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
 import type { MasterData, Impostazioni, TipoGiornata, TariffaLocale, SyncManifest } from '@/models/definitions';
 import { db } from '@/db/local-db';
@@ -155,17 +155,23 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         loadInitialData();
     }, [authLoading, user, isOnline]); // Dipendenze stabili e controllate
 
-    // useEffect #2: Gestisce la sincronizzazione continua delle anagrafiche (solo online)
+    // useEffect #2: Gestisce la sincronizzazione continua e INCREMENTALE delle anagrafiche (solo online)
     useEffect(() => {
         if (!isOnline || !user) return;
 
-        console.log("SYNC_ANAGRAFICHE: Inizializzazione listener...");
+        console.log("SYNC_ANAGRAFICHE: Inizializzazione listener per sync incrementale...");
         const manifestRef = doc(firestoreDb, 'versioning', 'sync_manifest');
+        
         const unsubscribe = onSnapshot(manifestRef, async (snapshot) => {
-            if (!snapshot.exists()) return;
-            const remoteManifest = snapshot.data() as SyncManifest;
-            const localManifest = (await db.sync_manifest.get('main'))?.data || {};
+            if (!snapshot.exists()) {
+                console.warn("SYNC_ANAGRAFICHE: Documento manifest non trovato.");
+                return;
+            }
             
+            const remoteManifest = snapshot.data() as SyncManifest;
+            const localManifestSync = await db.sync_manifest.get('main');
+            const localManifest = localManifestSync?.data || {};
+
             const collectionsToUpdate = ANAGRAFICA_COLLECTIONS.filter(key => {
                 const remoteTimestamp = rehydrateTimestamp(remoteManifest[key]);
                 const localTimestamp = rehydrateTimestamp(localManifest[key]);
@@ -173,18 +179,80 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
             });
 
             if (collectionsToUpdate.length > 0) {
-                console.log(`SYNC_ANAGRAFICHE: Rilevate modifiche per: ${collectionsToUpdate.join(', ')}. Aggiorno...`);
+                console.log(`SYNC_ANAGRAFICHE (INCREMENTALE): Rilevate modifiche per: ${collectionsToUpdate.join(', ')}. Avvio aggiornamento...`);
                 try {
-                    await Promise.all(collectionsToUpdate.map(fetchAndCacheCollection));
-                    const updatedData = await loadDataFromCache(); // Ricarica tutto dalla cache per consistenza
-                    if (updatedData) setMasterData(updatedData);
-                    console.log("SYNC_ANAGRAFICHE: Aggiornamento completato.");
+                    setLoading(true);
+                    let somethingChangedInCache = false;
+
+                    for (const collectionName of collectionsToUpdate) {
+                        const localTimestamp = rehydrateTimestamp(localManifest[collectionName]);
+                        
+                        // Se non c'è un timestamp locale, è più sicuro fare un fetch completo per questa collezione.
+                        if (!localTimestamp) {
+                            console.log(`-> ${collectionName}: Nessun timestamp locale, eseguo fetch completo.`);
+                            await fetchAndCacheCollection(collectionName as any);
+                            somethingChangedInCache = true;
+                            continue;
+                        }
+
+                        // Altrimenti, procedi con la query incrementale
+                        console.log(`-> ${collectionName}: Cerco modifiche dopo ${localTimestamp.toDate().toISOString()}`);
+                        const q = query(collection(firestoreDb, collectionName), where("updatedAt", ">", localTimestamp));
+                        const deltaSnapshot = await getDocs(q);
+
+                        if (deltaSnapshot.empty) {
+                            console.log(`-> ${collectionName}: Nessuna modifica remota trovata.`);
+                            continue;
+                        }
+
+                        console.log(`-> ${collectionName}: Trovati ${deltaSnapshot.size} aggiornamenti.`);
+                        somethingChangedInCache = true;
+                        
+                        const deltaDocs = deltaSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                        const existingCollection = await db.anagrafiche.get(collectionName);
+                        const dataMap = new Map(existingCollection?.data.map((item: any) => [item.id, item]) || []);
+                        deltaDocs.forEach((item: any) => dataMap.set(item.id, item));
+                        
+                        await db.anagrafiche.put({ 
+                            id: collectionName, 
+                            data: Array.from(dataMap.values()),
+                            timestamp: new Date()
+                        });
+                    }
+
+                    // Se qualcosa è cambiato, aggiorna il manifest locale e ricarica i dati nello stato.
+                    if (somethingChangedInCache) {
+                        const newLocalManifest = { ...localManifest };
+                        collectionsToUpdate.forEach(key => {
+                            newLocalManifest[key] = remoteManifest[key];
+                        });
+                        await db.sync_manifest.put({ id: 'main', data: newLocalManifest });
+
+                        const updatedData = await loadDataFromCache();
+                        if (updatedData) setMasterData(updatedData);
+                        console.log("SYNC_ANAGRAFICHE (INCREMENTALE): Cache e stato aggiornati con successo.");
+                    } else {
+                        // Anche se non ci sono documenti delta, aggiorniamo il manifest
+                        // per evitare di ri-controllare inutilmente al prossimo snapshot.
+                        const newLocalManifest = { ...localManifest };
+                        collectionsToUpdate.forEach(key => {
+                            newLocalManifest[key] = remoteManifest[key];
+                        });
+                        await db.sync_manifest.put({ id: 'main', data: newLocalManifest });
+                        console.log("SYNC_ANAGRAFICHE (INCREMENTALE): Manifesto aggiornato, nessuna modifica ai dati.");
+                    }
+
                 } catch (syncError) {
-                    console.error("SYNC_ANAGRAFICHE: Errore durante l'aggiornamento.", syncError);
+                    console.error("SYNC_ANAGRAFICHE (INCREMENTALE): Errore durante l'aggiornamento.", syncError);
+                    setError(syncError);
+                } finally {
+                    setLoading(false);
                 }
             }
         }, (error) => {
-            console.error("SYNC_ANAGRAFICHE: Errore nel listener del manifest.", error);
+            console.error("SYNC_ANAGRAFICHE: Errore critico nel listener del manifest.", error);
+            setError(error);
         });
 
         return () => {

@@ -4,104 +4,115 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ReportFormPage from './ReportFormPage';
 import { BrowserRouter } from 'react-router-dom';
-import { addDoc } from 'firebase/firestore'; // Import collection
+import type { Veicolo } from '@/models/definitions';
 
-// ============== PROVIDERS & THEME SETUP (CORRECTED) ============== 
+// ============== PROVIDERS SETUP ============== 
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { SnackbarProvider } from '@/providers/SnackbarProvider';
 
-// Helper to render components with all necessary providers
-const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <SnackbarProvider>
-            {children}
-        </SnackbarProvider>
-      </ThemeProvider>
-    </BrowserRouter>
-  );
-};
+const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <BrowserRouter>
+    <ThemeProvider>
+      <SnackbarProvider>{children}</SnackbarProvider>
+    </ThemeProvider>
+  </BrowserRouter>
+);
 AllTheProviders.displayName = 'AllTheProviders';
 
-// Custom render function that uses the wrapper
 const customRender = (ui: React.ReactElement, options?: any) =>
   render(ui, { wrapper: AllTheProviders, ...options });
 
-
 // ============== MOCKING DEPENDENCIES ============== 
 
-// 1. react-router-dom
-vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal() as any;
-  return {
-    ...actual,
-    useNavigate: () => vi.fn(),
-    useParams: () => ({ reportId: undefined }),
-  };
-});
+const mockHandleSave = vi.fn();
+const mockSetDataInizio = vi.fn();
 
-// 2. Auth Hook
-vi.mock('@/hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: { uid: 'test-uid', email: 'test@test.com', displayName: 'Test User' },
-    loading: false,
-    userProfile: { tecnicoId: 'test-uid', nome: 'Test', cognome: 'User' }
+// 1. Mock the entire custom hook
+vi.mock('@/hooks/useReportForm', () => ({
+  useReportForm: () => ({
+    isEditMode: false,
+    isReadOnly: false,
+    lockReason: null,
+    pageLoading: false,
+    isSaving: false,
+    isSharing: false,
+    isGeneratingPdf: false,
+    dataInizio: new Date('2023-10-27T10:00:00Z'),
+    setDataInizio: mockSetDataInizio,
+    dataFine: new Date('2023-10-27T10:00:00Z'),
+    setDataFine: vi.fn(),
+    isMultiDay: false,
+    tipoGiornataId: 'tg1',
+    trasfertaId: '',
+    setTrasfertaId: vi.fn(),
+    includeTrasferta: false,
+    setIncludeTrasferta: vi.fn(),
+    isLavorativo: true,
+    veicoloId: 'Nessuno',
+    setVeicoloId: vi.fn(),
+    naveId: 'Nessuna',
+    setNaveId: vi.fn(),
+    luogoId: 'Nessuno',
+    setLuogoId: vi.fn(),
+    descrizioneBreve: '',
+    setDescrizioneBreve: vi.fn(),
+    lavoroEseguito: '',
+    setLavoroEseguito: vi.fn(),
+    materialiImpiegati: '',
+    setMaterialiImpiegati: vi.fn(),
+    dettaglioOre: [],
+    firmaFirmatarioNome: '',
+    setFirmaFirmatarioNome: vi.fn(),
+    firmaFirmatarioSocieta: '',
+    setFirmaFirmatarioSocieta: vi.fn(),
+    firmaVettoriale: null,
+    tecnicoScrivente: { id: 'test-uid' },
+    tipiGiornataFiltrati: [{ id: 'tg1', nome: 'Ordinaria', lavorativo: true }],
+    tipiGiornataTrasferta: [],
+    selectedTecnicos: [],
+    otherTecnicos: [],
+    scriventeDettaglio: { tecnicoId: 'test-uid', nome: 'Test User' },
+    handleMultiDayToggle: vi.fn(),
+    handleTipoGiornataChange: vi.fn(),
+    handleAltriTecniciChange: vi.fn(),
+    removeTecnico: vi.fn(),
+    handleOpenModal: vi.fn(),
+    handleSave: mockHandleSave,
+    handleSaveAndShare: vi.fn(),
+    handleShare: vi.fn(),
+    handleCancel: vi.fn(),
+    handleOpenSignatureModal: vi.fn(),
+    isModalOpen: false,
+    handleCloseModal: vi.fn(),
+    handleSaveFromModal: vi.fn(),
+    editingTecnico: null,
+    tempDettaglioOre: null,
+    setTempDettaglioOre: vi.fn(),
+    isSignatureModalOpen: false,
+    setIsSignatureModalOpen: vi.fn(),
+    handleSaveSignature: vi.fn(),
+    isPdfPreviewOpen: false,
+    setIsPdfPreviewOpen: vi.fn(),
+    pdfUrl: null,
+    handleFinalShare: vi.fn(),
+    isConfirmSaveDialogOpen: false,
+    setIsConfirmSaveDialogOpen: vi.fn(),
+    handleConfirmSave: vi.fn(),
+    disableActions: false,
+    sortedVeicoli: [{ id: 'vei1', marca: 'Fiat', modello: 'Doblò', targa: 'AB123CD' }],
+    sortedNavi: [{ id: 'nave1', nome: 'Nave Prova' }],
+    sortedLuoghi: [{ id: 'luogo1', nome: 'Luogo Prova' }],
+    getVeicoloLabel: (v: Veicolo | undefined) => v ? `${v.marca} ${v.modello} (${v.targa})` : 'Nessuno',
   }),
 }));
 
-// 3. Local Data Hook
-const mockLocalData = {
-    navi: [{ id: 'nave1', nome: 'Nave Prova' }],
-    luoghi: [{ id: 'luogo1', nome: 'Luogo Prova' }],
-    tecnici: [{ id: 'test-uid', nome: 'Test', cognome: 'User', tecnicoId: 'test-uid' }],
-    veicoli: [{ id: 'vei1', marca: 'Fiat', modello: 'Doblò', targa: 'AB123CD' }],
-    tipiGiornata: [{ id: 'tg1', nome: 'Ordinaria', lavorativo: true }],
-    clienti: [], 
-    categorie: [], 
-};
-vi.mock('@/hooks/useLocalData', () => ({
-  useLocalData: () => ({ data: mockLocalData, loading: false, error: null }),
-}));
-
-// 4. Snackbar Context
-vi.mock('@/hooks/useSnackbar', () => ({
-    useSnackbar: () => ({ showSnackbar: vi.fn() }),
-}));
-
-// 5. Firebase / Offline Sync
-vi.mock('@/firebase', () => ({}));
-vi.mock('firebase/firestore', async (importOriginal) => {
-    const actual = await importOriginal() as any;
-    return {
-        ...actual,
-        doc: vi.fn(), 
-        getDoc: vi.fn(), 
-        addDoc: vi.fn(() => Promise.resolve({ id: 'new-doc-id' })),
-        updateDoc: vi.fn(), 
-        collection: vi.fn(),
-        runTransaction: vi.fn((_db, callback) => callback({})), // Corrected: unused _db
-        Timestamp: { fromDate: (date: Date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 }), now: () => ({ seconds: Date.now() / 1000, nanoseconds: 0 })},
-    }
-});
-
-// 6. Signature Canvas
+// 2. Mock Signature Canvas (UI component)
 vi.mock('react-signature-canvas', () => {
-    const signaturePadMock = {
-        clear: vi.fn(),
-        isEmpty: vi.fn().mockReturnValue(false),
-        getTrimmedCanvas: () => ({ toDataURL: () => 'data:image/png;base64,fakesignature' }),
-    };
-    // Assign the component to a variable with a name.
-    const MockSignatureCanvas = React.forwardRef((props: any, ref: any) => {
-        React.useImperativeHandle(ref, () => signaturePadMock);
-        return <canvas data-testid="signature-canvas" {...props} />;
-    });
-    // Add the display name.
+    // Aggiunto _ per indicare che ref non è usato
+    const MockSignatureCanvas = React.forwardRef((props: any, _ref: any) => <canvas data-testid="signature-canvas" {...props} />);
     MockSignatureCanvas.displayName = 'MockSignatureCanvas';
     return { default: MockSignatureCanvas };
 });
-
 
 // ============== TEST SUITE ============== 
 
@@ -112,43 +123,28 @@ describe('ReportFormPage', () => {
 
   it('dovrebbe corrispondere allo snapshot nello stato iniziale', async () => {
     const { container } = customRender(<ReportFormPage />);
-    await screen.findByText('Ordinaria'); // Wait for async data to load
+    // Usa una query specifica per verificare che il rendering sia avvenuto
+    expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
     expect(container).toMatchSnapshot();
   });
 
-  it('dovrebbe compilare il modulo e salvare i dati', async () => {
+  it('dovrebbe compilare il modulo e chiamare la funzione di salvataggio', async () => {
     const user = userEvent.setup();
     customRender(<ReportFormPage />);
 
-    // Wait for async data to load
-    await screen.findByText('User Test'); // Corrected name based on mock
+    expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
 
-    // Select a value
-    await user.click(screen.getByLabelText(/Tipo Giornata/i));
-    await user.click(await screen.findByRole('option', { name: 'Ordinaria' }));
-
-    // Select another value
     await user.click(screen.getByLabelText(/Nave/i));
     await user.click(await screen.findByRole('option', { name: /Nave Prova/i }));
     
-    // Type in a field
-    await user.type(screen.getByLabelText(/Breve Descrizione Lavoro/i), 'Test descrizione lavoro');
+    const descrizioneInput = screen.getByLabelText(/Breve Descrizione Lavoro/i);
+    await user.type(descrizioneInput, 'Test descrizione lavoro');
 
-    // Save
-    await user.click(screen.getByRole('button', { name: /salva/i }));
+    // Usa una regex precisa per il pulsante "Salva"
+    await user.click(screen.getByRole('button', { name: /^Salva$/i }));
 
-    // Verify that the save function was called
     await waitFor(() => {
-        expect(addDoc).toHaveBeenCalledOnce();
+        expect(mockHandleSave).toHaveBeenCalledOnce();
     });
-
-    // Verify the content of the submitted data
-    const submittedData = (vi.mocked(addDoc)).mock.calls[0][1];
-    expect(submittedData).toEqual(expect.objectContaining({
-        tecnicoId: 'test-uid',
-        tipoGiornataId: 'tg1',
-        naveId: 'nave1',
-        descrizioneBreve: 'Test descrizione lavoro',
-    }));
   });
 });

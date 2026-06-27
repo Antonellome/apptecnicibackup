@@ -60,7 +60,7 @@ const LoginPage = () => {
     try {
       await sendPasswordResetEmail(auth, email);
       setResetSent(true);
-    } catch (error: any) {
+    } catch {
       setError('Impossibile inviare l\'email di reset. Controlla l\'indirizzo email.');
     } finally {
       setLoading(false);

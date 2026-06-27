@@ -7,12 +7,6 @@ let isSyncing = false;
 
 // --- FUNZIONI DI SANITIZZAZIONE ---
 
-/**
- * Rimuove ricorsivamente le chiavi con valore `undefined` da un oggetto, lasciando intatti
- * gli oggetti Date e Timestamp di Firestore, che sono trattati come valori atomici.
- * @param obj L'oggetto da pulire.
- * @returns Un nuovo oggetto senza chiavi `undefined`.
- */
 function removeUndefinedKeys(obj: any): any {
   if (obj === null || typeof obj !== 'object' || obj instanceof Date || obj instanceof Timestamp) {
     return obj;
@@ -34,7 +28,7 @@ function removeUndefinedKeys(obj: any): any {
   return newObj;
 }
 
-// --- FUNZIONE DI DOWNLOAD: DA FIRESTORE A DEXIE ---
+// --- FUNZIONE DI DOWNLOAD INCREMENTALE: DA FIRESTORE A DEXIE ---
 
 const safeConvertToDate = (timestamp: any): Date => {
   if (timestamp instanceof Timestamp) {
@@ -54,8 +48,17 @@ export const syncRapportiniFromFirebase = async (tecnicoId: string) => {
   if (!navigator.onLine) return;
 
   try {
-    const q1 = query(collection(firestoreDb, 'rapportini'), where('tecnicoId', '==', tecnicoId));
-    const q2 = query(collection(firestoreDb, 'rapportini'), where('presenze', 'array-contains', tecnicoId));
+    // 1. Leggi l'ultimo timestamp di sincronizzazione da Dexie
+    const lastSyncState = await db.syncState.get('rapportini');
+    const lastSyncTimestamp = lastSyncState ? lastSyncState.timestamp : new Date(0); // Usa epoch se non ha mai sincronizzato
+
+    console.log(`DOWNLOAD_SYNC (INCREMENTALE): Sincronizzo rapportini modificati dopo ${lastSyncTimestamp.toISOString()}`);
+
+    // 2. Costruisci le query con il filtro temporale basato su 'updatedAt'
+    const rapportiniCollection = collection(firestoreDb, 'rapportini');
+    const q1 = query(rapportiniCollection, where('tecnicoId', '==', tecnicoId), where('updatedAt', '>', lastSyncTimestamp));
+    const q2 = query(rapportiniCollection, where('presenze', 'array-contains', tecnicoId), where('updatedAt', '>', lastSyncTimestamp));
+
     const [snapshot1, snapshot2] = await Promise.all([getDocs(q1), getDocs(q2)]);
     const rapportiniMap = new Map<string, Rapportino>();
 
@@ -78,17 +81,25 @@ export const syncRapportiniFromFirebase = async (tecnicoId: string) => {
 
     processSnapshot(snapshot1);
     processSnapshot(snapshot2);
-    const allRapportini = Array.from(rapportiniMap.values());
 
-    if (allRapportini.length > 0) {
-      await db.rapportini.bulkPut(allRapportini);
+    if (rapportiniMap.size > 0) {
+        const allRapportini = Array.from(rapportiniMap.values());
+        console.log(`DOWNLOAD_SYNC (INCREMENTALE): Trovati ${allRapportini.length} rapportini nuovi o modificati. Aggiorno cache...`);
+        await db.rapportini.bulkPut(allRapportini);
+    } else {
+        console.log("DOWNLOAD_SYNC (INCREMENTALE): Nessun rapportino nuovo o modificato da scaricare.");
     }
+
+    // 3. Aggiorna il timestamp di sincronizzazione all'ora attuale, anche se non sono stati trovati documenti,
+    // per evitare di ricontrollare lo stesso periodo di tempo inutilmente.
+    await db.syncState.put({ id: 'rapportini', timestamp: new Date() });
+
   } catch (error) {
-    console.error("DOWNLOAD_SYNC: Errore durante il download dei rapportini:", error);
+    console.error("DOWNLOAD_SYNC (INCREMENTALE): Errore durante il download dei rapportini:", error);
   }
 };
 
-// --- FUNZIONE DI UPLOAD: DA DEXIE A FIRESTORE ---
+// --- FUNZIONE DI UPLOAD: DA DEXIE A FIRESTORE (INVARIATA) ---
 
 export const aggiungiAllaCoda = async (rapportino: Omit<Rapportino, 'id'>, reportId?: string): Promise<string> => {
     const idEntita = reportId || `local-${Date.now()}`;
@@ -164,13 +175,14 @@ const syncUploadsToFirebase = async () => {
     }
 };
 
-// --- FUNZIONE ORCHESTRATORE ---
+// --- FUNZIONE ORCHESTRATORE (INVARIATA) ---
 
 export const sincronizzaTutto = async (tecnicoId: string) => {
     if (isSyncing || !navigator.onLine) return;
 
     isSyncing = true;
     try {
+        // Ora invoca la nuova funzione di sync incrementale
         await syncRapportiniFromFirebase(tecnicoId);
         await syncUploadsToFirebase();
     } catch (error) {

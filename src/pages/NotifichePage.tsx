@@ -5,7 +5,7 @@ import {
     CircularProgress,
     Alert,
     Button,
-    Grid
+    Grid,
 } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 import { syncNotifiche, marcaNotificaComeLetta } from '@/services/notification-service';
@@ -57,7 +57,7 @@ const NotifichePage: React.FC = () => {
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
                 {userProfile ? `Ciao ${userProfile.nome}, qui trovi tutte le tue comunicazioni.` : 'Qui trovi tutte le tue comunicazioni.'}
             </Typography>
-            
+
             <Grid container sx={{ mb: 2 }} justifyContent="flex-end">
                 <Grid>
                     <Button onClick={handleSync} disabled={loading} variant="outlined">
@@ -69,7 +69,7 @@ const NotifichePage: React.FC = () => {
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading && !notifiche ? (
-                 <Grid container justifyContent="center" alignItems="center" sx={{ height: '50vh' }}>
+                <Grid container justifyContent="center" alignItems="center" sx={{ height: '50vh' }}>
                     <CircularProgress />
                 </Grid>
             ) : notifiche && notifiche.length === 0 ? (
@@ -79,11 +79,9 @@ const NotifichePage: React.FC = () => {
             ) : (
                 <Grid container spacing={2} sx={{ width: '100%' }}>
                     {notifiche?.map((notification) => (
-                        // *** LA VERA CORREZIONE V2 ***
-                        // Sostituito `xs={12}` con `size={12}` per aderire alla spec v2
                         <Grid size={12} key={notification.id}>
-                            <NotificationItem 
-                                notification={notification} 
+                            <NotificationItem
+                                notification={notification}
                                 onMarkAsRead={() => handleMarkAsRead(notification.id)}
                             />
                         </Grid>

@@ -2,12 +2,18 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import OreLavoroSingoloTecnico from './OreLavoroSingoloTecnico';
 import type { DettaglioOreData } from '@/models/definitions';
+import React from 'react';
 
-// Mock per il componente Grid, per semplificare lo snapshot
-vi.mock('@mui/material/Grid', () => ({
-    // Usiamo la versione 2 della Grid API per coerenza
-    default: (props: any) => <div {...props} />
-}));
+// Mock per il componente Grid per semplificare lo snapshot
+vi.mock('@mui/material', async (importOriginal) => {
+  const actual = await importOriginal() as Record<string, unknown>;
+  return {
+    ...actual,
+    // Mock super semplice: renderizza solo i figli dentro un div.
+    // Ignora tutte le props di layout che causavano errori di tipo.
+    Grid: ({ children }: { children: React.ReactNode }) => <div data-grid-mock="true">{children}</div>,
+  };
+});
 
 describe('OreLavoroSingoloTecnico', () => {
 
@@ -62,11 +68,11 @@ describe('OreLavoroSingoloTecnico', () => {
       <OreLavoroSingoloTecnico datiOre={initialData} onUpdate={mockOnUpdate} isReadOnly={false} isScrivente={true} />
     );
 
-    expect(screen.getByRole('combobox', { name: 'Inizio' })).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Ore Lavorate' })).not.toBeInTheDocument();
+    // Aspetta che gli elementi appaiano
+    expect(screen.getByLabelText(/Ora Inizio/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Ore Lavorate/i)).not.toBeInTheDocument();
 
-    // CORREZIONE DEFINITIVA: Un Material-UI Switch ha il ruolo "switch", non "checkbox".
-    const aSwitch = screen.getByRole('switch', { name: 'Inserimento Manuale (per tutti)' });
+    const aSwitch = screen.getByRole('switch', { name: 'Inserimento Ore Manuale' });
     fireEvent.click(aSwitch);
 
     expect(mockOnUpdate).toHaveBeenCalledOnce();
@@ -77,7 +83,7 @@ describe('OreLavoroSingoloTecnico', () => {
         <OreLavoroSingoloTecnico datiOre={updatedData} onUpdate={mockOnUpdate} isReadOnly={false} isScrivente={true} />
     );
 
-    expect(screen.getByRole('combobox', { name: 'Ore Lavorate' })).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Inizio' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Ore Lavorate/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Ora Inizio/i)).not.toBeInTheDocument();
   });
 });

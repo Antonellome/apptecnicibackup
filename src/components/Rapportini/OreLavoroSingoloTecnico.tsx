@@ -1,9 +1,8 @@
 
 import React from 'react';
 import {
-    Box, Typography, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem
+    Box, Typography, Switch, FormControlLabel, FormControl, InputLabel, Select, MenuItem, Grid
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
 import { DettaglioOreData } from '@/models/definitions';
 
 interface OreLavoroSingoloTecnicoProps {
@@ -44,6 +43,9 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
     const handleGenericChange = (field: keyof DettaglioOreData, value: any) => {
         onUpdate({ ...datiOre, [field]: value });
     };
+    
+    // Genera ID unici per evitare conflitti quando il componente è usato più volte
+    const uniqueId = React.useId();
 
     return (
         <Box sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
@@ -52,8 +54,8 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                     Dettaglio Orario Scrivente
                 </Typography>
             )}
-            <Grid container spacing={2} alignItems="center">
-                <Grid size={{ xs: 12 }}>
+            <Grid container spacing={2} alignItems="center" sx={{ width: '100%' }}>
+                <Grid size={12}>
                     <FormControlLabel
                         control={<Switch
                             checked={datiOre.isManual}
@@ -65,10 +67,11 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                 </Grid>
 
                 {datiOre.isManual ? (
-                    <Grid size={{ xs: 12 }}>
+                    <Grid size={12}>
                         <FormControl fullWidth disabled={isReadOnly}>
-                            <InputLabel>Ore Lavorate</InputLabel>
+                            <InputLabel id={`${uniqueId}-ore-lavorate-label`}>Ore Lavorate</InputLabel>
                             <Select
+                                labelId={`${uniqueId}-ore-lavorate-label`}
                                 value={(datiOre.ore ?? '').toString()}
                                 onChange={e => handleGenericChange('ore', parseFloat(e.target.value) || 0)}
                                 label="Ore Lavorate"
@@ -85,8 +88,9 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                     <>
                         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                             <FormControl fullWidth disabled={isReadOnly}>
-                                <InputLabel>Ora Inizio</InputLabel>
+                                <InputLabel id={`${uniqueId}-ora-inizio-label`}>Ora Inizio</InputLabel>
                                 <Select
+                                    labelId={`${uniqueId}-ora-inizio-label`}
                                     value={datiOre.oraInizio || ''}
                                     onChange={e => handleGenericChange('oraInizio', e.target.value)}
                                     label="Ora Inizio"
@@ -97,8 +101,9 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                             <FormControl fullWidth disabled={isReadOnly}>
-                                <InputLabel>Ora Fine</InputLabel>
+                                <InputLabel id={`${uniqueId}-ora-fine-label`}>Ora Fine</InputLabel>
                                 <Select
+                                    labelId={`${uniqueId}-ora-fine-label`}
                                     value={datiOre.oraFine || ''}
                                     onChange={e => handleGenericChange('oraFine', e.target.value)}
                                     label="Ora Fine"
@@ -109,8 +114,9 @@ const OreLavoroSingoloTecnico: React.FC<OreLavoroSingoloTecnicoProps> = ({ datiO
                         </Grid>
                         <Grid size={{ xs: 12, sm: 12, md: 4 }}>
                              <FormControl fullWidth disabled={isReadOnly}>
-                                <InputLabel>Pausa (min)</InputLabel>
+                                <InputLabel id={`${uniqueId}-pausa-label`}>Pausa (min)</InputLabel>
                                 <Select
+                                    labelId={`${uniqueId}-pausa-label`}
                                     value={(datiOre.pausa ?? '').toString()}
                                     onChange={e => handleGenericChange('pausa', parseInt(e.target.value as string, 10))}
                                     label="Pausa (min)"
