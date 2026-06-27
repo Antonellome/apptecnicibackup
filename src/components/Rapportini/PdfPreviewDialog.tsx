@@ -29,6 +29,9 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
     const generatePdf = useCallback(async (data: Rapportino) => {
         if (!masterData) return;
         setIsGenerating(true);
+        // Reset state on new generation
+        setPdfUrl(null);
+        setPdfFile(null);
 
         try {
             const pdf = new jsPDF('p', 'mm', 'a4');
@@ -198,10 +201,7 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
 
     useEffect(() => {
         if (reportData) {
-            const timer = setTimeout(() => {
-                generatePdf(reportData);
-            }, 0);
-            return () => clearTimeout(timer);
+            generatePdf(reportData);
         }
 
         return () => {
@@ -209,7 +209,16 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
                 URL.revokeObjectURL(pdfUrl);
             }
         };
-    }, [reportData, generatePdf, pdfUrl]);
+    }, [reportData, generatePdf]); // Removed pdfUrl from dependency array to avoid re-triggering
+
+    const handleClose = () => {
+        if (pdfUrl) {
+            URL.revokeObjectURL(pdfUrl);
+        }
+        setPdfUrl(null);
+        setPdfFile(null);
+        onClose();
+    };
 
     const handleShare = async () => {
         if (!pdfFile) return;
@@ -230,14 +239,14 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
         } catch (error) {
             console.error('Error sharing', error);
         }
-        onClose();
+        handleClose(); // Close and cleanup after sharing
     };
 
     return (
-        <Dialog open={!!reportData} onClose={onClose} fullScreen>
+        <Dialog open={!!reportData} onClose={handleClose} fullScreen>
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 Anteprima PDF
-                <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
+                <IconButton edge="end" color="inherit" onClick={handleClose} aria-label="close">
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
@@ -246,7 +255,7 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
                 {!isGenerating && pdfUrl && <iframe src={pdfUrl} style={{ flexGrow: 1, width: '100%', height: '100%', border: 'none' }} title="Anteprima PDF" />}
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between', p: 2 }}>
-                <Button variant="outlined" onClick={onClose}>Annulla</Button>
+                <Button variant="outlined" onClick={handleClose}>Annulla</Button>
                 <Button variant="contained" onClick={handleShare} startIcon={<ShareIcon />} disabled={!pdfFile || isGenerating}>
                     Condividi
                 </Button>

@@ -12,7 +12,7 @@ import {
   Divider,
   Chip,
 } from '@mui/material';
-import { Cloud, WifiOff, CloudQueue } from '@mui/icons-material';
+import { WifiOff, CloudQueue } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, isAfter } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
@@ -196,7 +196,7 @@ const ReportListPage = () => {
       </Box>
 
       {!isOnline && <Alert severity="warning" icon={<WifiOff/>} sx={{ mb: 2 }}>Sei offline...</Alert>}
-      {(offlineSyncEventsCount ?? 0) > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEventsCount} in attesa`} color="warning" sx={{ mb: 2, width: '100%' }}/>}
+      {(offlineSyncEventsCount ?? 0) > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEventsCount} in attesa di sincronizzazione`} color="warning" sx={{ mb: 2, width: '100%' }}/>}
 
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
@@ -237,7 +237,7 @@ const ReportListPage = () => {
                                 </Box>
                                 <Box sx={{ flex: '0 0 30%', textAlign: 'right' }}>
                                     <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5}}>
-                                        {report.isOffline && <Chip icon={<Cloud />} label="Locale" size="small" color="info" variant="outlined" />}
+                                        {report.isOffline && <Chip label="Da Sincronizzare" size="small" color="warning" variant="outlined" />}
                                         <Typography variant="body2" sx={{ fontWeight: '500' }}>{report.tipoGiornata?.nome}</Typography>
                                         {report.oreDisplay && <Typography variant="caption">{report.oreDisplay}</Typography>}
                                     </Box>
@@ -255,3 +255,4 @@ const ReportListPage = () => {
 };
 
 export default ReportListPage;
+

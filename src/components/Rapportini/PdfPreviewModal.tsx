@@ -1,4 +1,5 @@
 
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -27,20 +28,37 @@ const PdfPreviewModal = ({
   fileName,
   onShare,
 }: PdfPreviewModalProps) => {
-  const pdfUrl = pdfBlob ? URL.createObjectURL(pdfBlob) : null;
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pdfBlob) {
+      const url = URL.createObjectURL(pdfBlob);
+      setPdfUrl(url);
+
+      // Funzione di cleanup per revocare l'URL quando il componente si smonta o il blob cambia
+      return () => {
+        URL.revokeObjectURL(url);
+        setPdfUrl(null);
+      };
+    }
+  }, [pdfBlob]);
 
   const handleShare = () => {
     if (pdfBlob) {
       onShare(pdfBlob, fileName);
-      onClose();
     }
   };
 
+  // Gestisce la chiusura e pulisce lo stato se necessario
+  const handleClose = () => {
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onClose={onClose} fullScreen>
+    <Dialog open={open} onClose={handleClose} fullScreen>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         Anteprima PDF
-        <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
+        <IconButton edge="end" color="inherit" onClick={handleClose} aria-label="close">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -58,7 +76,7 @@ const PdfPreviewModal = ({
         )}
       </DialogContent>
       <DialogActions sx={{ justifyContent: "space-between", p: 2 }}>
-        <Button variant="outlined" onClick={onClose}>
+        <Button variant="outlined" onClick={handleClose}>
           Chiudi
         </Button>
         <Button

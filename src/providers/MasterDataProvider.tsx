@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { collection, getDocs, doc, onSnapshot, Timestamp, query, where } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
@@ -84,6 +85,27 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const [error, setError] = useState<any | null>(null);
     const { user, userProfile, loading: authLoading } = useAuth();
     const isOnline = useOnlineStatus();
+
+    const updateTariffe = useCallback(async (nuoveTariffe: TariffaLocale[]) => {
+        if (!masterData) throw new Error("I dati anagrafici non sono caricati.");
+
+        const nuoveImpostazioni: Impostazioni = {
+            id: 'main',
+            tariffe: nuoveTariffe,
+        };
+
+        // 1. Salva nel DB locale
+        await db.tariffe_locali.put({ id: 'main', data: nuoveImpostazioni, timestamp: new Date() });
+
+        // 2. Aggiorna lo stato del provider
+        setMasterData(currentData => {
+            if (!currentData) return null;
+            return {
+                ...currentData,
+                impostazioni: nuoveImpostazioni,
+            };
+        });
+    }, [masterData]);
 
     const refetchData = useCallback(async () => {
         if (!isOnline) {
@@ -275,8 +297,9 @@ export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children
         masterData, 
         loading: authLoading || loading,
         error,
-        refetchData: refetchData,
-    }), [masterData, authLoading, loading, error, refetchData]);
+        refetchData,
+        updateTariffe, // <-- Esportato qui
+    }), [masterData, authLoading, loading, error, refetchData, updateTariffe]);
 
     if (authLoading || (loading && !masterData)) {
         return <FullScreenLoader />;

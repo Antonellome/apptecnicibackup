@@ -33,8 +33,10 @@ const initialState: SettingsState = {
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
     switch (action.type) {
         case 'SYNC_TARIFFE':
+            // Non sovrascrivere se ci sono modifiche non salvate, a meno che non si stia salvando.
+            if (state.isDirty && !state.isSaving) return state; 
             const sortedTariffe = [...action.payload].sort((a, b) => a.nome.localeCompare(b.nome));
-            return { ...state, tariffe: sortedTariffe, isDirty: false };
+            return { ...state, tariffe: sortedTariffe };
         
         case 'UPDATE_TARIFFA_COSTO': {
             return {
@@ -50,12 +52,14 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
             return { ...state, isSaving: action.payload };
 
         case 'SAVE_SUCCESS':
+            // Resetta lo stato di salvataggio e 'dirty' dopo il successo.
             return { ...state, isDirty: false, isSaving: false };
 
         default:
             return state;
     }
 }
+
 
 // --- Componente per una singola tariffa ---
 interface TariffaRowProps {
@@ -148,7 +152,8 @@ const SettingsPage: React.FC = () => {
         dispatch({ type: 'SET_SAVING', payload: true });
 
         try {
-            await updateTariffe(tariffe);
+            // Passa i dati correnti del reducer alla funzione di aggiornamento
+            await updateTariffe(state.tariffe); 
             showSnackbar('Tariffe salvate e applicate con successo!', 'success');
             dispatch({ type: 'SAVE_SUCCESS' });
         } catch (error) {
