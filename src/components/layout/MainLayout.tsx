@@ -38,7 +38,7 @@ const MainLayout: React.FC = () => {
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
             <AppBar position="static" sx={{ backgroundColor: '#0D47A1' }}>
                 <Toolbar>
                     <Box sx={{ flexGrow: 1 }}>
@@ -68,7 +68,7 @@ const MainLayout: React.FC = () => {
                 </Alert>
             )}
             
-            <Box component="main" sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 }, width: '100%', boxSizing: 'border-box' }}>
+            <Box component="main" sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 }, width: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
                 <Outlet />
             </Box>
         </Box>

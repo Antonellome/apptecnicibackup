@@ -7,7 +7,7 @@ export default defineConfig({
     plugins: [
         react(),
         VitePWA({
-            registerType: 'autoUpdate',
+            registerType: 'prompt',
             injectRegister: 'auto',
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,json,vue,txt,woff2}']
@@ -18,6 +18,8 @@ export default defineConfig({
                 short_name: 'Tecnici',
                 description: 'Applicazione per la gestione dei rapportini di intervento.',
                 theme_color: '#ffffff',
+                display: 'standalone',
+                orientation: 'any',
                 icons: [
                     {
                         src: 'pwa-192x192.png',

@@ -1,4 +1,3 @@
-
 import { RouterProvider } from 'react-router-dom';
 import { router } from './routes/index';
 import { AuthProvider } from './providers/AuthProvider';
@@ -8,7 +7,9 @@ import { MasterDataProvider } from './providers/MasterDataProvider';
 import { GlobalDataProvider } from './providers/GlobalDataProvider';
 import CssBaseline from '@mui/material/CssBaseline';
 import { GlobalStyles } from '@mui/material';
-import PWAUpdater from './components/PWAUpdater';
+import ReloadPrompt from './components/ReloadPrompt';
+
+import './components/ReloadPrompt.css';
 
 function App() {
   return (
@@ -17,7 +18,7 @@ function App() {
       <GlobalStyles styles={{ 'body::-webkit-scrollbar': { display: 'none' } }} />
       <AuthProvider>
         <SnackbarProvider>
-          <PWAUpdater />
+          <ReloadPrompt />
           <MasterDataProvider>
             <GlobalDataProvider>
               <RouterProvider router={router} future={{ v7_startTransition: true }} />
