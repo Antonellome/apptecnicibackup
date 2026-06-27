@@ -33,9 +33,8 @@ const initialState: SettingsState = {
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
     switch (action.type) {
         case 'SYNC_TARIFFE':
-            if (state.isDirty) return state; // Non sovrascrivere se ci sono modifiche non salvate
             const sortedTariffe = [...action.payload].sort((a, b) => a.nome.localeCompare(b.nome));
-            return { ...state, tariffe: sortedTariffe };
+            return { ...state, tariffe: sortedTariffe, isDirty: false };
         
         case 'UPDATE_TARIFFA_COSTO': {
             return {
