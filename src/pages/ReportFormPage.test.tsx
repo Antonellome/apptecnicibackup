@@ -108,8 +108,8 @@ vi.mock('@/hooks/useReportForm', () => ({
 
 // 2. Mock Signature Canvas (UI component)
 vi.mock('react-signature-canvas', () => {
-    // Aggiunto _ per indicare che ref non è usato
-    const MockSignatureCanvas = React.forwardRef((props: any, _ref: any) => <canvas data-testid="signature-canvas" {...props} />);
+    // Rimosso React.forwardRef perché il ref non è utilizzato in questo mock, risolvendo il warning.
+    const MockSignatureCanvas = (props: any) => <canvas data-testid="signature-canvas" {...props} />;
     MockSignatureCanvas.displayName = 'MockSignatureCanvas';
     return { default: MockSignatureCanvas };
 });

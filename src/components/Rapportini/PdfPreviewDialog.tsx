@@ -20,18 +20,25 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
 
+    // Hook dedicato alla pulizia dell'URL per evitare memory leak e cicli di rendering.
+    useEffect(() => {
+        // La funzione di cleanup viene eseguita quando il componente si smonta o quando pdfUrl cambia.
+        return () => {
+            if (pdfUrl) {
+                URL.revokeObjectURL(pdfUrl);
+            }
+        };
+    }, [pdfUrl]);
+
     const isGiornataLavorativa = useCallback((tipoId: string): boolean => {
         const tipo = tipiGiornata.find(t => t.id === tipoId);
         if (!tipo || !tipo.nome) return true;
         return !['ferie', 'malattia', 'permesso', 'legge 104'].some(keyword => tipo.nome.toLowerCase().includes(keyword));
     }, [tipiGiornata]);
 
+    // La funzione di generazione ora è più pura: prende i dati e restituisce il PDF senza impostare lo stato.
     const generatePdf = useCallback(async (data: Rapportino) => {
-        if (!masterData) return;
-        setIsGenerating(true);
-        // Reset state on new generation
-        setPdfUrl(null);
-        setPdfFile(null);
+        if (!masterData) return null;
 
         try {
             const pdf = new jsPDF('p', 'mm', 'a4');
@@ -189,34 +196,47 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
             const pdfBlob = pdf.output('blob');
             const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
             
-            setPdfFile(file);
-            setPdfUrl(URL.createObjectURL(pdfBlob));
+            return { file, blob: pdfBlob };
 
         } catch (error) {
             console.error("Errore durante la creazione del PDF: ", error);
-        } finally {
-            setIsGenerating(false);
+            return null;
         }
     }, [masterData, tecnici, tipiGiornata, navi, luoghi, veicoli, isGiornataLavorativa]);
 
+    // Hook che orchestra la generazione del PDF quando i dati cambiano.
     useEffect(() => {
-        if (reportData) {
-            generatePdf(reportData);
-        }
+        let isMounted = true; // Flag per prevenire aggiornamenti su componente smontato.
 
-        return () => {
-            if (pdfUrl) {
-                URL.revokeObjectURL(pdfUrl);
+        const createAndSetPdf = async () => {
+            if (!reportData) {
+                setPdfUrl(null);
+                setPdfFile(null);
+                return;
+            }
+
+            setIsGenerating(true);
+            const pdfAssets = await generatePdf(reportData);
+
+            if (isMounted && pdfAssets) {
+                const newUrl = URL.createObjectURL(pdfAssets.blob);
+                setPdfUrl(newUrl);
+                setPdfFile(pdfAssets.file);
+            }
+
+            if (isMounted) {
+                setIsGenerating(false);
             }
         };
-    }, [reportData, generatePdf]); // Removed pdfUrl from dependency array to avoid re-triggering
+
+        createAndSetPdf();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [reportData, generatePdf]);
 
     const handleClose = () => {
-        if (pdfUrl) {
-            URL.revokeObjectURL(pdfUrl);
-        }
-        setPdfUrl(null);
-        setPdfFile(null);
         onClose();
     };
 
@@ -229,6 +249,7 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
                     title: `Rapportino di Lavoro`,
                 });
             } else {
+                // Fallback per ambienti desktop o non supportati
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(pdfFile);
                 link.download = pdfFile.name;
@@ -237,9 +258,11 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
                 document.body.removeChild(link);
             }
         } catch (error) {
-            console.error('Error sharing', error);
+             // Ignoriamo l'errore AbortError che si verifica se l'utente annulla la condivisione
+            if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                 console.error('Error sharing', error);
+            }
         }
-        handleClose(); // Close and cleanup after sharing
     };
 
     return (
@@ -253,9 +276,10 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', p: 0 }}>
                 {isGenerating && <CircularProgress />}
                 {!isGenerating && pdfUrl && <iframe src={pdfUrl} style={{ flexGrow: 1, width: '100%', height: '100%', border: 'none' }} title="Anteprima PDF" />}
+                {!isGenerating && !pdfUrl && <p>Errore nella generazione del PDF.</p>}
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between', p: 2 }}>
-                <Button variant="outlined" onClick={handleClose}>Annulla</Button>
+                <Button variant="outlined" onClick={handleClose}>Chiudi</Button>
                 <Button variant="contained" onClick={handleShare} startIcon={<ShareIcon />} disabled={!pdfFile || isGenerating}>
                     Condividi
                 </Button>

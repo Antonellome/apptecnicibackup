@@ -43,7 +43,7 @@ const ReportFormPage: React.FC = () => {
         handleAltriTecniciChange, removeTecnico, handleOpenModal, handleSave, handleSaveAndShare, handleShare,
         handleCancel, handleOpenSignatureModal, isModalOpen, handleCloseModal, handleSaveFromModal, editingTecnico,
         tempDettaglioOre, setTempDettaglioOre, isSignatureModalOpen, setIsSignatureModalOpen, handleSaveSignature,
-        isPdfPreviewOpen, setIsPdfPreviewOpen, pdfUrl, handleFinalShare, isConfirmSaveDialogOpen, setIsConfirmSaveDialogOpen,
+        isPdfPreviewOpen, handleClosePdfPreview, pdfUrl, handleFinalShare, isConfirmSaveDialogOpen, setIsConfirmSaveDialogOpen,
         handleConfirmSave, disableActions, sortedVeicoli, sortedNavi, sortedLuoghi, getVeicoloLabel, tipiGiornataTrasferta
     } = useReportForm();
 
@@ -200,20 +200,22 @@ const ReportFormPage: React.FC = () => {
                                         </Grid>
                                         <Grid size={12}>
                                             {firmaVettoriale ? (
-                                                <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center', backgroundColor: isReadOnly ? '#f5f5f5' : '#616161' }}>
-                                                    <Typography variant="body2" gutterBottom sx={{ color: isReadOnly ? 'black' : 'white' }}>Firma salvata:</Typography>
+                                                <Box sx={{ border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center', backgroundColor: '#f5f5f5' }}>
+                                                    <Typography variant="body2" gutterBottom>Firma salvata:</Typography>
                                                     <img
                                                         key={firmaVettoriale}
                                                         src={firmaVettoriale}
                                                         alt="Firma"
                                                         style={{
-                                                            maxWidth: '200px',
+                                                            width: '100%',
+                                                            maxWidth: '400px',
                                                             height: 'auto',
                                                             margin: 'auto',
-                                                            filter: isReadOnly ? 'none' : 'invert(1)'
+                                                            backgroundColor: 'white',
+                                                            border: '1px solid #ddd'
                                                         }}/>
                                                     <br />
-                                                    {!isReadOnly && <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1, color: isReadOnly ? 'black' : 'white' }} disabled={disableActions}>Modifica Firma</Button>}
+                                                    {!isReadOnly && <Button onClick={handleOpenSignatureModal} startIcon={<EditIcon/>} sx={{mt: 1}} disabled={disableActions}>Modifica Firma</Button>}
                                                 </Box>
                                             ) : (
                                                 <Button variant="outlined" startIcon={<BorderColorIcon />} onClick={handleOpenSignatureModal} disabled={disableActions} fullWidth>Aggiungi Firma Cliente</Button>
@@ -272,7 +274,7 @@ const ReportFormPage: React.FC = () => {
             />
             <PdfPreviewDialog
                 open={isPdfPreviewOpen}
-                onClose={() => setIsPdfPreviewOpen(false)}
+                onClose={handleClosePdfPreview}
                 onShare={handleFinalShare}
                 pdfDataUrl={pdfUrl}
                 isGenerating={isGeneratingPdf}

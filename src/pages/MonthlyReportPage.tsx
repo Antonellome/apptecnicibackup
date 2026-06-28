@@ -94,15 +94,27 @@ const MonthlyReportContent = ({
         }
     };
     
-    const handleShareFromPreview = async (blob: Blob, fileName: string) => {
-        try {
-            await shareOrDownload(blob, fileName);
-        } catch (error) {
-            console.error("Errore condivisione:", error);
-            showSnackbar('Errore durante la condivisione.', 'error');
-        } finally {
+    const handleShareFromPreview = (blob: Blob, fileName: string) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+            try {
+                const base64data = reader.result as string;
+                await shareOrDownload(base64data, fileName);
+            } catch (error) {
+                console.error("Errore condivisione:", error);
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    showSnackbar('Errore durante la condivisione.', 'error');
+                }
+            } finally {
+                setIsPreviewOpen(false);
+            }
+        };
+        reader.onerror = () => {
+            console.error("Errore durante la conversione del blob in base64.");
+            showSnackbar('Errore durante la preparazione del file per la condivisione.', 'error');
             setIsPreviewOpen(false);
-        }
+        };
     };
 
     if (rapportiniLocali === undefined) {

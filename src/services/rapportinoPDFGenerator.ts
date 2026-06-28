@@ -5,65 +5,8 @@ import { Rapportino, MasterData } from '@/models/definitions';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
-// --- Funzione per processare l'immagine della firma per il PDF ---
-const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string | null> => {
-    return new Promise((resolve) => {
-        if (!whiteSignatureDataUrl || typeof whiteSignatureDataUrl !== 'string') {
-            console.error("Signature data is invalid or missing.");
-            return resolve(null);
-        }
-
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                console.error('Failed to get canvas context');
-                return resolve(null);
-            }
-
-            canvas.width = img.width;
-            canvas.height = img.height;
-
-            try {
-                // 1. Colora la firma di nero
-                ctx.drawImage(img, 0, 0);
-                ctx.globalCompositeOperation = 'source-in';
-                ctx.fillStyle = 'black';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // 2. Rendi il tratto più spesso
-                const thickness = 0.5;
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.drawImage(canvas, thickness, 0);
-                ctx.drawImage(canvas, -thickness, 0);
-                ctx.drawImage(canvas, 0, thickness);
-                ctx.drawImage(canvas, 0, -thickness);
-
-                // 3. Aggiungi uno sfondo bianco
-                ctx.globalCompositeOperation = 'destination-over';
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // 4. Ripristina e restituisci
-                ctx.globalCompositeOperation = 'source-over';
-                resolve(canvas.toDataURL('image/png'));
-            } catch (error) {
-                console.error("Error processing signature image:", error);
-                resolve(null);
-            }
-        };
-        img.onerror = (err) => {
-            console.error("Failed to load signature image:", err);
-            resolve(null);
-        };
-        img.src = whiteSignatureDataUrl;
-    });
-};
-
-
 // --- Funzione per generare il PDF --- 
-export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: MasterData): Promise<Blob> => {
+export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: MasterData): Promise<string> => {
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const margin = 15;
@@ -85,8 +28,10 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     };
 
     const addText = (text: string | string[], x: number, y: number, options: any = {}) => {
-        doc.text(text, x, y, options);
-        const textHeight = Array.isArray(text) ? text.length * 4 : 5;
+        // Garantisce che il testo non sia mai null o undefined
+        const safeText = text || '';
+        doc.text(safeText, x, y, options);
+        const textHeight = Array.isArray(safeText) ? safeText.length * 4 : 5;
         return y + textHeight;
     };
     
@@ -122,11 +67,9 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     
     let dateObject: Date | null = null;
     if (rapportino.data) {
-        // Se è un Timestamp di Firestore, avrà un metodo toDate.
         if (typeof (rapportino.data as any).toDate === 'function') {
             dateObject = (rapportino.data as any).toDate();
         } 
-        // Altrimenti, presumiamo sia un oggetto Date di JS o una stringa/numero convertibile.
         else {
             dateObject = new Date(rapportino.data as any);
         }
@@ -135,16 +78,16 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
 
     const nave = rapportino.naveId === 'Nessuna' 
         ? 'Nessuna' 
-        : navi.find(n => n.id === rapportino.naveId)?.nome || rapportino.naveId || '';
+        : navi.find(n => n.id === rapportino.naveId)?.nome || rapportino.naveId || 'N/D';
 
     const luogo = rapportino.luogoId === 'Nessuno'
         ? 'Nessuno'
-        : luoghi.find(l => l.id === rapportino.luogoId)?.nome || rapportino.luogoId || '';
+        : luoghi.find(l => l.id === rapportino.luogoId)?.nome || rapportino.luogoId || 'N/D';
 
     const veicoloData = veicoli.find(v => v.id === rapportino.veicoloId);
     const veicolo = rapportino.veicoloId === 'Nessuno' 
         ? 'Nessuno' 
-        : (veicoloData ? `${veicoloData.marca} ${veicoloData.modello} - ${veicoloData.targa}` : rapportino.veicoloId || '');
+        : (veicoloData ? `${veicoloData.marca || ''} ${veicoloData.modello || ''} - ${veicoloData.targa || ''}`.trim() : rapportino.veicoloId || 'N/D');
 
     
     doc.setFont('helvetica', 'normal');
@@ -161,7 +104,8 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         doc.setFont('helvetica', 'bold');
         doc.text(`${item.label}:`, margin, cursorY);
         doc.setFont('helvetica', 'normal');
-        doc.text(item.value || '', margin + 40, cursorY);
+        // Garantisce che il valore non sia mai null o undefined
+        doc.text(item.value || 'N/D', margin + 40, cursorY);
         cursorY += 7;
     });
 
@@ -189,7 +133,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
                 orario = `${dett.oraInizio} - ${dett.oraFine}${pausaText}`;
             }
             
-            return [nomeTecnico, orario];
+            return [nomeTecnico || 'N/D', orario || 'N/D'];
         }),
         theme: 'grid',
         didDrawPage: (data) => {
@@ -205,6 +149,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
 
     const addWorkDetail = (label: string, content: string | undefined | null) => {
         if (cursorY > 250) { doc.addPage(); cursorY = margin; }
+        const safeContent = content || ''; // Fallback a stringa vuota
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(COLOR_GREY);
@@ -214,7 +159,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(COLOR_BLACK);
-        const lines = doc.splitTextToSize(content || '', contentWidth);
+        const lines = doc.splitTextToSize(safeContent, contentWidth);
         doc.text(lines, margin, cursorY);
         cursorY += (lines.length * 4) + 5;
     };
@@ -224,6 +169,10 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     addWorkDetail('Lavoro Eseguito', rapportino.lavoroEseguito);
 
     // --- 6. QUARTO SEPARATORE E SEZIONE FIRMA ---
+    if (cursorY > doc.internal.pageSize.getHeight() - 80) {
+        doc.addPage();
+        cursorY = margin;
+    }
     const firmaSectionStartY = Math.max(cursorY, doc.internal.pageSize.getHeight() - 75);
     cursorY = addSeparatorLine(firmaSectionStartY);
     cursorY += 8;
@@ -244,9 +193,11 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.text(`Società: ${societaFirmatario}`, col1X, col1Y);
     col1Y += 5;
     if (rapportino.firmaVettoriale) {
-        const processedSignature = await processSignatureForPdf(rapportino.firmaVettoriale);
-        if (processedSignature) {
-            doc.addImage(processedSignature, 'PNG', col1X, col1Y, 50, 20);
+        try {
+             doc.addImage(rapportino.firmaVettoriale, 'PNG', col1X, col1Y, 50, 20);
+        } catch(e) {
+            console.error("Errore nell'aggiungere l'immagine della firma al PDF", e);
+            doc.text("[Firma non valida]", col1X, col1Y);
         }
     }
 
@@ -260,5 +211,5 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.text(nomeTecnicoScrivente, col2X, col2Y);
     
     // --- FINE E OUTPUT ---
-    return doc.output('blob');
+    return doc.output('datauristring');
 };

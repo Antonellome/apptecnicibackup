@@ -201,7 +201,7 @@ const SettingsPage: React.FC = () => {
                     <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2, mb: 2 }}>
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Installazione App</Typography>
                         <Typography paragraph>
-                            Per un accesso più rapido, puoi installare questa applicazione sulla schermata principale del tuo dispositivo, come se fosse un'app nativa.
+                            Per un accesso più rapido, puoi installare questa applicazione sulla schermata principale del tuo dispositivo, come se fosse un&apos;app nativa.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Android:</Typography>
                         <Typography paragraph>
@@ -209,7 +209,7 @@ const SettingsPage: React.FC = () => {
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>iOS (iPhone/iPad):</Typography>
                         <Typography paragraph>
-                            Tocca il pulsante di condivisione (il quadrato con la freccia verso l'alto) nella barra di navigazione di Safari e scorri fino a trovare &quot;Aggiungi a Home&quot;.
+                            Tocca il pulsante di condivisione (il quadrato con la freccia verso l&apos;alto) nella barra di navigazione di Safari e scorri fino a trovare &quot;Aggiungi a Home&quot;.
                         </Typography>
                     </Box>
 
@@ -217,7 +217,7 @@ const SettingsPage: React.FC = () => {
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Funzionalità delle Pagine</Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Home:</Typography>
                         <Typography paragraph>
-                            La pagina principale da cui puoi navigare verso tutte le sezioni principali dell'app.
+                            La pagina principale da cui puoi navigare verso tutte le sezioni principali dell&apos;app.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Nuovo Report:</Typography>
                         <Typography paragraph>
@@ -233,18 +233,18 @@ const SettingsPage: React.FC = () => {
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Notifiche:</Typography>
                         <Typography paragraph>
-                            Leggi le comunicazioni importanti inviate dall'azienda.
+                            Leggi le comunicazioni importanti inviate dall&apos;azienda.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Check-in:</Typography>
                         <Typography paragraph>
-                            Registra l'inizio e la fine delle tue attività giornaliere.
+                            Registra l&apos;inizio e la fine delle tue attività giornaliere.
                         </Typography>
                     </Box>
 
                     <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2 }}>
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Modalità Offline</Typography>
                         <Typography paragraph>
-                            L'applicazione è progettata per funzionare anche senza una connessione a Internet. Puoi continuare a creare report e utilizzare le altre funzionalità. I dati verranno sincronizzati automaticamente non appena il dispositivo tornerà online.
+                            L&apos;applicazione è progettata per funzionare anche senza una connessione a Internet. Puoi continuare a creare report e utilizzare le altre funzionalità. I dati verranno sincronizzati automaticamente non appena il dispositivo tornerà online.
                         </Typography>
                     </Box>
                 </AccordionDetails>
@@ -291,7 +291,7 @@ const SettingsPage: React.FC = () => {
              <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
                 <Typography variant="h6" gutterBottom>Manutenzione App</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Se riscontri problemi o l'app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
+                    Se riscontri problemi o l&apos;app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
                     <strong>Attenzione: questa operazione può cancellare i dati non ancora sincronizzati con il server, come i report creati offline.</strong>
                 </Typography>
                 <ForceUpdateButton />
@@ -302,7 +302,7 @@ const SettingsPage: React.FC = () => {
                     APP TECNICI
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    V1.5
+                    V1.6
                 </Typography>
             </Box>
 

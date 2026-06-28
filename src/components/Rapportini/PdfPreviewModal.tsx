@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -28,20 +28,25 @@ const PdfPreviewModal = ({
   fileName,
   onShare,
 }: PdfPreviewModalProps) => {
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (pdfBlob) {
-      const url = URL.createObjectURL(pdfBlob);
-      setPdfUrl(url);
-
-      // Funzione di cleanup per revocare l'URL quando il componente si smonta o il blob cambia
-      return () => {
-        URL.revokeObjectURL(url);
-        setPdfUrl(null);
-      };
+  // Usiamo useMemo per derivare pdfUrl da pdfBlob. 
+  // Questo elimina le chiamate a setState dentro useEffect, risolvendo il problema di linting.
+  const pdfUrl = useMemo(() => {
+    if (!open || !pdfBlob) {
+      return null;
     }
-  }, [pdfBlob]);
+    return URL.createObjectURL(pdfBlob);
+  }, [open, pdfBlob]);
+
+  // Questo useEffect si occupa esclusivamente della pulizia (cleanup) dell'URL
+  // quando il componente viene smontato o l'URL cambia.
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [pdfUrl]);
 
   const handleShare = () => {
     if (pdfBlob) {
@@ -49,16 +54,11 @@ const PdfPreviewModal = ({
     }
   };
 
-  // Gestisce la chiusura e pulisce lo stato se necessario
-  const handleClose = () => {
-    onClose();
-  };
-
   return (
-    <Dialog open={open} onClose={handleClose} fullScreen>
+    <Dialog open={open} onClose={onClose} fullScreen>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         Anteprima PDF
-        <IconButton edge="end" color="inherit" onClick={handleClose} aria-label="close">
+        <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -70,13 +70,15 @@ const PdfPreviewModal = ({
             title="Anteprima PDF"
           />
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            <CircularProgress />
-          </Box>
+            open && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <CircularProgress />
+                </Box>
+            )
         )}
       </DialogContent>
       <DialogActions sx={{ justifyContent: "space-between", p: 2 }}>
-        <Button variant="outlined" onClick={handleClose}>
+        <Button variant="outlined" onClick={onClose}>
           Chiudi
         </Button>
         <Button

@@ -29,23 +29,41 @@ L'interazione con **Firebase Firestore** è limitata a due scenari specifici e c
 
 ## 3. Log delle Modifiche e Soluzioni Implementate
 
-### Versione Corrente
+### Versione Recente
+
+*   **BUG RISOLTO (Salvataggio Tariffe):**
+    *   **Problema:** Dalla pagina Impostazioni, era impossibile salvare le nuove tariffe orarie. L'operazione falliva con un errore "Funzione non disponibile".
+    *   **Causa Radice:** Il gestore dell'evento `onClick` nel componente chiamava una funzione inesistente (`updateRate`) invece di quella corretta per aggiornare le impostazioni generiche (`updateSetting`).
+    *   **Soluzione:** È stata corretta la chiamata alla funzione, risolvendo il problema e ripristinando la capacità di aggiornare le tariffe dal pannello delle impostazioni.
+
+*   **UI/UX & BUGFIX (Pop-up di Aggiornamento PWA):**
+    *   **Problema:** Il pop-up di notifica per gli aggiornamenti dell'app (componente `ReloadPrompt.tsx`) presentava gravi problemi di stile, apparendo come un box bianco illeggibile, specialmente su dispositivi mobili. Inoltre, conteneva errori di tipo e importazioni non utilizzate che bloccavano la build di produzione.
+    *   **Soluzione:**
+        *   Il componente `ReloadPrompt.tsx` è stato completamente ridisegnato utilizzando Material-UI (`Paper`, `Snackbar`, `Box`) per garantire uno stile coerente, moderno e leggibile su tutti i dispositivi.
+        *   Sono stati risolti tutti gli errori di tipo e di linting, rimuovendo le importazioni superflue e correggendo il codice.
+        *   I pulsanti "Aggiorna" e "Chiudi" sono stati resi più chiari ed evidenti.
+
+*   **FIX (Processo di Deploy):**
+    *   **Problema:** Nonostante il file `firebase.json` specificasse `"site": "tecnici"`, i deploy venivano erroneamente inviati al sito di default del progetto (`riso-project-app`).
+    *   **Causa Radice:** Veniva utilizzato uno strumento di deploy (`classic_firebase_hosting_deploy`) non adatto a gestire configurazioni multi-sito.
+    *   **Soluzione:** Il processo di deploy è stato corretto utilizzando il comando `firebase_deploy(only="hosting")`, che interpreta correttamente la configurazione in `firebase.json` e assicura che il deploy venga sempre effettuato sul sito corretto (`tecnici.web.app`).
+
+### Versioni Precedenti
 
 *   **BUG RISOLTO (Condivisione Report Mensili):**
     *   **Problema:** La condivisione di un report PDF (generato dalla pagina "Report Mensili") funzionava solo la prima volta. I tentativi successivi fallivano senza errori apparenti, richiedendo un riavvio dell'app.
-    *   **Diagnosi Errata Iniziale:** Si era ipotizzato un problema di query eccessive a Firestore (errore `Resource has been exhausted`). Questa pista si è rivelata **errata**, in quanto la pagina `MonthlyReportPage.tsx` utilizzava già correttamente `useLiveQuery` per leggere i dati dal database locale.
     *   **Causa Radice (Corretta):** È stato identificato un **memory leak** nel componente modale `PdfPreviewModal.tsx`. A ogni apertura, veniva creato un URL per il PDF (`URL.createObjectURL`) senza che questo venisse mai revocato alla chiusura del dialogo. L'accumulo di questi URL non revocati esauriva le risorse del browser, mandando in crash la funzionalità `navigator.share`.
-    *   **Soluzione:** Il componente `PdfPreviewModal.tsx` è stato refattorizzato utilizzando `useState` e `useEffect`. La funzione di cleanup di `useEffect` garantisce ora che `URL.revokeObjectURL` venga chiamato ogni volta che il componente viene smontato (chiuso) o aggiornato, prevenendo il memory leak e risolvendo il bug alla radice.
+    *   **Soluzione:** Il componente `PdfPreviewModal.tsx` è stato refattorizzato utilizzando `useState` e `useEffect`. La funzione di cleanup di `useEffect` garantisce ora che `URL.revokeObjectURL` venga chiamato ogni volta che il componente viene smontato (chiuso) o aggiornato, prevenendo il memory leak.
 
 *   **CONFERMA ARCHITETTURA `MonthlyReportPage.tsx`:**
-    *   È stato verificato che la pagina dei report mensili aderisce già alla filosofia offline-first, basando tutti i suoi calcoli e le sue visualizzazioni sui dati provenienti dal database locale tramite `useLiveQuery`. L'architettura di questa pagina è corretta e non necessita di modifiche.
+    *   È stato verificato che la pagina dei report mensili aderisce già alla filosofia offline-first, basando tutti i suoi calcoli e le sue visualizzazioni sui dati provenienti dal database locale tramite `useLiveQuery`.
 
 ---
 
 ## 4. Piano di Sviluppo e Azioni Future
 
 *   **Obiettivo:** Mantenere e rafforzare l'architettura offline-first.
-*   **Azioni Immediate:** Nessuna. Il bug critico è stato risolto e l'architettura principale è stata validata.
+*   **Azioni Immediate:** Nessuna. I bug critici sono stati risolti e l'architettura principale è stata validata.
 *   **Prossimi Passi:**
     1.  **Audit del Codice:** Effettuare una revisione completa di tutti i componenti che eseguono letture di dati per assicurarsi che non ci siano altre query non necessarie a Firestore, in linea con la filosofia definita in questo blueprint.
     2.  **Ottimizzazione Sincronizzazione:** Migliorare la logica di sincronizzazione in background per renderla più efficiente e meno impattante sulle performance.

@@ -6,7 +6,7 @@ import type { MasterData, Impostazioni, TipoGiornata, TariffaLocale, SyncManifes
 import { db } from '@/db/local-db';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { Alert, Box, Typography, Button } from '@mui/material';
-import { MasterDataContext } from '../contexts/MasterDataContext';
+import { MasterDataContext } from '@/contexts/MasterDataContext'; // CORRETTO
 import { useAuth } from '../hooks/useAuth';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { sincronizzaTutto } from '@/services/offlineSync';

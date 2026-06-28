@@ -48,30 +48,39 @@ export const syncRapportiniFromFirebase = async (tecnicoId: string) => {
   if (!navigator.onLine) return;
 
   try {
-    // 1. Leggi l'ultimo timestamp di sincronizzazione da Dexie
     const lastSyncState = await db.syncState.get('rapportini');
-    const lastSyncTimestamp = lastSyncState ? lastSyncState.timestamp : new Date(0); // Usa epoch se non ha mai sincronizzato
+    const lastSyncTimestamp = lastSyncState ? lastSyncState.timestamp : new Date(0);
 
-    console.log(`DOWNLOAD_SYNC (INCREMENTALE): Sincronizzo rapportini modificati dopo ${lastSyncTimestamp.toISOString()}`);
+    console.log(`DOWNLOAD_SYNC: Sincronizzo rapportini per ${tecnicoId} modificati dopo ${lastSyncTimestamp.toISOString()}`);
 
-    // 2. Costruisci le query con il filtro temporale basato su 'updatedAt'
     const rapportiniCollection = collection(firestoreDb, 'rapportini');
+    
+    // Query 1: Rapportini dove l'utente è il creatore (con filtro data)
     const q1 = query(rapportiniCollection, where('tecnicoId', '==', tecnicoId), where('updatedAt', '>', lastSyncTimestamp));
-    const q2 = query(rapportiniCollection, where('presenze', 'array-contains', tecnicoId), where('updatedAt', '>', lastSyncTimestamp));
+    
+    // Query 2: Rapportini dove l'utente è partecipante (SENZA filtro data - verrà applicato nel client)
+    const q2 = query(rapportiniCollection, where(`dettaglioOreTecnici.${tecnicoId}`, '!=', null));
 
     const [snapshot1, snapshot2] = await Promise.all([getDocs(q1), getDocs(q2)]);
     const rapportiniMap = new Map<string, Rapportino>();
 
-    const processSnapshot = (snapshot: any) => {
+    const processSnapshot = (snapshot: any, filterByDate: boolean) => {
       snapshot.docs.forEach((doc: any) => {
         const data = doc.data();
+        const updatedAt = safeConvertToDate(data.updatedAt);
+
+        // Applica il filtro data nel client se richiesto (per la query q2)
+        if (filterByDate && updatedAt <= lastSyncTimestamp) {
+            return; // Salta questo documento perché non è stato modificato di recente
+        }
+
         const rapportinoProcessato: Rapportino = {
           ...data,
           id: doc.id,
           data: safeConvertToDate(data.data),
           oraInizio: data.oraInizio ? safeConvertToDate(data.oraInizio) : undefined,
           oraFine: data.oraFine ? safeConvertToDate(data.oraFine) : undefined,
-          updatedAt: data.updatedAt ? safeConvertToDate(data.updatedAt) : new Date(),
+          updatedAt: updatedAt,
           createdAt: data.createdAt ? safeConvertToDate(data.createdAt) : new Date(),
           isOffline: false,
         };
@@ -79,25 +88,26 @@ export const syncRapportiniFromFirebase = async (tecnicoId: string) => {
       });
     };
 
-    processSnapshot(snapshot1);
-    processSnapshot(snapshot2);
+    // Processa i risultati di q1 (il filtro data è già nella query)
+    processSnapshot(snapshot1, false);
+    // Processa i risultati di q2 (il filtro data viene applicato qui)
+    processSnapshot(snapshot2, true);
 
     if (rapportiniMap.size > 0) {
         const allRapportini = Array.from(rapportiniMap.values());
-        console.log(`DOWNLOAD_SYNC (INCREMENTALE): Trovati ${allRapportini.length} rapportini nuovi o modificati. Aggiorno cache...`);
+        console.log(`DOWNLOAD_SYNC: Trovati ${allRapportini.length} rapportini totali da aggiornare. Aggiorno cache...`);
         await db.rapportini.bulkPut(allRapportini);
     } else {
-        console.log("DOWNLOAD_SYNC (INCREMENTALE): Nessun rapportino nuovo o modificato da scaricare.");
+        console.log("DOWNLOAD_SYNC: Nessun rapportino nuovo o modificato da scaricare.");
     }
 
-    // 3. Aggiorna il timestamp di sincronizzazione all'ora attuale, anche se non sono stati trovati documenti,
-    // per evitare di ricontrollare lo stesso periodo di tempo inutilmente.
     await db.syncState.put({ id: 'rapportini', timestamp: new Date() });
 
   } catch (error) {
-    console.error("DOWNLOAD_SYNC (INCREMENTALE): Errore durante il download dei rapportini:", error);
+    console.error("DOWNLOAD_SYNC: Errore durante il download dei rapportini:", error);
   }
 };
+
 
 // --- FUNZIONE DI UPLOAD: DA DEXIE A FIRESTORE (INVARIATA) ---
 
@@ -182,7 +192,6 @@ export const sincronizzaTutto = async (tecnicoId: string) => {
 
     isSyncing = true;
     try {
-        // Ora invoca la nuova funzione di sync incrementale
         await syncRapportiniFromFirebase(tecnicoId);
         await syncUploadsToFirebase();
     } catch (error) {

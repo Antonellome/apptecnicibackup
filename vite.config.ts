@@ -50,7 +50,7 @@ export default defineConfig({
   optimizeDeps: {
     include: ['trim-canvas'],
   },
-  // @ts-expect-error
+  // @ts-expect-error: Vitest requires this configuration to be in a JS file, but TypeScript expects it in a TS file.
   test: {
     globals: true,
     environment: 'jsdom',

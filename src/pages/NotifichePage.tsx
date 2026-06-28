@@ -5,23 +5,23 @@ import {
     CircularProgress,
     Alert,
     Button,
-    Grid,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useAuth } from '@/hooks/useAuth';
-import { syncNotifiche, marcaNotificaComeLetta } from '@/services/notification-service';
+import { syncNotifiche, marcaNotificaComeLetta, eliminaNotifica } from '@/services/notification-service'; // Aggiunto importa eliminaNotifica
 import { NotificationItem } from '@/components/notifiche/NotificationItem';
 import { db } from '@/db/local-db';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 const NotifichePage: React.FC = () => {
     const { userProfile } = useAuth();
-    const [loading, setLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const notifiche = useLiveQuery(() => db.notifiche.orderBy('createdAt').reverse().toArray(), []);
+    const notifiche = useLiveQuery(() => db.notifiche.orderBy('createdAt').reverse().toArray());
 
     const handleSync = useCallback(async () => {
-        setLoading(true);
+        setIsSyncing(true);
         setError(null);
         try {
             const success = await syncNotifiche();
@@ -32,22 +32,31 @@ const NotifichePage: React.FC = () => {
             setError("Errore critico durante la sincronizzazione.");
             console.error(err);
         } finally {
-            setLoading(false);
+            setIsSyncing(false);
         }
     }, []);
 
     useEffect(() => {
         handleSync();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [handleSync]);
 
-    const handleMarkAsRead = async (id: string) => {
+    const handleMarkAsRead = useCallback(async (id: string) => {
         try {
             await marcaNotificaComeLetta(id);
         } catch (error) {
             console.error("Impossibile segnare la notifica come letta:", error);
         }
-    };
+    }, []);
+
+    // Funzione per gestire l'eliminazione, passata al componente figlio
+    const handleDelete = useCallback(async (id: string) => {
+        try {
+            // La reattività di useLiveQuery rimuoverà l'elemento dalla UI
+            await eliminaNotifica(id);
+        } catch (error) {
+            console.error("Impossibile eliminare la notifica:", error);
+        }
+    }, []);
 
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
@@ -60,29 +69,30 @@ const NotifichePage: React.FC = () => {
 
             <Grid container sx={{ mb: 2 }} justifyContent="flex-end">
                 <Grid>
-                    <Button onClick={handleSync} disabled={loading} variant="outlined">
-                        {loading ? <CircularProgress size={24} /> : 'Aggiorna'}
+                    <Button onClick={handleSync} disabled={isSyncing} variant="outlined">
+                        {isSyncing ? <CircularProgress size={24} /> : 'Aggiorna'}
                     </Button>
                 </Grid>
             </Grid>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-            {loading && !notifiche ? (
+            {notifiche === undefined ? (
                 <Grid container justifyContent="center" alignItems="center" sx={{ height: '50vh' }}>
                     <CircularProgress />
                 </Grid>
-            ) : notifiche && notifiche.length === 0 ? (
+            ) : notifiche.length === 0 ? (
                 <Grid container justifyContent="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">Non ci sono notifiche per te.</Typography>
                 </Grid>
             ) : (
                 <Grid container spacing={2} sx={{ width: '100%' }}>
-                    {notifiche?.map((notification) => (
+                    {notifiche.map((notification) => (
                         <Grid size={12} key={notification.id}>
                             <NotificationItem
                                 notification={notification}
-                                onMarkAsRead={() => handleMarkAsRead(notification.id)}
+                                onMarkAsRead={handleMarkAsRead}
+                                onDelete={handleDelete} // Passiamo la nuova funzione
                             />
                         </Grid>
                     ))}

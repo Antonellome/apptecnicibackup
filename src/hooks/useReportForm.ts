@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { isSameMonth, subMonths, format, eachDayOfInterval, startOfDay } from 'date-fns';
 import { doc, getDoc, addDoc, collection, runTransaction, writeBatch, Timestamp } from 'firebase/firestore';
@@ -118,6 +118,8 @@ export const useReportForm = () => {
     const [firmaFirmatarioSocieta, setFirmaFirmatarioSocieta] = useState('');
     const [firmaVettoriale, setFirmaVettoriale] = useState<string | undefined>(undefined);
 
+    const populatedReportIdRef = useRef<string | null>(null);
+
     const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === loggedInTecnicoId), [tecnici, loggedInTecnicoId]);
 
     const getVeicoloLabel = useCallback((veicolo: Veicolo | undefined) => {
@@ -158,13 +160,16 @@ export const useReportForm = () => {
 
     useEffect(() => {
         const initializeForm = async () => {
-            if (!isEditMode && tecnicoScrivente) {
+            if (!isEditMode && tecnicoScrivente && populatedReportIdRef.current !== 'new') {
                 const nomeTecnico = `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}`.trim();
                 setDettaglioOre([createInitialDettaglio(tecnicoScrivente.id, nomeTecnico)]);
                 setPageLoading(false);
+                populatedReportIdRef.current = 'new';
             }
         };
-        initializeForm();
+        if (!isEditMode) {
+            initializeForm();
+        }
     }, [isEditMode, tecnicoScrivente]);
 
     useEffect(() => {
@@ -197,6 +202,8 @@ export const useReportForm = () => {
 
         const loadReportData = async () => {
             if (!isEditMode || !reportId || collectionsLoading) return;
+            if (populatedReportIdRef.current === reportId) return;
+
             setPageLoading(true);
             try {
                 let reportData: Rapportino | null = null;
@@ -231,6 +238,7 @@ export const useReportForm = () => {
                         setIsReadOnly(true);
                         setLockReason("Questo report non è modificabile perché appartiene a un mese precedente.");
                     }
+                    populatedReportIdRef.current = reportId;
                 } else {
                     showSnackbar("Rapportino non trovato.", "error");
                     navigate('/lista-report');
@@ -242,20 +250,10 @@ export const useReportForm = () => {
                 setPageLoading(false);
             }
         };
-
-        const runEffect = async () => {
-            if (isEditMode) {
-                await loadReportData();
-            } else {
-                setPageLoading(false);
-            }
-        };
-        runEffect();
+        if(isEditMode) {
+            loadReportData();
+        }
     }, [reportId, isEditMode, isOfflineMode, collectionsLoading, loggedInTecnicoId, navigate, showSnackbar, tecnici, tipiGiornata]);
-
-    useEffect(() => {
-        return () => { if (pdfUrl) { URL.revokeObjectURL(pdfUrl); } };
-    }, [pdfUrl]);
 
     const handleMultiDayToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
         const checked = event.target.checked;
@@ -314,14 +312,26 @@ export const useReportForm = () => {
     };
 
     const handleAltriTecniciChange = (_: React.SyntheticEvent, nuoviTecniciSelezionati: Tecnico[]) => {
-        const scrivente = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
-        if (!scrivente) return;
-        const baseDetail = isLavorativo ? scrivente : undefined;
-        const nuoviDettagli = nuoviTecniciSelezionati.map(t => {
-            const existingDetail = dettaglioOre.find(d => d.tecnicoId === t.id);
-            return existingDetail || createInitialDettaglio(t.id, `${t.cognome} ${t.nome}`.trim(), baseDetail);
+        const scriventeDettaglioTemplate = dettaglioOre.find(d => d.tecnicoId === loggedInTecnicoId);
+        if (!scriventeDettaglioTemplate) return;
+
+        const baseDetail = isLavorativo ? scriventeDettaglioTemplate : undefined;
+
+        setDettaglioOre(dettagliPrecedenti => {
+            const scriventeCorrente = dettagliPrecedenti.find(d => d.tecnicoId === loggedInTecnicoId);
+
+            if (!scriventeCorrente) {
+                console.error("Tecnico scrivente non trovato nello stato precedente. L'aggiornamento è stato annullato per prevenire la perdita di dati.");
+                return dettagliPrecedenti;
+            }
+
+            const altriTecniciDettagli = nuoviTecniciSelezionati.map(tecnicoSelezionato => {
+                const existingDetail = dettagliPrecedenti.find(d => d.tecnicoId === tecnicoSelezionato.id);
+                return existingDetail || createInitialDettaglio(tecnicoSelezionato.id, `${tecnicoSelezionato.cognome} ${tecnicoSelezionato.nome}`.trim(), baseDetail);
+            });
+
+            return [scriventeCorrente, ...altriTecniciDettagli];
         });
-        setDettaglioOre([scrivente, ...nuoviDettagli]);
     };
 
     const removeTecnico = (tecnicoIdToRemove: string) => {
@@ -363,7 +373,7 @@ export const useReportForm = () => {
     };
 
     const salvaOAccodaRapportino = async (options: { navigateOnSuccess: boolean } = { navigateOnSuccess: true }): Promise<string | null> => {
-        if (!loggedInTecnicoId || !dataInizio) {
+        if (!tecnicoScrivente || !dataInizio) {
             showSnackbar("Errore: Utente non autenticato o data mancante.", "error");
             return null;
         }
@@ -420,8 +430,8 @@ export const useReportForm = () => {
     };
 
     const handleMultiDaySave = async () => {
-        if (isSaving) return;
-        if (!dataInizio || !dataFine || !tipoGiornataId || !loggedInTecnicoId) {
+        if (isSaving || !tecnicoScrivente) return;
+        if (!dataInizio || !dataFine || !tipoGiornataId ) {
             showSnackbar("Per la creazione multipla, sono necessarie le date di inizio e fine e il tipo di giornata.", "warning");
             return;
         }
@@ -434,14 +444,14 @@ export const useReportForm = () => {
                 nome: `Rapportino del ${format(giorno, 'dd/MM/yyyy')} - ${nomeTipoGiornata}`,
                 data: giorno,
                 oreLavoro: 8,
-                tecnicoId: loggedInTecnicoId,
+                tecnicoId: tecnicoScrivente.id,
                 tipoGiornataId,
                 trasfertaId: undefined,
                 oraInizio: '', 
                 oraFine: '', 
                 pausa: 0, 
                 dettaglioOreTecnici: [{
-                    tecnicoId: loggedInTecnicoId,
+                    tecnicoId: tecnicoScrivente.id,
                     ore: 8,
                     isManual: true,
                     nome: `${tecnicoScrivente?.cognome || ''} ${tecnicoScrivente?.nome || ''}`.trim(),
@@ -449,7 +459,7 @@ export const useReportForm = () => {
                     oraFine: '', 
                     pausa: 0, 
                 }],
-                presenze: [loggedInTecnicoId],
+                presenze: [tecnicoScrivente.id],
                 veicoloId: 'Nessuno',
                 naveId: 'Nessuna',
                 luogoId: 'Nessuno',
@@ -491,7 +501,10 @@ export const useReportForm = () => {
     };
 
     const proceedToSave = async () => {
-        if (isSaving) return;
+        if (isSaving || !tecnicoScrivente) {
+            showSnackbar("Dati utente non ancora caricati. Riprova tra un istante.", "warning");
+            return;
+        }
         if (isMultiDay) {
             await handleMultiDaySave();
         } else {
@@ -500,7 +513,6 @@ export const useReportForm = () => {
     };
 
     const handleSave = async () => {
-        if (isSaving) return;
         if (!isEditMode && firmaVettoriale) {
             setIsConfirmSaveDialogOpen(true);
             return;
@@ -515,28 +527,32 @@ export const useReportForm = () => {
 
     const handleShare = async () => {
         setIsSharing(true);
-        setIsPdfPreviewOpen(true);
-        if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+        setIsGeneratingPdf(true);
         try {
             const reportData = getFullReportData();
-            if (!reportData) throw new Error("Dati del report invalidi per la generazione del PDF.")
+            if (!reportData) throw new Error("Dati del report invalidi per la generazione del PDF.");
             if (!masterData) throw new Error("Dati anagrafici non disponibili per la generazione del PDF.");
             const reportDataWithId = { ...reportData, id: reportId || 'temp-id' };
-            const pdfBlob = await generateRapportinoPDF(reportDataWithId, masterData as MasterData);
-            const newPdfUrl = URL.createObjectURL(pdfBlob);
-            setPdfUrl(newPdfUrl);
+            const pdfDataUri = await generateRapportinoPDF(reportDataWithId, masterData as MasterData);
+            setPdfUrl(pdfDataUri);
+            setIsGeneratingPdf(false);
+            setIsPdfPreviewOpen(true);
         } catch (error) {
             console.error("Errore durante la generazione PDF per condivisione: ", error);
             showSnackbar("Errore durante la generazione del PDF.", "error");
             setIsPdfPreviewOpen(false);
-        } finally {
-            setIsGeneratingPdf(false);
             setIsSharing(false);
         }
     };
+
+    const handleClosePdfPreview = () => {
+        setIsPdfPreviewOpen(false);
+        setIsSharing(false);
+        setPdfUrl(null); 
+    };
     
     const handleSaveAndShare = async () => {
-        if (isSaving) return;
+        if (isSaving || isSharing) return;
         if (isMultiDay) {
             showSnackbar("La funzione 'Salva e Condividi' non è disponibile per la creazione di più giorni.", "warning");
             return;
@@ -549,20 +565,16 @@ export const useReportForm = () => {
 
     const handleFinalShare = async () => {
         if (!pdfUrl || !dataInizio) return;
-        setIsSharing(true);
         try {
-            const response = await fetch(pdfUrl);
-            const blob = await response.blob();
             const fileName = `Rapportino_${format(dataInizio, 'dd-MM-yyyy')}.pdf`;
-            await shareOrDownload(blob, fileName);
-            setIsPdfPreviewOpen(false);
+            await shareOrDownload(pdfUrl, fileName);
         } catch (error) {
             console.error("Errore di condivisione finale: ", error);
             if (!(error instanceof DOMException && error.name === 'AbortError')) {
                 showSnackbar("Impossibile condividere il file.", "error");
             }
         } finally {
-            setIsSharing(false);
+            handleClosePdfPreview();
         }
     };
 
@@ -600,7 +612,7 @@ export const useReportForm = () => {
         handleAltriTecniciChange, handleOreUpdate, handleScriventeOreUpdate, removeTecnico, handleOpenModal, handleSave,
         handleSaveAndShare, handleShare, handleCancel, handleOpenSignatureModal, isModalOpen, handleCloseModal,
         handleSaveFromModal, editingTecnico, tempDettaglioOre, setTempDettaglioOre, isSignatureModalOpen,
-        setIsSignatureModalOpen, handleSaveSignature, isPdfPreviewOpen, setIsPdfPreviewOpen, pdfUrl, handleFinalShare,
+        setIsSignatureModalOpen, handleSaveSignature, isPdfPreviewOpen, handleClosePdfPreview, pdfUrl, handleFinalShare,
         isConfirmSaveDialogOpen, setIsConfirmSaveDialogOpen, handleConfirmSave, disableActions, sortedVeicoli, sortedNavi, 
         sortedLuoghi, getVeicoloLabel, tipiGiornataLavorativi, tipiGiornataTrasferta
     };
