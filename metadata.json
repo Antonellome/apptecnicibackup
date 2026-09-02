@@ -1,0 +1,6 @@
+{
+  "name": "App Tecnici e Presenze",
+  "description": "Applicazione Web per la gestione delle presenze e la compilazione dei rapportini tecnici.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

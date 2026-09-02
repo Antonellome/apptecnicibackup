@@ -1,0 +1,264 @@
+
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Rapportino, MasterData } from '@/models/definitions';
+import { format } from 'date-fns';
+import { it } from 'date-fns/locale';
+
+// --- Funzione per processare l'immagine della firma per il PDF ---
+const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+        if (!whiteSignatureDataUrl || typeof whiteSignatureDataUrl !== 'string') {
+            console.error("Signature data is invalid or missing.");
+            return resolve(null);
+        }
+
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.error('Failed to get canvas context');
+                return resolve(null);
+            }
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            try {
+                // 1. Colora la firma di nero
+                ctx.drawImage(img, 0, 0);
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 2. Rendi il tratto più spesso
+                const thickness = 0.5;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.drawImage(canvas, thickness, 0);
+                ctx.drawImage(canvas, -thickness, 0);
+                ctx.drawImage(canvas, 0, thickness);
+                ctx.drawImage(canvas, 0, -thickness);
+
+                // 3. Aggiungi uno sfondo bianco
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 4. Ripristina e restituisci
+                ctx.globalCompositeOperation = 'source-over';
+                resolve(canvas.toDataURL('image/png'));
+            } catch (error) {
+                console.error("Error processing signature image:", error);
+                resolve(null);
+            }
+        };
+        img.onerror = (err) => {
+            console.error("Failed to load signature image:", err);
+            resolve(null);
+        };
+        img.src = whiteSignatureDataUrl;
+    });
+};
+
+
+// --- Funzione per generare il PDF --- 
+export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: MasterData): Promise<Blob> => {
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const margin = 15;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const contentWidth = pageWidth - (margin * 2);
+    let cursorY = margin;
+
+    // --- DEFINIZIONE COLORI ---
+    const COLOR_BLUE = '#0D47A1';
+    const COLOR_GREY = '#424242';
+    const COLOR_BLACK = '#000000';
+
+    // --- FUNZIONI HELPER ---
+    const addSeparatorLine = (y: number) => {
+        doc.setDrawColor(COLOR_BLUE);
+        doc.setLineWidth(0.5);
+        doc.line(margin, y, pageWidth - margin, y);
+        return y + 5;
+    };
+
+    const addText = (text: string | string[], x: number, y: number, options: any = {}) => {
+        doc.text(text, x, y, options);
+        const textHeight = Array.isArray(text) ? text.length * 4 : 5;
+        return y + textHeight;
+    };
+    
+    // --- 1. INTESTAZIONE AZIENDALE ---
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(COLOR_BLUE);
+    cursorY = addText('Tecnologie Industriali Navali S.R.L.', pageWidth / 2, cursorY, { align: 'center' }) + 3;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(COLOR_BLACK);
+    const companyInfo = [
+        'Sede Legale: Via Guicciardini, 52-54 - cap 98121 Messina',
+        'Tel 090358694 - cell. +39 3401649518 / +39 3460227234',
+        'Cod. Fisc. e Part. I.V.A. : 02962480832 - e-mail: tin.srl2008@alice.it',
+        'Impianti elettrici di bordo e di terra - Meccanica industriale e navale.'
+    ];
+    cursorY = addText(companyInfo, pageWidth / 2, cursorY, { align: 'center' });
+    cursorY += 2;
+
+    // --- 2. PRIMO SEPARATORE E TITOLO ---
+    cursorY = addSeparatorLine(cursorY);
+    cursorY += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(COLOR_BLUE);
+    cursorY = addText('RAPPORTO DI INTERVENTO TECNICO', pageWidth / 2, cursorY, { align: 'center' });
+    cursorY += 5;
+    
+    // --- 3. DATI INIZIALI ---
+    const { navi = [], luoghi = [], veicoli = [] } = masterData;
+    
+    let dateObject: Date | null = null;
+    if (rapportino.data) {
+        // Se è un Timestamp di Firestore, avrà un metodo toDate.
+        if (typeof (rapportino.data as any).toDate === 'function') {
+            dateObject = (rapportino.data as any).toDate();
+        } 
+        // Altrimenti, presumiamo sia un oggetto Date di JS o una stringa/numero convertibile.
+        else {
+            dateObject = new Date(rapportino.data as any);
+        }
+    }
+    const dataRapportino = dateObject ? format(dateObject, 'dd MMMM yyyy', { locale: it }) : 'N/D';
+
+    const nave = rapportino.naveId === 'Nessuna' 
+        ? 'Nessuna' 
+        : navi.find(n => n.id === rapportino.naveId)?.nome || rapportino.naveId || '';
+
+    const luogo = rapportino.luogoId === 'Nessuno'
+        ? 'Nessuno'
+        : luoghi.find(l => l.id === rapportino.luogoId)?.nome || rapportino.luogoId || '';
+
+    const veicoloData = veicoli.find(v => v.id === rapportino.veicoloId);
+    const veicolo = rapportino.veicoloId === 'Nessuno' 
+        ? 'Nessuno' 
+        : (veicoloData ? `${veicoloData.marca} ${veicoloData.modello} - ${veicoloData.targa}` : rapportino.veicoloId || '');
+
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(COLOR_BLACK);
+
+    const initialData = [
+        { label: 'Data', value: dataRapportino },
+        { label: 'Nave/Impianto', value: nave },
+        { label: 'Luogo', value: luogo },
+        { label: 'Veicolo', value: veicolo },
+    ];
+    initialData.forEach(item => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${item.label}:`, margin, cursorY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(item.value || '', margin + 40, cursorY);
+        cursorY += 7;
+    });
+
+    // --- 4. SECONDO SEPARATORE E TABELLA TECNICI ---
+    cursorY = addSeparatorLine(cursorY) + 5;
+    
+    autoTable(doc, {
+        startY: cursorY,
+        head: [[{
+            content: 'Tecnici Intervenuti',
+            styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' }
+        }, {
+            content: 'Orari',
+            styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' }
+        }]],
+        body: (rapportino.dettaglioOreTecnici || []).map(dett => {
+            const tecnico = masterData.tecnici.find(t => t.id === dett.tecnicoId);
+            const nomeTecnico = tecnico ? `${tecnico.cognome} ${tecnico.nome}` : 'Sconosciuto';
+            
+            let orario;
+            if (dett.isManual || !dett.oraInizio || !dett.oraFine) {
+                orario = `${(dett.ore || 0).toFixed(2)} ore`;
+            } else {
+                const pausaText = (dett.pausa || 0) > 0 ? ` (Pausa: ${dett.pausa} min)` : '';
+                orario = `${dett.oraInizio} - ${dett.oraFine}${pausaText}`;
+            }
+            
+            return [nomeTecnico, orario];
+        }),
+        theme: 'grid',
+        didDrawPage: (data) => {
+            if (data.cursor) {
+                cursorY = data.cursor.y;
+            }
+        }
+    });
+    cursorY = (doc as any).lastAutoTable.finalY + 5;
+
+    // --- 5. TERZO SEPARATORE E DETTAGLI LAVORO ---
+    cursorY = addSeparatorLine(cursorY) + 5;
+
+    const addWorkDetail = (label: string, content: string | undefined | null) => {
+        if (cursorY > 250) { doc.addPage(); cursorY = margin; }
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(COLOR_GREY);
+        doc.text(label, margin, cursorY);
+        cursorY += 5;
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(COLOR_BLACK);
+        const lines = doc.splitTextToSize(content || '', contentWidth);
+        doc.text(lines, margin, cursorY);
+        cursorY += (lines.length * 4) + 5;
+    };
+
+    addWorkDetail('Breve Descrizione Lavoro', rapportino.descrizioneBreve);
+    addWorkDetail('Materiali Impiegati', rapportino.materialiImpiegati);
+    addWorkDetail('Lavoro Eseguito', rapportino.lavoroEseguito);
+
+    // --- 6. QUARTO SEPARATORE E SEZIONE FIRMA ---
+    const firmaSectionStartY = Math.max(cursorY, doc.internal.pageSize.getHeight() - 75);
+    cursorY = addSeparatorLine(firmaSectionStartY);
+    cursorY += 8;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(COLOR_BLACK);
+
+    // Colonna 1: Firma Cliente
+    const col1X = margin;
+    let col1Y = cursorY;
+    doc.text('Per accettazione (firma del responsabile)', col1X, col1Y);
+    col1Y += 10;
+    const nomeFirmatario = rapportino.firmaFirmatarioNome || '_________________';
+    const societaFirmatario = rapportino.firmaFirmatarioSocieta || '_________________';
+    doc.text(`Nome Firmatario: ${nomeFirmatario}`, col1X, col1Y);
+    col1Y += 7;
+    doc.text(`Società: ${societaFirmatario}`, col1X, col1Y);
+    col1Y += 5;
+    if (rapportino.firmaVettoriale) {
+        const processedSignature = await processSignatureForPdf(rapportino.firmaVettoriale);
+        if (processedSignature) {
+            doc.addImage(processedSignature, 'PNG', col1X, col1Y, 50, 20);
+        }
+    }
+
+    // Colonna 2: Firma Tecnico
+    const col2X = pageWidth / 2 + 15;
+    let col2Y = cursorY;
+    const tecnicoScrivente = masterData.tecnici.find(t => t.id === rapportino.tecnicoId);
+    const nomeTecnicoScrivente = tecnicoScrivente ? `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}` : '';
+    doc.text('Firma Tecnico Responsabile', col2X, col2Y);
+    col2Y += 10;
+    doc.text(nomeTecnicoScrivente, col2X, col2Y);
+    
+    // --- FINE E OUTPUT ---
+    return doc.output('blob');
+};

@@ -1,0 +1,28 @@
+{
+  "appName": "TECNICI",
+  "appType": "frontend",
+  "description": "Applicazione React per i tecnici sul campo. Gestisce la visualizzazione, la creazione e la modifica dei rapportini e dei check-in. La logica di business e i permessi sono gestiti dal backend MASTER.",
+  "techStack": [
+    "React",
+    "Vite",
+    "TypeScript",
+    "MUI",
+    "Dexie",
+    "Vitest",
+    "Firebase-Auth",
+    "React-Router"
+  ],
+  "counterparts": [
+    {
+      "appName": "MASTER",
+      "appType": "backend"
+    }
+  ],
+  "keyFiles": {
+    "entryPoint": "src/main.jsx",
+    "packageJson": "package.json",
+    "viteConfig": "vite.config.ts",
+    "tsconfig": "tsconfig.json",
+    "blueprint": "blueprint.md"
+  }
+}
