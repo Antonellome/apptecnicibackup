@@ -45,36 +45,36 @@ const ReportFormPage: React.FC = () => {
                     {form.state.isReadOnly && form.state.lockReason && <Alert severity="info" sx={{ mb: 2 }}>{form.state.lockReason}</Alert>}
 
                     <Section title="Dati Principali">
-                        <Grid size={12}>
+                        <Grid item xs={12}>
                             {!form.isEditMode && (
                                 <FormControlLabel control={<Switch checked={form.state.isMultiDay} onChange={form.handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={form.isEditMode || form.disableActions} />
                             )}
                         </Grid>
-                        <Grid size={{ xs: 12, md: form.state.isMultiDay ? 6 : 4 }}>
+                        <Grid item xs={12} md={form.state.isMultiDay ? 6 : 4}>
                              <DatePicker label={form.state.isMultiDay ? "Dal" : "Data"} value={form.state.data} onChange={(date) => form.setField('data', date)} disabled={form.disableActions} sx={{width: '100%'}} />
                         </Grid>
                         {form.state.isMultiDay && (
-                            <Grid size={{ xs: 12, md: 4 }}>
+                            <Grid item xs={12} md={4}>
                                 <DatePicker label="Al" value={form.state.dataFine} onChange={(date) => form.setField('dataFine', date)} disabled={form.disableActions} sx={{width: '100%'}} minDate={form.state.data || undefined} />
                             </Grid>
                         )}
-                         <Grid size={{ xs: 12, md: form.state.isMultiDay ? 12 : 4 }}>
+                         <Grid item xs={12} md={form.state.isMultiDay ? 12 : 4}>
                             <TextField label="Tecnico Responsabile" value={form.scriventeDettaglio?.nome || 'Caricamento...'} fullWidth disabled />
                         </Grid>
-                        <Grid size={{ xs: 12, md: 4 }}>
+                        <Grid item xs={12} md={4}>
                             <TextField label="Ordine di Lavoro" value={form.state.ordineLavoro || ''} onChange={(e) => form.setField('ordineLavoro', e.target.value)} fullWidth />
                         </Grid>
-                         <Grid size={{ xs: 12, md: 8 }}>
+                         <Grid item xs={12} md={8}>
                            <FormControl fullWidth required disabled={form.disableActions}>
                                 <InputLabel id="tipo-giornata-label">Tipo Giornata</InputLabel>
                                 <Select
                                     labelId="tipo-giornata-label"
                                     id="tipo-giornata-select"
-                                    value={form.state.tipoGiornataId}
+                                    value={form.state.tipoGiornataId || ''}
                                     label="Tipo Giornata"
                                     onChange={e => form.handleTipoGiornataChange(e.target.value as string)}
                                 >
-                                    {form.tipiGiornataFiltrati.map((t: any) => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
+                                    {form.tipiGiornataFiltrati.map((t: any) => <MenuItem key={t.id} value={t.id}>{t.nome || ''}</MenuItem>)}
                                 </Select>
                             </FormControl>
                             <FormControlLabel
@@ -88,11 +88,11 @@ const ReportFormPage: React.FC = () => {
                                     <Select
                                         labelId="tipo-trasferta-label"
                                         id="tipo-trasferta-select"
-                                        value={form.state.trasfertaId}
+                                        value={form.state.trasfertaId || ''}
                                         label="Tipo di Trasferta"
                                         onChange={e => form.setField('trasfertaId', e.target.value as string)}
                                     >
-                                        {form.tipiGiornataTrasferta?.map((t: any) => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
+                                        {form.tipiGiornataTrasferta?.map((t: any) => <MenuItem key={t.id} value={t.id}>{t.nome || ''}</MenuItem>)}
                                     </Select>
                                 </FormControl>
                             )}
@@ -103,11 +103,11 @@ const ReportFormPage: React.FC = () => {
                         <>
                             <Section title="Tecnici Coinvolti">
                                 {form.scriventeDettaglio && (
-                                    <Grid size={12}>
+                                    <Grid item xs={12}>
                                         <OreLavoroSingoloTecnico key={form.scriventeDettaglio.tecnicoId} datiOre={form.scriventeDettaglio} onUpdate={form.handleOreUpdate} isReadOnly={form.disableActions} isScrivente={true} />
                                     </Grid>
                                 )}
-                                <Grid size={12}>
+                                <Grid item xs={12}>
                                         <Autocomplete
                                         multiple
                                         options={form.otherTecnicos}
@@ -120,7 +120,7 @@ const ReportFormPage: React.FC = () => {
                                 </Grid>
 
                                 {form.state.dettaglioOreTecnici.filter(d => d.tecnicoId !== form.tecnicoScrivente?.id).map(dett => (
-                                    <Grid key={dett.tecnicoId} size={12}>
+                                    <Grid key={dett.tecnicoId} item xs={12}>
                                         <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, width: '100%' }}>
                                             <Box><Typography variant="body1" fontWeight="500">{dett.nome}</Typography>
                                                 <Chip label={dett.isManual ? `Manuale: ${dett.ore || 0} ore` : `Orario: ${dett.oraInizio || 'N/A'}-${dett.oraFine || 'N/A'} (${(dett.ore || 0).toFixed(2)}h)`} size="small" />
@@ -135,7 +135,7 @@ const ReportFormPage: React.FC = () => {
                             </Section>
 
                             <Section title="Dettagli Intervento">
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid item xs={12} md={6}>
                                     <FormControl fullWidth required disabled={form.disableActions}>
                                         <InputLabel id="nave-label">Nave</InputLabel>
                                         <Select labelId="nave-label" value={form.state.naveId || 'Nessuna'} label="Nave" onChange={e => form.setField('naveId', e.target.value as string)}>
@@ -144,7 +144,7 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid item xs={12} md={6}>
                                     <FormControl fullWidth required disabled={form.disableActions}>
                                         <InputLabel id="luogo-label">Luogo</InputLabel>
                                         <Select labelId="luogo-label" value={form.state.luogoId || 'Nessuno'} label="Luogo" onChange={e => form.setField('luogoId', e.target.value as string)}>
@@ -153,7 +153,7 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={12}>
+                                <Grid item xs={12}>
                                     <FormControl fullWidth disabled={form.disableActions}>
                                         <InputLabel id="veicolo-label">Veicolo</InputLabel>
                                         <Select
@@ -173,19 +173,19 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={12}><TextField label="Breve Descrizione Lavoro" value={form.state.descrizioneBreve || ''} onChange={e => form.setField('descrizioneBreve', e.target.value)} fullWidth disabled={form.disableActions} /></Grid>
-                                <Grid size={12}><TextField label="Materiali Impiegati" value={form.state.materialiImpiegati || ''} onChange={e => form.setField('materialiImpiegati', e.target.value)} fullWidth multiline rows={2} disabled={form.disableActions} /></Grid>
-                                <Grid size={12}><TextField label="Lavoro Eseguito" value={form.state.lavoroEseguito || ''} onChange={e => form.setField('lavoroEseguito', e.target.value)} fullWidth multiline rows={4} required disabled={form.disableActions} /></Grid>
+                                <Grid item xs={12}><TextField label="Breve Descrizione Lavoro" value={form.state.descrizioneBreve || ''} onChange={e => form.setField('descrizioneBreve', e.target.value)} fullWidth disabled={form.disableActions} /></Grid>
+                                <Grid item xs={12}><TextField label="Materiali Impiegati" value={form.state.materialiImpiegati || ''} onChange={e => form.setField('materialiImpiegati', e.target.value)} fullWidth multiline rows={2} disabled={form.disableActions} /></Grid>
+                                <Grid item xs={12}><TextField label="Lavoro Eseguito" value={form.state.lavoroEseguito || ''} onChange={e => form.setField('lavoroEseguito', e.target.value)} fullWidth multiline rows={4} required disabled={form.disableActions} /></Grid>
                             </Section>
 
                             <Section title="Firma Cliente">
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid item xs={12} md={6}>
                                     <TextField label="Nome e Cognome Firmatario" value={form.state.firmaFirmatarioNome || ''} onChange={(e) => form.setField('firmaFirmatarioNome', e.target.value)} fullWidth required disabled={form.disableActions}/>
                                 </Grid>
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid item xs={12} md={6}>
                                     <TextField label="Società" value={form.state.firmaFirmatarioSocieta || ''} onChange={(e) => form.setField('firmaFirmatarioSocieta', e.target.value)} fullWidth disabled={form.disableActions}/>
                                 </Grid>
-                                <Grid size={12}>
+                                <Grid item xs={12}>
                                     {form.state.firmaVettoriale ? (
                                         <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center', backgroundColor: form.state.isReadOnly ? '#f5f5f5' : '#616161' }}>
                                             <Typography variant="body2" gutterBottom sx={{ color: form.state.isReadOnly ? 'black' : 'white' }}>Firma salvata:</Typography>
@@ -212,7 +212,7 @@ const ReportFormPage: React.FC = () => {
 
                      { !form.isLavorativo && (
                         <Section title="Dettagli Assenza">
-                             <Grid size={12}>
+                             <Grid item xs={12}>
                                 <TextField 
                                     label="Breve Descrizione (opzionale)" 
                                     value={form.state.descrizioneBreve || ''} 
