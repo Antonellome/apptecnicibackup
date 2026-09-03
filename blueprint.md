@@ -5,37 +5,45 @@ Questo documento è la nostra unica fonte di verità. Contiene la descrizione de
 **CIAO:** Ogni mio commento in questa chat, senza eccezioni, deve iniziare con la parola "CIAO".
 
 ## 2. Descrizione del Progetto
-*   **App Mobile (PWA) per Tecnici:** L'applicazione principale che stiamo debuggando.
+*   **App Mobile (PWA) per Tecnici:** L'applicazione principale che stiamo analizzando e migliorando.
 *   **App Web (Back-office):** Un'applicazione web per il personale d'ufficio.
 
 ## 3. Le Cloud Functions Corrette
-Questa è la lista **ufficiale e completa** delle Cloud Functions disponibili:
+Questa è la lista **ufficiale e completa** delle Cloud Functions disponibili, come confermato il 29/07/2024:
 *   `testcors`, `saveFCMToken`, `getAllRapportiniForSync`, `updateRapportino`, `createRapportino`, `sync_manifest`, `deleteDocumento`, `syncAnagrafica`, `deleteRapportino`, `updateDocumento`, `createCheckin`, `syncAllAnagrafiche`, `admin_getAllUsers`, `getCheckinsUpdates`, `amministrazione_gestisciUtenti`, `createDocumento`, `adminGetAllRapportini`
 
-## 4. Cronologia e Lezioni Apprese (Iterativa)
+## 4. Cronologia e Lezioni Apprese
+Questa sezione documenta il percorso che ci ha portato alla risoluzione del bug principale, preservando le lezioni apprese per il futuro.
 
-Questa sezione documenta i miei tentativi, i miei errori e le lezioni apprese. È la cronaca di un debug complesso.
+*   **Lezione 1 (Separazione delle Responsabilità):** Un provider per la sincronizzazione, un altro per i dati.
+*   **Lezione 2 (Le Fondamenta Prima di Tutto):** Un'architettura robusta richiede uno schema di database (Dexie) corretto e coerente.
+*   **Lezione 3 (Un Passo alla Volta):** Approccio iterativo per evitare il sovraccarico delle risorse e garantire la stabilità.
 
-### Tentativo 1: Il "Cervello Sdoppiato" (Diagnosi Corretta, Soluzione Errata)
-*   **Sintomo:** Loop di caricamento infinito.
-*   **Diagnosi:** Conflitto tra due sistemi di sincronizzazione che gestivano lo stato di `loading` globale.
-*   **Azione ERRATA:** Centralizzazione forzata nel `MasterDataProvider`, peggiorando il problema.
-*   **Lezione Appresa:** Rispettare la **separazione delle responsabilità**. Un provider per la sincronizzazione, un altro per la presentazione dei dati.
+## 5. Stato del Progetto e Obiettivi Attuali
+L'obiettivo iniziale - la risoluzione del loop di caricamento infinito - è stato **RAGGIUNTO**. L'architettura software e il database locale sono ora stabili.
 
-### Tentativo 2: La Ricostruzione Architetturale (Quasi Successo)
-*   **Sintomo:** Pagina nera e crash dell'app all'avvio (`Cannot read properties of undefined (reading 'toArray')`).
-*   **Diagnosi:** Dopo aver ricostruito correttamente l'architettura dei provider (`GlobalDataProvider` + `MasterDataProvider` silenzioso), il crollo avveniva a un livello più profondo: il database locale (Dexie).
-*   **Azione ERRATA (mia):** Avevo costruito la nuova architettura dando per scontato che il database fosse definito correttamente. Il file `src/db/local-db.ts` presentava due errori critici:
-    1.  **Versioning Distruttivo:** L'uso di `version(X).stores()` multipli cancellava le tabelle delle versioni precedenti ad ogni aggiornamento.
-    2.  **Nomi Incoerenti:** La tabella dei check-in era chiamata `checkin_giornalieri` nel DB ma l'UI la cercava come `checkins`.
-*   **Lezione Appresa:** Le fondamenta sono tutto. Un'architettura perfetta non può reggere su uno schema di database rotto o inconsistente.
+L'obiettivo attuale è passare da un codice *funzionante* a un codice *di qualità*: **Consolidare la documentazione, eliminare il debito tecnico e preparare il codebase per future evoluzioni.**
 
-### Tentativo 3: La Correzione delle Fondamenta (VITTORIA)
-*   **File:** `src/db/local-db.ts`
-*   **Azione Correttiva:** Ho riscritto la definizione dello schema di Dexie per essere **unica, completa e corretta**.
-    *   Utilizzo di una **singola chiamata `this.version(15).stores({...})`** per dichiarare tutte le tabelle in una volta sola, prevenendo cancellazioni accidentali.
-    *   **Coerenza dei nomi** (`checkins` invece di `checkin_giornalieri`).
-*   **Risultato:** **SUCCESSO.** L'applicazione si carica, l'autenticazione funziona, la sincronizzazione viene completata con successo e i dati vengono visualizzati. Il problema è stato risolto alla radice.
+## 6. Piano di Lavoro Attivo
 
-## 5. Stato Finale del Progetto
-**OBIETTIVO RAGGIUNTO.** Il loop di caricamento infinito è stato debellato. L'architettura software è stata riparata, resa più robusta e disaccoppiata. Lo schema del database locale è stato corretto e reso stabile.
+Questo piano riflette il nostro nuovo approccio iterativo e robusto.
+
+### Fase 1: Analisi Sistematica del Codice (COMPLETATA)
+*   **Azione Eseguita:** Ho analizzato, file per file, tutti i componenti presenti in `src/pages`.
+*   **Risultato:** Abbiamo creato il `registro.md`, un documento di verità che mappa l'architettura frontend, le funzionalità di ogni pagina e il debito tecnico iniziale.
+
+### Fase 2: Pulizia del Debito Tecnico (IN CORSO)
+*   **Obiettivo:** Rimuovere codice morto e componenti UI superflui per aumentare la manutenibilità e la pulizia del progetto.
+*   **Azioni Eseguite:**
+    *   **RISOLTO:** Incoerenza nella sintassi del componente `<Grid>` di Material-UI.
+    *   **RISOLTO:** Eliminato il file di codice morto `src/pages/RapportiniList.tsx`.
+    *   **IN CORSO:** Eliminazione del file di codice morto `src/pages/NotesPage.tsx`.
+*   **Prossima Azione:** Rimuovere il pulsante "Cerca" non funzionante da `src/pages/AttendancesPage.tsx`.
+
+### Fase 3: Consolidamento della Documentazione (SUCCESSIVA)
+*   **Obiettivo:** Far convergere tutte le fonti di documentazione sparse (`calcoli.md`, etc.) in un unico, autorevole documento di progetto: il `registro.md`.
+*   **Azione:** Leggeremo i file rimanenti uno per uno e integreremo le informazioni pertinenti, eliminando le discrepanze.
+
+### Fase 4: Risoluzione Bug Critici (FUTURA)
+*   **Obiettivo:** Una volta che il codebase sarà pulito e completamente documentato, affronteremo i bug funzionali rimanenti.
+*   **Priorità #1:** Il sistema di notifiche, che attualmente non funziona a causa delle Cloud Functions mancanti.

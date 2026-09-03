@@ -40,7 +40,7 @@ const CheckinPage = () => {
 
   const allUserEvents = useLiveQuery(() => {
       if (!user?.uid) return [];
-      return db.checkin_giornalieri
+      return db.checkins
           .where('tecnicoId')
           .equals(user.uid)
           .sortBy('timestampImpostato');
@@ -110,6 +110,11 @@ const CheckinPage = () => {
       return;
     }
 
+    if (type === 'inizio_giornata' && !startLocation) {
+        setError("Per iniziare la giornata, è obbligatorio selezionare un luogo iniziale.");
+        return;
+    }
+
     if (type === 'check_in_luogo' && !selectedLuogo) {
         setError("Per entrare, devi prima selezionare una Nave o un Luogo dal menu.");
         return;
@@ -118,13 +123,13 @@ const CheckinPage = () => {
     setLoading(type);
 
     try {
-        await dexieDb.transaction('rw', dexieDb.checkin_giornalieri, dexieDb.syncQueue, async () => {
+        await dexieDb.transaction('rw', dexieDb.checkins, dexieDb.syncQueue, async () => {
             const tecnicoName = currentUserProfile.displayName || currentUser.email || 'N/D';
 
             const addEventToDbAndQueue = async (eventPayload: any, idSuffix: string) => {
                 const localId = `local_${Date.now()}_${idSuffix}`.replace(/\./g, '');
                 const optimisticEvent = { ...eventPayload, id: localId, timestampReale: new Date() };
-                await dexieDb.checkin_giornalieri.add(optimisticEvent);
+                await dexieDb.checkins.add(optimisticEvent);
                 await aggiungiAllaCoda({ type: 'checkin', action: 'create', entityId: localId, payload: eventPayload });
             };
 
@@ -194,7 +199,7 @@ const CheckinPage = () => {
                     <Box ref={scrollBoxRef} component='ul' sx={{ m: 0, pl: '20px', maxHeight: '110px', overflowY: 'auto', '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' } }}>
                         {eventiDelGiorno.map((e: any) => {
                             const nome = e.naveId ? navi?.find(n=>n.id === e.naveId)?.nome : luoghi?.find(l=>l.id === e.luogoId)?.nome;
-                            return (<li key={e.id}><b>{e.tipo.replace(/_/g, ' ')}</b> alle {new Date(e.timestampImpostato).toLocaleString()} {nome ? `- ${nome}` : ''}</li>);
+                            return (<li key={e.id}><b>{e.tipo.replace(/_/g, ' ')}</b>alle {new Date(e.timestampImpostato).toLocaleString()} {nome ? `- ${nome}` : ''}</li>);
                         })}
                     </Box>
                 </Alert>
@@ -204,8 +209,8 @@ const CheckinPage = () => {
               <Typography variant='h6' component='h2' sx={{ mb: 2 }}>Orario di Lavoro</Typography>
               <Grid container spacing={2} alignItems='flex-end'>
                 <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Inizio Giornata' type='datetime-local' value={timeValues.inizio_giornata} onChange={(e) => handleTimeChange('inizio_giornata', e.target.value)} disabled={giornataIniziata} InputLabelProps={{ shrink: true }} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth disabled={giornataIniziata}><InputLabel>Luogo Iniziale (Opzionale)</InputLabel><Select value={startLocation} onChange={(e) => setStartLocation(e.target.value)} label='Luogo Iniziale (Opzionale)'>{[...naviOptions, ...luoghiOptions].sort((a,b)=>a.nome.localeCompare(b.nome)).map(o => <MenuItem key={o.id} value={o.id}>{o.nome}</MenuItem>)}</Select></FormControl></Grid>
-                <Grid size={12}><Button fullWidth variant='contained' color='primary' onClick={() => handleGenericSubmit('inizio_giornata')} disabled={giornataIniziata || !!loading}>{loading === 'inizio_giornata' ? <CircularProgress size={24} /> : 'Inizia Giornata'}</Button></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth disabled={giornataIniziata}><InputLabel>Luogo Iniziale</InputLabel><Select value={startLocation} onChange={(e) => setStartLocation(e.target.value)} label='Luogo Iniziale'>{[...naviOptions, ...luoghiOptions].sort((a,b)=>a.nome.localeCompare(b.nome)).map(o => <MenuItem key={o.id} value={o.id}>{o.nome}</MenuItem>)}</Select></FormControl></Grid>
+                <Grid size={12}><Button fullWidth variant='contained' color='primary' onClick={() => handleGenericSubmit('inizio_giornata')} disabled={giornataIniziata || !startLocation || !!loading}>{loading === 'inizio_giornata' ? <CircularProgress size={24} /> : 'Inizia Giornata'}</Button></Grid>
                 <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Fine Giornata' type='datetime-local' value={timeValues.fine_giornata} onChange={(e) => handleTimeChange('fine_giornata', e.target.value)} disabled={!giornataIniziata} InputLabelProps={{ shrink: true }} /></Grid>
                 <Grid size={{ xs: 12, sm: 6 }}><Button fullWidth variant='contained' color='secondary' onClick={() => handleGenericSubmit('fine_giornata')} disabled={!giornataIniziata || !!loading}>{loading === 'fine_giornata' ? <CircularProgress size={24} /> : 'Termina Giornata'}</Button></Grid>
               </Grid>
@@ -226,7 +231,7 @@ const CheckinPage = () => {
                 </FormControl>
                 <Grid container spacing={2} alignItems='flex-end'>
                     <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Entrata' type='datetime-local' value={timeValues.check_in_luogo} onChange={(e) => handleTimeChange('check_in_luogo', e.target.value)} disabled={!giornataIniziata || !!inLuogo} InputLabelProps={{ shrink: true }} /></Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}><Button fullWidth variant='contained' onClick={() => handleGenericSubmit('check_in_luogo')} disabled={!giornataIniziata || !!inLuogo || !!loading}>{loading === 'check_in_luogo' ? <CircularProgress size={24} /> : 'Entrata'}</Button></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><Button fullWidth variant='contained' onClick={() => handleGenericSubmit('check_in_luogo')} disabled={!giornataIniziata || !!inLuogo || !!loading || !selectedLuogo}>{loading === 'check_in_luogo' ? <CircularProgress size={24} /> : 'Entrata'}</Button></Grid>
                     <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Uscita' type='datetime-local' value={timeValues.check_out_luogo} onChange={(e) => handleTimeChange('check_out_luogo', e.target.value)} disabled={!giornataIniziata || !inLuogo} InputLabelProps={{ shrink: true }} /></Grid>
                     <Grid size={{ xs: 12, sm: 6 }}><Button fullWidth variant='contained' onClick={() => handleGenericSubmit('check_out_luogo')} disabled={!giornataIniziata || !inLuogo || !!loading}>{loading === 'check_out_luogo' ? <CircularProgress size={24} /> : 'Uscita'}</Button></Grid>
                 </Grid>

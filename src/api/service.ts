@@ -36,13 +36,13 @@ const callFunction = async (functionName: keyof typeof callableFunctions, payloa
     }
 
     try {
-        console.log(`[API_SERVICE] Chiamata a --> ${functionName} <-- con payload:`, payload);
+        console.log(`[API_SERVICE] Chiamata a --> ${functionName} <-- con payload:`, JSON.stringify(payload, null, 2));
         const result = await callableFn(payload);
-        console.log(`[API_SERVICE] Risposta da <-- ${functionName} -->:`, result.data);
+        console.log(`[API_SERVICE] Risposta da <-- ${functionName} -->:`, JSON.stringify(result.data, null, 2));
         return result.data;
     } catch (error) {
         // @ts-expect-error Utilizzato per gestire l'errore di Firebase che non ha un tipo standard
-        console.error(`[API_SERVICE] ERRORE GRAVE durante la chiamata a \"${functionName}\"`, error.message, error.details);
+        console.error(`[API_SERVICE] ERRORE GRAVE durante la chiamata a \"${functionName}\"`, JSON.stringify({ message: error.message, details: error.details }, null, 2));
         throw error;
     }
 };
