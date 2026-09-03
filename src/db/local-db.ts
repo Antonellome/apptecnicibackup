@@ -1,9 +1,13 @@
 import Dexie, { Table } from 'dexie';
-// AGGIUNGO Lavorazione e Sistema per le nuove tabelle
-import type { Impostazioni, Rapportino, SyncEvent, SyncManifest, Tecnico, Ditta, Categoria, Veicolo, Cliente, TipoGiornata, Nave, Luogo, Sede, UserProfile, Qualifica, Documento, Notifica, CheckinGiornaliero, Lavorazione, Sistema } from '@/models/definitions';
+import type { 
+    Impostazioni, Rapportino, SyncEvent, SyncManifest, Tecnico, Ditta, 
+    Categoria, Veicolo, Cliente, TipoGiornata, Nave, Luogo, Sede, 
+    UserProfile, Qualifica, Documento, Notifica, Checkin, // Uso Checkin per coerenza
+    Lavorazione, Sistema 
+} from '@/models/definitions';
 
-// Esporto i tipi per renderli disponibili ad altri moduli
-export type { CheckinGiornaliero, SyncEvent };
+// Tipi e interfacce per le tabelle locali
+export type { SyncEvent };
 
 export interface Settings {
   id: string; 
@@ -37,7 +41,9 @@ export interface LocalSyncInfo {
     timestamp: number;
 }
 
+// Definizione del database locale dell'applicazione
 export class AppLocalDB extends Dexie {
+  // Dichiarazione di tutte le tabelle
   anagrafiche!: Table<AnagraficaCache, string>;
   tariffe_locali!: Table<TariffaLocaleCache, string>;
   syncQueue!: Table<SyncEvent, number>;
@@ -58,39 +64,23 @@ export class AppLocalDB extends Dexie {
   impostazioni!: Table<Impostazioni, string>;
   syncState!: Table<SyncState, string>; 
   notifiche!: Table<Notifica, string>;
-  checkin_giornalieri!: Table<CheckinGiornaliero, string>;
+  checkins!: Table<Checkin, string>; // NOME CORRETTO
   localSyncInfo!: Table<LocalSyncInfo, string>;
   settings!: Table<Settings, string>; 
   lavorazioni!: Table<Lavorazione, string>;
-  sistemi!: Table<Sistema, string>; // NUOVA TABELLA
+  sistemi!: Table<Sistema, string>;
 
   constructor() {
     super('AppLocalDB');
     
-    // DEFINIZIONI VECCHIE...
-    this.version(13).stores({
-        settings: 'id',
-        rapportini: 'id, [tecnicoId+data], tecnicoId, data', tecnici: 'id', ditte: 'id',
-        categorie: 'id', veicoli: 'id', clienti: 'id', tipiGiornata: 'id',
-        navi: 'id', luoghi: 'id', sedi: 'id', webAppUsers: 'id', qualifiche: 'id',
-        documenti: 'id', anagrafiche: 'id', tariffe_locali: 'id',
-        syncQueue: '++id, type, syncStatus, entityId', sync_manifest: 'id',
-        impostazioni: 'id', syncState: 'id', notifiche: 'id, isRead, createdAt',
-        checkin_giornalieri: 'id, [tecnicoId+timestampReale], tipo, timestampImpostato, [tecnicoId+timestampImpostato]',
-        localSyncInfo: 'id'
-    });
-
-    this.version(14).stores({
-      lavorazioni: 'id',
-    });
-
-    // AGGIORNAMENTO SCHEMA v15: Aggiunta tabella 'sistemi' e consolidamento
+    // Definizione di una VERSIONE UNICA E CONSOLIDATA dello schema.
+    // Questo previene la cancellazione accidentale di tabelle durante gli aggiornamenti.
     this.version(15).stores({
-      sistemi: 'id', // <-- NUOVA TABELLA
-      // Reinserisco TUTTE le tabelle esistenti per assicurarmi che non vengano cancellate
-      lavorazioni: 'id',
-      settings: 'id',
+      anagrafiche: 'id',
+      tariffe_locali: 'id',
+      syncQueue: '++id, type, syncStatus, entityId',
       rapportini: 'id, [tecnicoId+data], tecnicoId, data',
+      sync_manifest: 'id',
       tecnici: 'id',
       ditte: 'id',
       categorie: 'id',
@@ -103,17 +93,17 @@ export class AppLocalDB extends Dexie {
       webAppUsers: 'id',
       qualifiche: 'id',
       documenti: 'id',
-      anagrafiche: 'id',
-      tariffe_locali: 'id',
-      syncQueue: '++id, type, syncStatus, entityId',
-      sync_manifest: 'id',
       impostazioni: 'id',
-      syncState: 'id', 
+      syncState: 'id',
       notifiche: 'id, isRead, createdAt',
-      checkin_giornalieri: 'id, [tecnicoId+timestampReale], tipo, timestampImpostato, [tecnicoId+timestampImpostato]',
-      localSyncInfo: 'id'
+      checkins: 'id, [tecnicoId+timestampReale], tipo, timestampImpostato, [tecnicoId+timestampImpostato]', // NOME CORRETTO
+      localSyncInfo: 'id',
+      settings: 'id',
+      lavorazioni: 'id',
+      sistemi: 'id'
     });
   }
 }
 
+// Esportazione di un'unica istanza del database per tutta l'app
 export const db = new AppLocalDB();

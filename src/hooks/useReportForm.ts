@@ -9,7 +9,7 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useSyncManager } from '@/hooks/useSyncManager';
 import { db } from '@/db/local-db';
 import { aggiungiAllaCoda } from '@/services/syncService';
-import { useGlobalData } from '@/contexts/GlobalDataProvider';
+import { useGlobalData } from '@/hooks/useGlobalData';
 import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData } from '@/models/definitions';
 
 const FORM_AUTOSAVE_KEY = 'form-autosave-data';
@@ -170,19 +170,12 @@ export const useReportForm = () => {
     const [state, dispatch] = useReducer(formReducer, initialState);
     const isUnmounting = useRef(false);
 
+    const { masterData, loading: collectionsLoading } = useGlobalData();
     const { 
-        tecnici, 
-        ditte, 
-        categorie, 
-        navi, 
-        luoghi, 
-        veicoli, 
-        tipiGiornata, 
-        clienti, 
-        loading: collectionsLoading 
-    } = useGlobalData();
+        tecnici = [], ditte = [], categorie = [], navi = [], luoghi = [], 
+        veicoli = [], tipiGiornata = [], clienti = []
+    } = masterData || {};
 
-    const masterData = { tipiGiornata, tecnici, veicoli, navi, luoghi, clienti, ditte, categorie };
     const isEditMode = Boolean(reportId);
     const loggedInTecnicoId = userProfile?.tecnicoId;
 
@@ -216,7 +209,9 @@ export const useReportForm = () => {
 
     useEffect(() => {
         const loadData = async () => {
-            if (collectionsLoading || !tipiGiornata.length) return;
+            if (collectionsLoading) {
+                return;
+            }
 
             try {
                 if (isEditMode && reportId) {
@@ -248,16 +243,23 @@ export const useReportForm = () => {
                             const nome = `${scrivente.cognome} ${scrivente.nome}`.trim();
                             const initialDettaglio = [createInitialDettaglio(scrivente.id, nome, true)];
                             dispatch({ type: 'LOAD_NEW_FORM_DEFAULTS', payload: { tecnicoId: loggedInTecnicoId, dettaglio: initialDettaglio } });
+                        } else {
+                            dispatch({ type: 'SET_FIELD', payload: { field: 'pageLoading', value: false } });
                         }
                     }
+                } else {
+                    dispatch({ type: 'SET_FIELD', payload: { field: 'pageLoading', value: false } });
                 }
             } catch (error) {
                 console.error("Errore caricamento dati:", error);
                 showSnackbar("Errore critico durante il caricamento.", "error");
-            } 
+                dispatch({ type: 'SET_FIELD', payload: { field: 'pageLoading', value: false } });
+            }
         };
         loadData();
-    }, [reportId, isEditMode, collectionsLoading, loggedInTecnicoId, navigate, showSnackbar, tecnici, tipiGiornata]);
+        // L'array delle dipendenze ora include `tecnici`, garantendo che l'hook si riattivi 
+        // quando i dati dei tecnici sono finalmente disponibili, risolvendo la race condition.
+    }, [reportId, isEditMode, collectionsLoading, loggedInTecnicoId, navigate, showSnackbar, tecnici]);
 
     useEffect(() => {
         if (isEditMode || state.pageLoading || state.isProcessing || isUnmounting.current) return;
@@ -461,7 +463,7 @@ export const useReportForm = () => {
     return {
         state, dispatch, setField,
         isEditMode, isLavorativo, disableActions, 
-        masterData, collectionsLoading, tecnicoScrivente, tipiGiornataFiltrati, tipiGiornataTrasferta, tipiGiornataOperativi, 
+        masterData: masterData || {}, collectionsLoading, tecnicoScrivente, tipiGiornataFiltrati, tipiGiornataTrasferta, tipiGiornataOperativi, 
         selectedTecnicos, otherTecnicos, scriventeDettaglio,
         sortedVeicoli, sortedNavi, sortedLuoghi, getVeicoloLabel,
         handleMultiDayToggle, handleTipoGiornataChange, handleAltriTecniciChange, handleOreUpdate, removeTecnico,
