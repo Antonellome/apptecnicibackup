@@ -295,7 +295,7 @@ export const useReportForm = () => {
         }
 
         const baseData: Omit<Rapportino, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'isLocked' | 'createdBy'> = {
-            data: dateToUse,
+            data: Timestamp.fromDate(dateToUse),
             nome: `Rapportino del ${format(dateToUse, 'dd-MM-yyyy')}`,
             tecnicoId: loggedInTecnicoId,
             tecnicoScriventeId: loggedInTecnicoId, 
@@ -317,7 +317,7 @@ export const useReportForm = () => {
             firmaVettoriale: state.firmaVettoriale,
         };
 
-        const now = new Date();
+        const now = Timestamp.now();
 
         if (isEditMode && state.originalReport) {
             return {
