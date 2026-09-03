@@ -34,47 +34,88 @@ Questa sezione elenca le funzioni **effettivamente deployate** su Firebase, come
 - `adminGetAllRapportini`
 
 **NOTA CRITICA - FUNZIONALITÀ NOTIFICHE NON OPERATIVA (29/07/2024):**
-Il problema è CONFERMATO e PERSISTE. Le funzioni `getNotifiche`, `markNotificheAsRead`, `sendNotifica` e `deleteNotifiche` sono **ASSENTI** dall'ambiente di produzione. Un'analisi di un file di documentazione archiviato (`notifiche.md`) indicava che il problema era noto (un errore di deploy nella region sbagliata) e che un fix era 'in fase di deploy'. L'ultima verifica conferma che questo deploy **non è mai stato completato con successo**. Di conseguenza, l'intera sezione Notifiche dell'app è e rimane NON FUNZIONANTE.
+Il problema è CONFERMATO e PERSISTE. Le funzioni `getNotifiche`, `markNotificheAsRead`, `sendNotifica` e `deleteNotifiche` sono **ASSENTI** dall'ambiente di produzione. Questo rende l'intera sezione Notifiche dell'app **NON FUNZIONANTE**.
 
 ---
 
-## 4. Architettura Frontend: Analisi delle Pagine
-### 4.1. Pagine Principali (Accessibili dal Menu Utente)
-*   **HomePage:** Cruscotto principale e menu di navigazione.
-*   **Nuovo Report:** Form per la creazione di nuovi report (usa il componente `ReportFormPage`).
-*   **I Miei Report (`ReportListPage`):** Elenco dei report dell'utente, con azioni di modifica, condivisione e cancellazione.
-*   **Report Mensili:** Visione aggregata dell'attività mensile, con generazione di PDF riassuntivi.
-*   **Notifiche:** Centro notifiche **(ATTUALMENTE NON FUNZIONANTE)**.
-*   **Check-in:** Sistema di timbratura digitale (punch clock) con architettura offline-first.
-*   **Impostazioni:** Centro di controllo per l'utente (guida, logout, gestione PWA).
-*   **Login:** Pagina di accesso.
+## 4. Architettura Frontend: Analisi Dettagliata delle Pagine
 
-### 4.2. Pagine e Componenti Interni (Non accessibili dal Menu)
-Questa sezione documenta le pagine e i componenti che esistono nel codebase ma non sono direttamente raggiungibili dalla navigazione principale.
-*   **`AttendancesPage.tsx` (Storico Presenze):** Pagina funzionante ma non linkata, fornisce un registro cronologico unificato di report e timbrature.
-*   **`AnagrafichePage.tsx` (Visualizzatore Anagrafiche):** Pagina di sola lettura, probabilmente uno strumento di sviluppo/debug.
-*   **`ReportFormPage.tsx`:** Componente fondamentale e riutilizzabile che contiene tutta la logica del form per la creazione/modifica dei report.
-*   **`EditReportPage.tsx` / `EditOfflineReportPage.tsx`:** Componenti "wrapper" che caricano il `ReportFormPage` per la modifica dei report.
+### 4.1. HomePage (`src/pages/HomePage.tsx`)
+*   **Scopo:** Cruscotto principale e menu di navigazione per le funzionalità chiave.
+*   **Layout:** Organizzato a griglia, con un messaggio di benvenuto personalizzato con l'email dell'utente.
+*   **Funzionalità:**
+    *   **Navigazione:** Contiene i link principali a "Nuovo report", "I miei Report", "Report Mensili", "Notifiche" e "Check-in".
+    *   **Contatore Notifiche:** Un `Badge` sul pulsante Notifiche mostra il numero di notifiche non lette, recuperato tramite l'hook `useUnreadNotificationsCount`.
+*   **Punto Critico Rilevato:** Il contatore notifiche è quasi certamente **non funzionante**, poiché dipende da una logica backend che è assente.
+
+### 4.2. Nuovo Report (`src/pages/NuovoReportPage.tsx` e `ReportFormPage.tsx`)
+Questa funzionalità è composta da un componente "wrapper" (`NuovoReportPage`) che carica il componente principale del form (`ReportFormPage`). Tutta la logica complessa risiede nell'hook **`useReportForm.ts`**.
+*   **Scopo:** Fornisce l'interfaccia per la creazione e la modifica dei report di intervento e delle assenze.
+*   **Architettura:** La pagina delega tutta la gestione dello stato e della logica all'hook `useReportForm`, che utilizza un `useReducer` per una gestione robusta dello stato.
+*   **Logica di Salvataggio (Offline-First):**
+    1.  Al salvataggio, l'hook **non** chiama direttamente le API di Firebase.
+    2.  L'operazione (`create` o `update`) viene salvata in una coda locale nel database Dexie.
+    3.  Un processo in background (`SyncManager`) si occupa di inviare i dati a Firestore.
+*   **Regole di Business Implementate:**
+    *   **Blocco Modifiche:** Un report viene bloccato (sola lettura) se l'utente non è il creatore o se è passata la data limite (il 5 del mese successivo).
+    *   **Gestione Ore (Manuale vs Automatica):** L'inserimento delle ore può essere automatico (da ora inizio/fine) o manuale (totale ore). La modalità viene ereditata dai tecnici aggiunti.
+    *   **Multi-Giorno:** Permesso solo per tipi di assenza specifici (es. ferie).
+    *   **Pausa Automatica:** Viene aggiunta una pausa di 60 minuti se l'orario interseca la fascia 12:00-13:00.
+    *   **Firma Non Modificabile:** La firma del cliente, una volta salvata, non può più essere modificata.
+*   **Funzionalità Aggiuntive:** Auto-salvataggio in `localStorage` durante la creazione; copia degli orari quando si aggiungono nuovi tecnici.
+
+### 4.3. I Miei Report (`src/pages/ReportListPage.tsx`)
+*   **Scopo:** Elencare, visualizzare e gestire i report creati dall'utente.
+*   **Architettura e Dati:**
+    *   **Fonte Dati Locale e Reattiva:** Usa `useLiveQuery` per leggere i dati in tempo reale dal database locale (Dexie), rendendo l'UI istantaneamente reattiva.
+    *   **Dati Arricchiti:** Utilizza un hook `useEnrichedRapportini` per combinare i dati grezzi con le anagrafiche.
+*   **Funzionalità Chiave:**
+    *   **Navigazione Mensile:** Permette di sfogliare i report mese per mese.
+    *   **Indicatori di Stato:** Comunica lo stato di connettività (online/offline) e i dati in attesa di sincronizzazione.
+    *   **Condivisione PDF:** Genera un PDF del report **direttamente sul client** tramite `generateRapportinoPDF`.
+    *   **Cancellazione (Soft Delete):** Marca un report come "cancellato" (`isDeleted: true`) ma non lo rimuove fisicamente.
+
+### 4.4. Report Mensili (`src/pages/MonthlyReportPage.tsx`)
+*   **Scopo:** Fornire una visione d'insieme aggregata dell'attività mensile di un tecnico.
+*   **Architettura e Dati:**
+    *   **Fonte Dati Inclusiva:** Recupera tutti i report del mese in cui l'utente è presente (creatore o aggiunto).
+    *   **Logica di Calcolo Centralizzata:** Un servizio `calculateMonthlyReportData` si occupa di processare e aggregare i dati.
+*   **Interfaccia Utente:** Presenta i dati in tre formati: calendario, tabella riepilogo e dettaglio giornaliero.
+*   **Funzionalità Chiave:** Generazione e **anteprima** del PDF mensile sul client.
+*   **Funzionalità Nascosta (Easter Egg):** 5 click sul titolo rivelano la stima dei costi nel riepilogo.
+
+### 4.5. Notifiche (`src/pages/NotifichePage.tsx`)
+*   **Scopo:** Centro notifiche per visualizzare comunicazioni.
+*   **Punto di Rottura CRITICO:**
+    *   **Recupero Dati (Funzionante):** La pagina visualizza correttamente le notifiche grazie a un ascoltatore `onSnapshot`.
+    *   **Aggiornamento Dati (NON Funzionante):** Qualsiasi interazione (es. "Segna come letta") fallisce perché invoca una Cloud Function (`markNotificationAsRead`) che **non esiste**.
+*   **Impatto:** L'utente vede le notifiche ma non può gestirle, rendendo la pagina inutilizzabile.
+
+### 4.6. Check-in (`src/pages/CheckinPage.tsx`)
+*   **Scopo:** Sistema di "timbratura" digitale (punch clock).
+*   **Architettura:** 100% Offline-First. Ogni "timbratura" viene salvata localmente in Dexie e accodata per la sincronizzazione.
+*   **Flusso di Lavoro Rigoroso (Post-Modifica):**
+    1.  **Stato Iniziale:** L'unica azione possibile è "Inizia Giornata", con **selezione obbligatoria** del luogo di lavoro.
+    2.  **Stato "Dentro":** Dopo l'inizio, le uniche azioni sono "Uscita" o "Termina Giornata".
+    3.  **Stato "Fuori":** Dopo un'uscita, le uniche azioni sono una nuova "Entrata" o "Termina Giornata".
+
+### 4.7. Impostazioni (`src/pages/SettingsPage.tsx`)
+*   **Scopo:** Centro di controllo con guida, gestione account e configurazioni.
+*   **Funzionalità:** Guida all'installazione della PWA, recupero password, logout, pulsante per forzare l'aggiornamento dell'app.
+*   **Funzionalità Nascosta (Easter Egg):** Sezione per la **Gestione Tariffe** (salvate solo localmente) appare dopo 5 click sul titolo.
+
+### 4.8. Login (`src/pages/LoginPage.tsx`)
+*   **Scopo:** Pagina di accesso standard.
+*   **Architettura:** Reindirizza automaticamente gli utenti già loggati. Gestisce autenticazione e recupero password via Firebase SDK.
 
 ---
 
 ## 5. Guida di Stile e Convenzioni: Material-UI v7
-Questo progetto utilizza **Material-UI v7**. Tutto il codice deve aderire a queste convenzioni.
-### 5.1. Utilizzo del Componente `<Grid>`
-**Regola Fondamentale:** Non usare mai la prop `item`. Le dimensioni dei breakpoint vanno passate come oggetto tramite la prop `size`.
-**Esempio Corretto:**
-```javascript
-<Grid container spacing={2}>
-  <Grid size={{ xs: 12, md: 6 }}>...</Grid>
-</Grid>
-```
+Questo progetto utilizza **Material-UI v7**. La convenzione per il componente `<Grid>` è usare la prop `size` con un oggetto per i breakpoint (`<Grid size={{ xs: 12, md: 6 }}>`).
 
 ---
 
 ## 6. Debito Tecnico e Azioni Correttive
-*   **Incoerenza Sintassi `<Grid>` di MUI (RISOLTO):** Eseguito codemod `v7.0.0/grid-props` per allineare l'intero codebase.
-*   **Codice Morto (DA RIMUOVERE):**
-    *   `RapportiniList.tsx`
-    *   `NotesPage.tsx`
-*   **UI Superflua (DA RIMUOVERE):**
-    *   Pulsante "Cerca" in `AttendancesPage.tsx`.
+*   **Incoerenza Sintassi `<Grid>` di MUI (RISOLTO):** Il codebase è stato allineato tramite codemod.
+*   **Codice Morto (RIMOSSO):** `RapportiniList.tsx`, `NotesPage.tsx`.
+*   **UI Superflua (RIMOSSO):** Pulsante "Cerca" in `AttendancesPage.tsx`.
