@@ -9,11 +9,14 @@ import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import WhereToVoteIcon from '@mui/icons-material/WhereToVote';
+import CloudQueueIcon from '@mui/icons-material/CloudQueue'; // Importa l'icona
+import { useSyncManager } from '@/hooks/useSyncManager'; // Importa l'hook
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const unreadCount = useUnreadNotificationsCount();
+    const { pendingSyncCount } = useSyncManager(); // Ottieni il conteggio
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
@@ -39,9 +42,9 @@ const HomePage: React.FC = () => {
                 flexDirection: 'column', 
                 alignItems: 'center', 
                 p: { xs: 2, sm: 3 },
-                mt: { xs: 0, sm: 4 }, // Rimuovo il margine superiore solo su mobile
-                minHeight: '100%', // Faccio in modo che il contenitore occupi tutta l'altezza
-                justifyContent: { xs: 'center', sm: 'flex-start' }, // Centro verticalmente solo su mobile
+                mt: { xs: 0, sm: 4 },
+                minHeight: '100%',
+                justifyContent: { xs: 'center', sm: 'flex-start' },
             }}
         >
             <Box sx={{ width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -56,14 +59,21 @@ const HomePage: React.FC = () => {
                       textAlign: 'center',
                       width: '100%',
                       bgcolor: 'rgba(13, 71, 161, 0.1)',
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      alignItems: 'center', 
+                      justifyContent: 'center',
                     }}
                 >
                     <Typography variant="h5" component="h1" sx={{ fontWeight: '500', color: 'white' }}>
                       Benvenuto
                     </Typography>
-                    <Typography variant="body1" sx={{ color: 'white' }}>
-                      {user?.email}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                      {pendingSyncCount > 0 && <CloudQueueIcon color="warning" />}
+                      <Typography variant="body1" sx={{ color: 'white' }}>
+                        {user?.email}
+                      </Typography>
+                    </Box>
                 </Box>
                 
                 <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ maxWidth: '500px', mb: 4 }}>

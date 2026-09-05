@@ -1,7 +1,9 @@
+
 import { db as firestore } from '@/utils/firebase';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/db/local-db';
 import { Rapportino } from '@/models/definitions';
+import { createRapportino, updateRapportino } from './rapportiniService';
 
 const ANAGRAFICHE_COLLECTIONS = [
   'navi',
@@ -41,8 +43,6 @@ export const syncAllAnagrafiche = async () => {
     console.log("Tutte le anagrafiche sono state sincronizzate con successo.");
   } catch (error) {
     console.error("Errore critico durante la sincronizzazione delle anagrafiche:", error);
-    // In caso di errore, è importante che l'app possa continuare a funzionare in modalità offline
-    // o notificare l'utente in modo appropriato.
     throw new Error("La sincronizzazione di base non è riuscita. L'app potrebbe non funzionare correttamente.");
   }
 };
@@ -78,3 +78,48 @@ export const listenForRapportiniUpdates = (tecnicoId: string, onUpdate: (rapport
     console.error("Errore nell'ascolto dei rapportini:", error);
   });
 };
+
+
+export const processSyncQueue = async () => {
+    const itemsToSync = await db.syncQueue.where('syncStatus').equals('pending').toArray();
+    if (itemsToSync.length === 0) {
+      console.log("Coda di sincronizzazione vuota. Nessuna azione richiesta.");
+      return;
+    }
+  
+    console.log(`Inizio processamento della coda di sincronizzazione per ${itemsToSync.length} elementi.`);
+  
+    for (const item of itemsToSync) {
+      try {
+        let result;
+        switch (item.type) {
+          case 'rapportino':
+            switch (item.action) {
+              case 'create':
+                result = await createRapportino(item.payload);
+                console.log(`Rapportino creato con successo tramite coda:`, result);
+                break;
+              case 'update':
+                result = await updateRapportino(item.entityId, item.payload);
+                console.log(`Rapportino aggiornato con successo tramite coda:`, result);
+                break;
+              default:
+                throw new Error(`Azione non supportata per il tipo rapportino: ${item.action}`);
+            }
+            break;
+          default:
+            throw new Error(`Tipo di entità non supportato: ${item.type}`);
+        }
+  
+        // Se la chiamata al cloud ha successo, rimuovo l'elemento dalla coda
+        await db.syncQueue.delete(item.id!);
+  
+      } catch (error) {
+        console.error(`Errore durante la sincronizzazione dell'elemento ${item.id} (${item.type}/${item.action}):`, error);
+        // In caso di errore, l'elemento rimane in stato 'pending' e verrà ritentato al prossimo ciclo.
+        // Non si aggiorna più lo stato a 'error' per permettere tentativi automatici.
+        // Per debug futuro, si potrebbe aggiungere un contatore di tentativi.
+      }
+    }
+    console.log("Processamento della coda di sincronizzazione completato.");
+  };

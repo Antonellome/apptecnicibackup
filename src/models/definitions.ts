@@ -175,6 +175,7 @@ export interface SyncEvent {
     timestamp: Date;
     syncStatus: 'pending' | 'syncing' | 'success' | 'error';
     attempts?: number;
+    error?: string;
 }
 
 export interface CondivisioneInSospeso {
@@ -208,6 +209,8 @@ export interface Notifica extends FirebaseDoc {
 // MODELLI ARRICCHITI E CALCOLATI
 // =================================================================
 
+export type SyncState = 'synced' | 'pending' | 'error';
+
 export interface EnrichedRapportino extends Rapportino {
     tecnico?: Tecnico;
     tipoGiornata?: TipoGiornata;
@@ -222,6 +225,7 @@ export interface EnrichedRapportino extends Rapportino {
     creatore?: string;
     orariDisplay?: string;
     hasFirma?: boolean;
+    syncState?: SyncState;
 }
 
 export interface DayInfo {

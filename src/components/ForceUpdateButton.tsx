@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button, CircularProgress } from '@mui/material';
 import { useSnackbar } from '@/contexts/SnackbarContext';
@@ -9,6 +8,14 @@ export const ForceUpdateButton = () => {
     const { showSnackbar } = useSnackbar();
 
     const handleForceUpdate = async () => {
+        const userConfirmed = window.confirm(
+            "ATTENZIONE!\n\nSei sicuro di voler forzare l'aggiornamento?\n\nQuesta operazione cancellerà TUTTI i dati locali, compresi i report non ancora sincronizzati. L'azione è irreversibile."
+        );
+
+        if (!userConfirmed) {
+            return;
+        }
+
         setUpdating(true);
         showSnackbar("Forzando l'aggiornamento dell'app...", 'info');
         try {

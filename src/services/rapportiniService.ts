@@ -16,7 +16,9 @@ const callCloudFunction = async (url: string, data: any) => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ data }), // Le Cloud Function v2 si aspettano un oggetto { data: ... }
+        // Modifica: Invia l'oggetto dati direttamente, senza l'involucro { data: ... }.
+        // Questo si allinea a come le funzioni HTTPS standard di Firebase si aspettano il corpo della richiesta.
+        body: JSON.stringify(data),
     });
 
     if (!response.ok) {
@@ -37,7 +39,7 @@ const callCloudFunction = async (url: string, data: any) => {
  * @param rapportinoData I dati del rapportino da creare.
  */
 export const createRapportino = async (rapportinoData: any) => {
-    const url = 'https://createrapportino-2xbiermwyq-ew.a.run.app';
+    const url = 'https://createrapportino-2xbiermwyq-oa.a.run.app';
     return await callCloudFunction(url, rapportinoData);
 };
 
@@ -47,7 +49,7 @@ export const createRapportino = async (rapportinoData: any) => {
  * @param rapportinoData I dati aggiornati del rapportino.
  */
 export const updateRapportino = async (reportId: string, rapportinoData: any) => {
-    const url = 'https://updaterapportino-2xbiermwyq-ew.a.run.app';
+    const url = 'https://updaterapportino-2xbiermwyq-oa.a.run.app';
     // La funzione si aspetta l'ID nel payload dei dati
     const dataWithId = { ...rapportinoData, id: reportId };
     return await callCloudFunction(url, dataWithId);

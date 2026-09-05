@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
-import { syncAllAnagrafiche } from '@/services/offlineSync';
+import { syncAllAnagrafiche, processSyncQueue } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useAuth } from './useAuth';
 import { useOnlineStatus } from './useOnlineStatus';
@@ -9,7 +9,6 @@ import { hasInitialSyncBeenTriggered, markInitialSyncAsTriggered } from '@/servi
 
 /**
  * Hook per gestire la logica di sincronizzazione offline-first.
- * Utilizza un gestore di stato esterno per garantire che la sincronizzazione iniziale avvenga una sola volta per sessione.
  */
 export const useSyncManager = () => {
     const { showSnackbar } = useSnackbar();
@@ -17,36 +16,62 @@ export const useSyncManager = () => {
     const isOnline = useOnlineStatus();
     const isSyncing = useRef(false);
 
-    const pendingSyncCount = useLiveQuery(() => db.syncQueue.where({ syncStatus: 'pending' }).count(), [], 0);
+    const pendingSyncCount = useLiveQuery(() => db.syncQueue.where('syncStatus').equals('pending').count(), [], 0);
 
-    // EFFETTO 1: Esegue la sincronizzazione UNA SOLA VOLTA all'avvio dell'app, usando lo stato esterno.
-    useEffect(() => {
-        const runInitialSync = async () => {
-            if (isSyncing.current) return;
-
-            isSyncing.current = true;
-            console.log("Orchestratore (AVVIO): Prima sincronizzazione automatica.");
-
-            try {
-                await syncAllAnagrafiche();
-                console.log("SYNC ACTION: Completata con successo (Iniziale).");
-            } catch (error) {
-                showSnackbar('Errore di sincronizzazione in background.', 'error');
-                console.error(`Errore critico during initial sync:`, error);
-            } finally {
-                isSyncing.current = false;
-            }
-        };
-
-        // CONDIZIONE DI INNESCO: utente, online e flag esterno non ancora impostato.
-        if (isOnline && userProfile?.tecnicoId && !hasInitialSyncBeenTriggered()) {
-            // Il flag viene impostato immediatamente per prevenire qualsiasi riesecuzione
-            // causata da rapidi re-render.
-            markInitialSyncAsTriggered();
-            runInitialSync();
+    const runFullSync = useCallback(async (syncType: 'Iniziale' | 'Manuale') => {
+        if (isSyncing.current) {
+            console.log(`SYNC SKIPPED: Sincronizzazione già in corso.`);
+            if (syncType === 'Manuale') showSnackbar("Sincronizzazione già in corso.", "info");
+            return;
         }
-    // Le dipendenze sono stabili e reagiscono ai cambi di stato necessari.
-    }, [isOnline, userProfile, showSnackbar]);
+
+        isSyncing.current = true;
+        console.log(`Orchestratore (AVVIO): Sincronizzazione ${syncType}.`);
+
+        try {
+            // FASE 0: RIPRISTINO AUTOMATICO
+            // "Perdona" gli errori precedenti e rimette gli elementi in coda per un nuovo tentativo.
+            const failedItems = await db.syncQueue.where('syncStatus').equals('error').toArray();
+            if (failedItems.length > 0) {
+                console.log(`SYNC ACTION: Trovati ${failedItems.length} elementi falliti. Tentativo di ripristino...`);
+                await db.transaction('rw', db.syncQueue, async () => {
+                    const updates = failedItems.map(item => 
+                        db.syncQueue.update(item.id!, { syncStatus: 'pending', error: undefined, lastAttempt: undefined })
+                    );
+                    await Promise.all(updates);
+                });
+                showSnackbar(`Verrà ritentata la sincronizzazione per ${failedItems.length} operazioni fallite.`, 'info');
+            }
+
+            // FASE 1: UPLOAD - Processa la coda di elementi pendenti
+            await processSyncQueue();
+            console.log("SYNC ACTION (Upload): Coda locale processata.");
+
+            // FASE 2: DOWNLOAD - Scarica le anagrafiche aggiornate
+            await syncAllAnagrafiche();
+            console.log("SYNC ACTION (Download): Anagrafiche aggiornate.");
+            
+            if (syncType === 'Manuale') {
+                showSnackbar('Sincronizzazione completata! I dati sono allineati.', 'success');
+            }
+            console.log(`SYNC ACTION: Completata con successo (${syncType}).`);
+
+        } catch (error) {
+            const errorMessage = `Errore critico durante la sincronizzazione ${syncType}.`;
+            showSnackbar(errorMessage, 'error');
+            console.error(errorMessage, error);
+        } finally {
+            isSyncing.current = false;
+        }
+    }, [showSnackbar]);
+
+    // EFFETTO 1: Esegue la sincronizzazione UNA SOLA VOLTA all'avvio dell'app.
+    useEffect(() => {
+        if (isOnline && userProfile?.tecnicoId && !hasInitialSyncBeenTriggered()) {
+            markInitialSyncAsTriggered();
+            runFullSync('Iniziale');
+        }
+    }, [isOnline, userProfile, runFullSync]);
 
     // Funzione per la sincronizzazione manuale richiesta dall'utente.
     const requestManualSync = useCallback(async () => {
@@ -58,30 +83,16 @@ export const useSyncManager = () => {
             showSnackbar("Utente non configurato. Impossibile sincronizzare.", "error");
             return;
         }
-        if (isSyncing.current) {
-            showSnackbar("Sincronizzazione già in corso.", "info");
-            return;
-        }
 
-        isSyncing.current = true;
         const count = await db.syncQueue.where({ syncStatus: 'pending' }).count();
         const msg = count === 0 
             ? 'Nessun dato locale da inviare. Controllo novità dal server...' 
             : `Sincronizzazione manuale avviata per ${count} record...`;
         showSnackbar(msg, 'info');
-        console.log(`SYNC ACTION: Avviata (Manuale) con ${count} elementi in coda.`);
 
-        try {
-            await syncAllAnagrafiche();
-            showSnackbar('Sincronizzazione completata! I dati sono allineati.', 'success');
-            console.log("SYNC ACTION: Completata con successo (Manuale).");
-        } catch (error) {
-            showSnackbar('Errore critico durante la sincronizzazione manuale.', 'error');
-            console.error(`Errore critico during manual sync:`, error);
-        } finally {
-            isSyncing.current = false;
-        }
-    }, [isOnline, userProfile, showSnackbar]);
+        await runFullSync('Manuale');
+        
+    }, [isOnline, userProfile, showSnackbar, runFullSync]);
 
     return {
         requestManualSync,

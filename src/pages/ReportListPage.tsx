@@ -16,11 +16,11 @@ import {
   ListItemIcon,
   ListItemText
 } from '@mui/material';
-import { WifiOff, CloudQueue, Gesture, Edit, Share, Delete, AccountCircle } from '@mui/icons-material';
+import { WifiOff, CloudQueue, Gesture, Edit, Share, Delete, AccountCircle, ErrorOutline } from '@mui/icons-material';
 import { format, startOfMonth, addMonths, isAfter, isSameMonth, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { EnrichedRapportino } from '@/models/definitions';
+import { EnrichedRapportino, SyncState } from '@/models/definitions';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { AuthContext } from '@/contexts/AuthContextDefinition';
@@ -38,7 +38,7 @@ const ReportListPage: React.FC = () => {
   const { showSnackbar } = useSnackbar();
   const authContext = useContext(AuthContext);
   const userProfile = authContext?.userProfile;
-  const { requestManualSync } = useSyncManager();
+  const { requestManualSync, pendingSyncCount } = useSyncManager();
   const isOnline = useOnlineStatus();
   
   const globalDataContext = useContext(GlobalDataContext);
@@ -49,8 +49,17 @@ const ReportListPage: React.FC = () => {
     db.rapportini.orderBy('data').reverse().toArray()
   , []);
 
+  const syncQueueItems = useLiveQuery(() => db.syncQueue.toArray(), []);
+
   const enrichedRapportini = useMemo(() => {
-    if (!rapportiniGrezzi || !masterData || !userProfile) return [];
+    if (!rapportiniGrezzi || !masterData || !userProfile || !syncQueueItems) return [];
+
+    const syncStatusMap = new Map<string, SyncState>();
+    syncQueueItems.forEach(item => {
+        if (item.entityId) {
+            syncStatusMap.set(item.entityId, item.syncStatus === 'error' ? 'error' : 'pending');
+        }
+    });
 
     return rapportiniGrezzi.reduce<EnrichedRapportino[]>((acc, report) => {
       const isNonWorkingDay = !report.dettaglioOreTecnici || report.dettaglioOreTecnici.length === 0;
@@ -83,32 +92,34 @@ const ReportListPage: React.FC = () => {
         return '';
       }).filter(Boolean).join(', ');
 
+      const syncState: SyncState = syncStatusMap.get(report.id) || 'synced';
+      const isEditable = syncState === 'synced';
+
       const enrichedReport = {
         ...report,
         tipoGiornata: tipoGiornata,
         naveNome: nave?.nome,
         luogoNome: luogo?.nome,
         creatore: tecnicoScrivente?.nome || 'N/D',
-        isEditable: true,
+        isEditable: isEditable, // <-- Logica di modifica basata sullo stato di sinc.
         isClickable: true,
         oreDisplay: oreLavorateTecnico > 0 ? `${oreLavorateTecnico.toFixed(2)} ore` : '',
         orariDisplay: orariTecnico,
         hasFirma: !!report.firmaVettoriale,
+        syncState: syncState, // <-- Stato di sinc. aggiunto per il rendering
       } as EnrichedRapportino;
 
       acc.push(enrichedReport);
       return acc;
     }, []);
-  }, [rapportiniGrezzi, masterData, userProfile, masterData?.navi, masterData?.luoghi]);
-
+  }, [rapportiniGrezzi, masterData, userProfile, syncQueueItems]);
 
   const [menuState, setMenuState] = useState<{ anchorEl: HTMLElement; report: EnrichedRapportino; } | null>(null);
   const [reportToDelete, setReportToDelete] = useState<EnrichedRapportino | null>(null);
   const [isConfirmDeleteDialogOpen, setConfirmDeleteDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
-  const offlineSyncEventsCount = useLiveQuery(() => db.syncQueue.where('type').equals('rapportino').count(), []);
-
+  
   useEffect(() => {
     if (enrichedRapportini && !currentMonth) {
       setCurrentMonth(startOfMonth(enrichedRapportini.length > 0 ? enrichedRapportini[0].data : new Date()));
@@ -130,8 +141,8 @@ const ReportListPage: React.FC = () => {
   const handleMenuClose = () => setMenuState(null);
 
   const handleEdit = () => {
-    if (!menuState) return;
-    navigate(menuState.report.id.startsWith('local-') ? `/report/edit-offline/${menuState.report.id}` : `/report/edit/${menuState.report.id}`);
+    if (!menuState || !menuState.report.isEditable) return;
+    navigate(`/report/edit/${menuState.report.id}`);
     handleMenuClose();
   };
 
@@ -159,14 +170,14 @@ const ReportListPage: React.FC = () => {
   };
 
   const handleDelete = () => {
-    if (!menuState || !userProfile) return;
-    const { report } = menuState;
-    if (report.tecnicoId !== userProfile.tecnicoId) {
-      showSnackbar("Non puoi cancellare un report creato da un altro tecnico.", "warning");
+    if (!menuState || !userProfile || !menuState.report.isEditable) return;
+
+    if (report.tecnicoId !== userProfile.tecnicoId && !report.isOwner) {
+        showSnackbar("Non puoi cancellare un report creato da un altro tecnico.", "warning");
     } else if (!isSameMonth(new Date(report.data), new Date())) {
-      showSnackbar("Puoi cancellare solo i report del mese corrente.", "warning");
+        showSnackbar("Puoi cancellare solo i report del mese corrente.", "warning");
     } else {
-      setReportToDelete(report);
+      setReportToDelete(menuState.report);
       setConfirmDeleteDialogOpen(true);
     }
     handleMenuClose();
@@ -177,21 +188,16 @@ const ReportListPage: React.FC = () => {
     setIsProcessing(true);
     setConfirmDeleteDialogOpen(false);
     try {
-      const fullReport = await db.rapportini.get(reportToDelete.id);
-      if (!fullReport) throw new Error("Rapportino non più esistente nel db locale.");
-
-      const updatedReport = { ...fullReport, isDeleted: true };
-
-      await db.rapportini.put(updatedReport);
+      await db.rapportini.update(reportToDelete.id, { isDeleted: true });
       
       await aggiungiAllaCoda({
         type: 'rapportino',
         action: 'update',
         entityId: reportToDelete.id,
-        payload: updatedReport
+        payload: { isDeleted: true }
       });
 
-      showSnackbar("Rapportino contrassegnato come eliminato.", "success");
+      showSnackbar("Rapportino contrassegnato come eliminato e messo in coda per la sinc.", "success");
       requestManualSync();
 
     } catch (error) {
@@ -218,7 +224,7 @@ const ReportListPage: React.FC = () => {
         <Button variant="contained" color="primary" size="large" onClick={() => navigate('/nuovo-report')} disabled={isProcessing}>Nuovo</Button>
       </Box>
       {!isOnline && <Alert severity="warning" icon={<WifiOff />} sx={{ mb: 2 }}>Sei offline...</Alert>}
-      {(offlineSyncEventsCount ?? 0) > 0 && <Chip icon={<CloudQueue />} label={`${offlineSyncEventsCount} modifiche in attesa di invio`} color="warning" sx={{ mb: 2, width: '100%' }} />}
+      {(pendingSyncCount ?? 0) > 0 && <Chip icon={<CloudQueue />} label={`${pendingSyncCount} modifiche in attesa di invio`} color="warning" sx={{ mb: 2, width: '100%' }} />}
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
         <Typography variant="h6">{currentMonth ? format(currentMonth, 'MMMM yyyy', { locale: it }) : '...'}</Typography>
@@ -247,20 +253,21 @@ const ReportListPage: React.FC = () => {
                       </Divider>
                   )}
                   <ListItem disablePadding divider={!isLastOfGroup}>
-                    <ListItemButton onClick={(e) => handleRowClick(e, report)} disabled={!report.isClickable || isProcessing} selected={isSelected} sx={{ py: 1.5, px: 2, opacity: report.isClickable ? 1 : 0.6, ...(isSelected && { border: '2px solid', borderColor: 'primary.main', borderRadius: 1 }) }}>
+                    <ListItemButton onClick={(e) => handleRowClick(e, report)} disabled={isProcessing} selected={isSelected} sx={{ py: 1.5, px: 2, ...(isSelected && { border: '2px solid', borderColor: 'primary.main', borderRadius: 1 }) }}>
                       <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography variant="body2" sx={{ fontWeight: '500', color: 'primary.main' }}>{tipoGiornataNome}</Typography>
                           {report.oreDisplay && <Typography variant="body2" sx={{fontWeight: 'bold'}} >{report.oreDisplay}</Typography>}
                           {report.orariDisplay && <Typography variant="caption" color="text.secondary">{report.orariDisplay}</Typography>}
-                          {report.isOffline && <Chip icon={<CloudQueue />} label="Locale" size="small" color="info" variant="outlined" sx={{mt: 0.5}} />}
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
                            {report.tecnicoId !== userProfile?.tecnicoId && report.creatore && <Chip icon={<AccountCircle />} label={report.creatore} size="small" variant="outlined" color="info" sx={{ mb: 0.5 }} />}
                           <Typography variant="body2" color="text.secondary" noWrap>{report.descrizioneBreve || ''}</Typography>
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                            <Box sx={{ height: '24px' }}>
+                            <Box sx={{ height: '24px', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {report.syncState === 'pending' && <CloudQueue fontSize="small" color="warning" titleAccess="In attesa di sincronizzazione" />}
+                                {report.syncState === 'error' && <ErrorOutline fontSize="small" color="error" titleAccess="Errore di sincronizzazione" />}
                                 {report.hasFirma && <Gesture fontSize="small" color="action" titleAccess="Firmato" />}
                             </Box>
                             <Typography variant="caption" color="text.secondary" noWrap>{report.naveNome || ''}</Typography>
@@ -276,9 +283,9 @@ const ReportListPage: React.FC = () => {
         </List>
       </Paper>
       <Menu open={menuState !== null} onClose={handleMenuClose} anchorEl={menuState?.anchorEl} anchorOrigin={{ vertical: 'center', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
-          <MenuItem onClick={handleEdit}><ListItemIcon><Edit fontSize="small" /></ListItemIcon><ListItemText>Modifica</ListItemText></MenuItem>
+          <MenuItem onClick={handleEdit} disabled={!menuState?.report.isEditable}><ListItemIcon><Edit fontSize="small" /></ListItemIcon><ListItemText>Modifica</ListItemText></MenuItem>
           <MenuItem onClick={handleShare}><ListItemIcon><Share fontSize="small" /></ListItemIcon><ListItemText>Condividi</ListItemText></MenuItem>
-          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}><ListItemIcon><Delete fontSize="small" color="error" /></ListItemIcon><ListItemText>Cancella</ListItemText></MenuItem>
+          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }} disabled={!menuState?.report.isEditable}><ListItemIcon><Delete fontSize="small" color="error" /></ListItemIcon><ListItemText>Cancella</ListItemText></MenuItem>
       </Menu>
       <ConfirmationDialog open={isConfirmDeleteDialogOpen} onClose={handleDialogClose} onConfirm={confirmDelete} title="Conferma Cancellazione" description={`Sei sicuro di voler cancellare questo rapportino? L'azione è irreversibile.`} />
       {isProcessing && <FullScreenLoader />}

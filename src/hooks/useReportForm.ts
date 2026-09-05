@@ -257,8 +257,6 @@ export const useReportForm = () => {
             }
         };
         loadData();
-        // L'array delle dipendenze ora include `tecnici`, garantendo che l'hook si riattivi 
-        // quando i dati dei tecnici sono finalmente disponibili, risolvendo la race condition.
     }, [reportId, isEditMode, collectionsLoading, loggedInTecnicoId, navigate, showSnackbar, tecnici]);
 
     useEffect(() => {
@@ -349,15 +347,31 @@ export const useReportForm = () => {
                 for (const day of days) {
                     const dataToSave = getFullReportData(day);
                     if (!dataToSave) continue;
-                    await aggiungiAllaCoda({ type: 'rapportino', action: 'create', entityId: `local-${uuidv4()}`, payload: removeUndefinedKeys(dataToSave) });
+                    
+                    const entityId = `local-${uuidv4()}`;
+                    const finalData = { ...dataToSave, id: entityId };
+
+                    // Salva immediatamente nel DB locale per visibilità UI
+                    await db.rapportini.put(finalData as Rapportino);
+
+                    await aggiungiAllaCoda({ type: 'rapportino', action: 'create', entityId, payload: removeUndefinedKeys(dataToSave) });
                 }
                 showSnackbar(`Creati ${days.length} rapportini!`, "success");
             } else {
                 const dataToSave = getFullReportData();
                 if (!dataToSave) { showSnackbar("Dati incompleti.", "error"); return null; }
+                
                 const actionType = isEditMode ? 'update' : 'create';
                 const entityId = dataToSave.id || `local-${uuidv4()}`;
+                
+                const finalData = { ...dataToSave, id: entityId };
+
+                // Salva immediatamente nel DB locale per visibilità UI
+                await db.rapportini.put(finalData as Rapportino);
+
+                // Aggiungi alla coda di sincronizzazione
                 await aggiungiAllaCoda({ type: 'rapportino', action: actionType, entityId, payload: removeUndefinedKeys(dataToSave) });
+                
                 showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
                 savedId = entityId;
             }
