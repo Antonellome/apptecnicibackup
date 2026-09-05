@@ -36,9 +36,11 @@ const callFunction = async (functionName: keyof typeof callableFunctions, payloa
     }
 
     try {
-        console.log(`[API_SERVICE] Chiamata a --> ${functionName} <-- con payload:`, JSON.stringify(payload, null, 2));
+        // LOG RIMOSSO: La riga seguente è stata rimossa per ridurre il rumore nei log di produzione.
+        // console.log(`[API_SERVICE] Chiamata a --> ${functionName} <-- con payload:`, JSON.stringify(payload, null, 2));
         const result = await callableFn(payload);
-        console.log(`[API_SERVICE] Risposta da <-- ${functionName} -->:`, JSON.stringify(result.data, null, 2));
+        // LOG RIMOSSO: La riga seguente è stata rimossa per non inondare la console con dati di anagrafica.
+        // console.log(`[API_SERVICE] Risposta da <-- ${functionName} -->:`, JSON.stringify(result.data, null, 2));
         return result.data;
     } catch (error) {
         // @ts-expect-error Utilizzato per gestire l'errore di Firebase che non ha un tipo standard

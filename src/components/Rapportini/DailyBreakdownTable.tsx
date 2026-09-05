@@ -57,11 +57,14 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
         const isFirst = dayKey !== lastDate;
         lastDate = dayKey;
 
+        // CORREZIONE: Usa sia naveNome che luogoNome per la descrizione
+        const locationName = report.naveNome || report.luogoNome;
+
         const row: ProcessedReportRow = {
             id: report.id,
             isFirstOfDate: isFirst,
             date: report.data,
-            activityDescription: `${report.tipoGiornata?.nome || 'N/D'} ${report.naveNome ? `(${report.naveNome})` : ''}`,
+            activityDescription: `${report.tipoGiornata?.nome || 'N/D'} ${locationName ? `(${locationName})` : ''}`,
             oreOrdinarie: 0,
             oreStraordinarie: 0,
             altreOre: {},

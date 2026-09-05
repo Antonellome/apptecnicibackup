@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from 'react';
+import React, { ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import { useAuth } from '../hooks/useAuth';
@@ -7,12 +7,13 @@ import { GlobalDataContext, GlobalData } from '../contexts/GlobalDataContext';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { MasterData } from '@/models/definitions';
 
-// Creiamo un oggetto MasterData di default, completamente vuoto ma strutturalmente valido.
-// Questo oggetto verrà usato come fallback per prevenire crash durante il caricamento iniziale.
 const defaultMasterData: MasterData = {
     tecnici: [],
     ditte: [],
     categorie: [],
+    lavorazioni: [],
+    qualifiche: [],
+    sistemi: [],
     navi: [],
     luoghi: [],
     veicoli: [],
@@ -21,34 +22,65 @@ const defaultMasterData: MasterData = {
     impostazioni: { id: 'main', tariffe: [] },
 };
 
-/**
- * Questo provider è la fonte di verità per l'intera UI.
- * È stato blindato per non restituire MAI un contesto non valido.
- */
 export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, loading: authLoading } = useAuth();
     const { isSyncing, error: syncError } = useSyncManager();
+    const [isDbReady, setIsDbReady] = useState(false);
 
-    const loading = authLoading || isSyncing;
+    useEffect(() => {
+        db.open().then(() => {
+            console.log("[DB] Database aperto e pronto.");
+            setIsDbReady(true);
+        }).catch(err => {
+            console.error("[DB] Errore critico: impossibile aprire il database", err);
+            setIsDbReady(false);
+        });
+    }, []);
 
-    const userProfile = useLiveQuery(() => user ? db.webAppUsers.get(user.uid) : undefined, [user]);
-    const rapportini = useLiveQuery(() => db.rapportini.toArray(), []);
-    const checkins = useLiveQuery(() => db.checkins.toArray(), []);
+    const loading = authLoading || isSyncing || !isDbReady;
 
-    // La query per masterData ora usa il nostro oggetto di default come valore iniziale.
-    // Questo garantisce che `masterData` non sia mai `undefined`.
+    const userProfile = useLiveQuery(() => 
+        isDbReady && user ? db.webAppUsers.get(user.uid) : undefined,
+    [isDbReady, user]);
+
+    const rapportini = useLiveQuery(() => 
+        isDbReady ? db.rapportini.toArray() : [], 
+    [isDbReady], []);
+
+    const checkins = useLiveQuery(() => 
+        isDbReady ? db.checkin_giornalieri.toArray() : [],
+    [isDbReady], []);
+
     const masterData = useLiveQuery(async () => {
-        const anagrafiche = await db.anagrafiche.toArray();
-        if (anagrafiche.length === 0) return defaultMasterData;
+        if (!isDbReady) return defaultMasterData;
 
-        const data: { [key: string]: any[] } = {};
-        anagrafiche.forEach(item => { data[item.id] = item.data; });
+        const [tecnici, ditte, categorie, lavorazioni, navi, luoghi, veicoli, tipiGiornata, impostazioni] = await Promise.all([
+            db.tecnici.toArray(),
+            db.ditte.toArray(),
+            db.categorie.toArray(),
+            db.lavorazioni.toArray(),
+            db.navi.toArray(),
+            db.luoghi.toArray(),
+            db.veicoli.toArray(),
+            db.tipiGiornata.toArray(),
+            db.impostazioni.get('main')
+        ]);
 
-        const impostazioni = await db.tariffe_locali.get('main');
-        return { ...defaultMasterData, ...data, impostazioni: impostazioni?.data || defaultMasterData.impostazioni } as MasterData;
-    }, [], defaultMasterData);
+        return {
+            ...defaultMasterData, // Inizia con i default (che includono array vuoti per la spazzatura)
+            tecnici,
+            ditte,
+            categorie,
+            lavorazioni,
+            navi,
+            luoghi,
+            veicoli,
+            tipiGiornata,
+            impostazioni: impostazioni || defaultMasterData.impostazioni,
+        };
 
-    // Il valore del contesto è ora SEMPRE un oggetto valido.
+    }, [isDbReady], defaultMasterData);
+
     const contextValue: GlobalData = useMemo(() => ({
         masterData: masterData || defaultMasterData,
         rapportini: rapportini || [],
@@ -58,9 +90,7 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
         error: syncError,
     }), [masterData, rapportini, checkins, userProfile, loading, syncError]);
 
-    // Mostra il loader solo se siamo in caricamento E i dati principali non sono ancora arrivati.
-    // Questo previene sfarfallii se i dati sono già in cache.
-    if (loading && !rapportini) {
+    if (loading) {
         return <FullScreenLoader />;
     }
 

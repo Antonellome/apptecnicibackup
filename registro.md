@@ -1,121 +1,59 @@
-# Registro di Progetto
-Questo documento serve come fonte di verità per l'architettura, le funzionalità e le specifiche tecniche dell'applicazione.
+# Cronistoria del Progetto
+
+Questo documento traccia l'evoluzione dell'applicazione, evidenziando le decisioni architetturali, i problemi riscontrati e le soluzioni adottate.
+
+## Regole Fondamentali
+
+1.  **Non modificare MAI il layout delle pagine.** Non è permesso modificare, eliminare, aggiungere o creare nemmeno una virgola di codice relativo alla struttura visiva (es. Grid, Box, layout CSS) se non esplicitamente richiesto.
+2.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica.
+3.  **Mai Dare Niente per Scontato:** Prima di modificare un file, leggerlo sempre. Prima di usare una funzione, verificarne la firma. Questo previene errori di refactoring e ipotesi errate.
 
 ---
 
-## 1. La Regola del Ciao: La Mia Filosofia Operativa
-Ciao! Sono il tuo assistente AI. Il mio obiettivo è agire e risolvere, non solo chiacchierare. Prendo iniziative basate sul contesto per portare a termine il lavoro in modo efficiente. Parlo solo quando è necessario per confermare piani complessi o chiedere chiarimenti. La mia priorità è l'azione diretta e risolutiva.
+## Fase 1: Analisi Iniziale e Criticità Rilevate
+
+- **Stabilità:** Assenza di `ErrorBoundary` globale.
+- **Sincronizzazione Fragile:** Logica di upload inaffidabile e rischio di discrepanze sui dati in download.
+- **Funzionalità Incomplete:** Notifiche non funzionanti.
+- **Debito Tecnico:** Codice e documentazione obsoleti.
 
 ---
 
-## 2. Descrizione Generale dell'Applicazione
-L'applicazione è una Progressive Web App (PWA) progettata per i tecnici di *Tecnologie Industriali Navali*, con un forte focus sulla funzionalità offline.
+## Fase 2: Primi Interventi Correttivi
+
+- **Stabilità:** Introdotto `ErrorBoundary` globale.
+- **Pulizia:** Rimozione codice inutilizzato.
+- **Architettura Upload:** Spostata tutta la logica di scrittura su Cloud Functions, abbandonando le scritture dirette da client.
 
 ---
 
-## 3. Architettura Backend: Cloud Functions (Stato di Produzione)
-Questa sezione elenca le funzioni **effettivamente deployate** su Firebase, come da verifica e conferma del 29/07/2024. Questo elenco è la fonte di verità.
-- `testcors`
-- `saveFCMToken`
-- `getAllRapportiniForSync`
-- `updateRapportino`
-- `createRapportino`
-- `sync_manifest`
-- `deleteDocumento`
-- `syncAnagrafica`
-- `deleteRapportino`
-- `updateDocumento`
-- `createCheckin`
-- `syncAllAnagrafiche`
-- `admin_getAllUsers`
-- `getCheckinsUpdates`
-- `amministrazione_gestisciUtenti`
-- `createDocumento`
-- `adminGetAllRapportini`
+## Fase 3: Analisi Funzionalità Incomplete e Correzione Sincronizzazione
 
-**NOTA CRITICA - FUNZIONALITÀ NOTIFICHE NON OPERATIVA (29/07/2024):**
-Il problema è CONFERMATO e PERSISTE. Le funzioni `getNotifiche`, `markNotificheAsRead`, `sendNotifica` e `deleteNotifiche` sono **ASSENTI** dall'ambiente di produzione. Questo rende l'intera sezione Notifiche dell'app **NON FUNZIONANTE**.
+### Problema 1: Dati Mancanti nell'UI
 
----
+- **Sintomo:** L'app visualizza `[Tipo sconosciuto]`, `[Nave sconosciuta]`, `[Luogo sconosciuto]`.
+- **Causa Radice:** La sincronizzazione iniziale non scarica tutte le anagrafiche necessarie per mappare gli ID ai nomi corrispondenti.
 
-## 4. Architettura Frontend: Analisi Dettagliata delle Pagine
+### Problema 2: Notifiche Incomplete
 
-### 4.1. HomePage (`src/pages/HomePage.tsx`)
-*   **Scopo:** Cruscotto principale e menu di navigazione per le funzionalità chiave.
-*   **Layout:** Organizzato a griglia, con un messaggio di benvenuto personalizzato con l'email dell'utente.
-*   **Funzionalità:**
-    *   **Navigazione:** Contiene i link principali a "Nuovo report", "I miei Report", "Report Mensili", "Notifiche" e "Check-in".
-    *   **Contatore Notifiche:** Un `Badge` sul pulsante Notifiche mostra il numero di notifiche non lette, recuperato tramite l'hook `useUnreadNotificationsCount`.
-*   **Punto Critico Rilevato:** Il contatore notifiche è quasi certamente **non funzionante**, poiché dipende da una logica backend che è assente.
+- **Sintomo:** I tecnici ricevono solo le notifiche dirette, ma non quelle inviate al loro gruppo di appartenenza (categoria) o a tutti.
+- **Causa Radice:** La query di recupero notifiche è errata e filtra solo per `tecnicoId`. Inoltre, l'app non scarica le informazioni sulla categoria di appartenenza del tecnico.
 
-### 4.2. Nuovo Report (`src/pages/NuovoReportPage.tsx` e `ReportFormPage.tsx`)
-Questa funzionalità è composta da un componente "wrapper" (`NuovoReportPage`) che carica il componente principale del form (`ReportFormPage`). Tutta la logica complessa risiede nell'hook **`useReportForm.ts`**.
-*   **Scopo:** Fornisce l'interfaccia per la creazione e la modifica dei report di intervento e delle assenze.
-*   **Architettura:** La pagina delega tutta la gestione dello stato e della logica all'hook `useReportForm`, che utilizza un `useReducer` per una gestione robusta dello stato.
-*   **Logica di Salvataggio (Offline-First):**
-    1.  Al salvataggio, l'hook **non** chiama direttamente le API di Firebase.
-    2.  L'operazione (`create` o `update`) viene salvata in una coda locale nel database Dexie.
-    3.  Un processo in background (`SyncManager`) si occupa di inviare i dati a Firestore.
-*   **Regole di Business Implementate:**
-    *   **Blocco Modifiche:** Un report viene bloccato (sola lettura) se l'utente non è il creatore o se è passata la data limite (il 5 del mese successivo).
-    *   **Gestione Ore (Manuale vs Automatica):** L'inserimento delle ore può essere automatico (da ora inizio/fine) o manuale (totale ore). La modalità viene ereditata dai tecnici aggiunti.
-    *   **Multi-Giorno:** Permesso solo per tipi di assenza specifici (es. ferie).
-    *   **Pausa Automatica:** Viene aggiunta una pausa di 60 minuti se l'orario interseca la fascia 12:00-13:00.
-    *   **Firma Non Modificabile:** La firma del cliente, una volta salvata, non può più essere modificata.
-*   **Funzionalità Aggiuntive:** Auto-salvataggio in `localStorage` durante la creazione; copia degli orari quando si aggiungono nuovi tecnici.
+### Investigazione e Soluzione
 
-### 4.3. I Miei Report (`src/pages/ReportListPage.tsx`)
-*   **Scopo:** Elencare, visualizzare e gestire i report creati dall'utente.
-*   **Architettura e Dati:**
-    *   **Fonte Dati Locale e Reattiva:** Usa `useLiveQuery` per leggere i dati in tempo reale dal database locale (Dexie), rendendo l'UI istantaneamente reattiva.
-    *   **Dati Arricchiti:** Utilizza un hook `useEnrichedRapportini` per combinare i dati grezzi con le anagrafiche.
-*   **Funzionalità Chiave:**
-    *   **Navigazione Mensile:** Permette di sfogliare i report mese per mese.
-    *   **Indicatori di Stato:** Comunica lo stato di connettività (online/offline) e i dati in attesa di sincronizzazione.
-    *   **Condivisione PDF:** Genera un PDF del report **direttamente sul client** tramite `generateRapportinoPDF`.
-    *   **Cancellazione (Soft Delete):** Marca un report come "cancellato" (`isDeleted: true`) ma non lo rimuove fisicamente.
+- **Analisi Modello Dati:** L'analisi del file `src/models/definitions.ts` ha rivelato che l'identificativo della categoria di un tecnico (`categoriaId`) è memorizzato direttamente nel suo profilo (`Tecnico`).
+- **Conclusione:** Non sono necessarie tabelle di collegamento intermedie come `tecniciQualifiche`. La soluzione risiede nel sincronizzare le anagrafiche corrette.
 
-### 4.4. Report Mensili (`src/pages/MonthlyReportPage.tsx`)
-*   **Scopo:** Fornire una visione d'insieme aggregata dell'attività mensile di un tecnico.
-*   **Architettura e Dati:**
-    *   **Fonte Dati Inclusiva:** Recupera tutti i report del mese in cui l'utente è presente (creatore o aggiunto).
-    *   **Logica di Calcolo Centralizzata:** Un servizio `calculateMonthlyReportData` si occupa di processare e aggregare i dati.
-*   **Interfaccia Utente:** Presenta i dati in tre formati: calendario, tabella riepilogo e dettaglio giornaliero.
-*   **Funzionalità Chiave:** Generazione e **anteprima** del PDF mensile sul client.
-*   **Funzionalità Nascosta (Easter Egg):** 5 click sul titolo rivelano la stima dei costi nel riepilogo.
+### Piano d'Azione Definitivo (Client-Side)
 
-### 4.5. Notifiche (`src/pages/NotifichePage.tsx`)
-*   **Scopo:** Centro notifiche per visualizzare comunicazioni.
-*   **Punto di Rottura CRITICO:**
-    *   **Recupero Dati (Funzionante):** La pagina visualizza correttamente le notifiche grazie a un ascoltatore `onSnapshot`.
-    *   **Aggiornamento Dati (NON Funzionante):** Qualsiasi interazione (es. "Segna come letta") fallisce perché invoca una Cloud Function (`markNotificationAsRead`) che **non esiste**.
-*   **Impatto:** L'utente vede le notifiche ma non può gestirle, rendendo la pagina inutilizzabile.
-
-### 4.6. Check-in (`src/pages/CheckinPage.tsx`)
-*   **Scopo:** Sistema di "timbratura" digitale (punch clock).
-*   **Architettura:** 100% Offline-First. Ogni "timbratura" viene salvata localmente in Dexie e accodata per la sincronizzazione.
-*   **Flusso di Lavoro Rigoroso (Post-Modifica):**
-    1.  **Stato Iniziale:** L'unica azione possibile è "Inizia Giornata", con **selezione obbligatoria** del luogo di lavoro.
-    2.  **Stato "Dentro":** Dopo l'inizio, le uniche azioni sono "Uscita" o "Termina Giornata".
-    3.  **Stato "Fuori":** Dopo un'uscita, le uniche azioni sono una nuova "Entrata" o "Termina Giornata".
-
-### 4.7. Impostazioni (`src/pages/SettingsPage.tsx`)
-*   **Scopo:** Centro di controllo con guida, gestione account e configurazioni.
-*   **Funzionalità:** Guida all'installazione della PWA, recupero password, logout, pulsante per forzare l'aggiornamento dell'app.
-*   **Funzionalità Nascosta (Easter Egg):** Sezione per la **Gestione Tariffe** (salvate solo localmente) appare dopo 5 click sul titolo.
-
-### 4.8. Login (`src/pages/LoginPage.tsx`)
-*   **Scopo:** Pagina di accesso standard.
-*   **Architettura:** Reindirizza automaticamente gli utenti già loggati. Gestisce autenticazione e recupero password via Firebase SDK.
-
----
-
-## 5. Guida di Stile e Convenzioni: Material-UI v7
-Questo progetto utilizza **Material-UI v7**. La convenzione per il componente `<Grid>` è usare la prop `size` con un oggetto per i breakpoint (`<Grid size={{ xs: 12, md: 6 }}>`).
-
----
-
-## 6. Debito Tecnico e Azioni Correttive
-*   **Incoerenza Sintassi `<Grid>` di MUI (RISOLTO):** Il codebase è stato allineato tramite codemod.
-*   **Codice Morto (RIMOSSO):** `RapportiniList.tsx`, `NotesPage.tsx`.
-*   **UI Superflua (RIMOSSO):** Pulsante "Cerca" in `AttendancesPage.tsx`.
+1.  **Identificare il Responsabile:** Individuato il service `offlineSync.ts` come gestore della sincronizzazione.
+2.  **Definire le Anagrafiche Obbligatorie:** La lista completa e definitiva delle collezioni da sincronizzare è:
+    - `navi`
+    - `luoghi`
+    - `categorie`
+    - `tipiGiornata`
+    - `veicoli`
+    - `tecnici`
+3.  **Estendere la Sincronizzazione:** Modificato la funzione `syncAllAnagrafiche` in `offlineSync.ts` per scaricare **tutte e sei** le collezioni elencate.
+4.  **Correggere la Logica Notifiche:** Modificato la query in `NotifichePage.tsx` per includere le notifiche per categoria e quelle globali, utilizzando il `categoriaId` ottenuto dal profilo del tecnico.
+5.  **Risoluzione Errori di Refactoring:** Corretti molteplici errori di importazione causati da ipotesi errate sui nomi e percorsi dei file. Questo ha portato all'aggiunta della Regola Fondamentale n.3.

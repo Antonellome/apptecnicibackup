@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import {
     Container,
     Typography,
@@ -9,12 +9,12 @@ import {
     Box,
     Chip
 } from '@mui/material';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { collection, query, where, orderBy, onSnapshot, Query } from 'firebase/firestore';
+import { db as firestore } from '@/utils/firebase';
 import { markNotificheAsRead } from '@/services/notificationService';
 import { NotificationItem } from '@/components/notifiche/NotificationItem';
 import type { Notifica } from '@/models/definitions';
-import { useAuth } from '@/hooks/useAuth';
+import { AuthContext } from '@/contexts/AuthContextDefinition';
 
 const DISMISSED_STORAGE_KEY = 'dismissed_notifications';
 
@@ -29,40 +29,72 @@ const getDismissedNotifiche = (): string[] => {
 };
 
 const NotifichePage: React.FC = () => {
-    const { user, userProfile } = useAuth();
+    const authContext = useContext(AuthContext);
+    const userProfile = authContext?.userProfile;
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [notifiche, setNotifiche] = useState<Notifica[]>([]);
     const [dismissedIds, setDismissedIds] = useState<string[]>(getDismissedNotifiche);
 
     useEffect(() => {
-        if (!user) {
+        if (!userProfile?.tecnicoId) {
             setLoading(false);
-            setError("Devi essere autenticato per vedere le notifiche.");
+            setError("Profilo utente non caricato o incompleto. Impossibile caricare le notifiche.");
             return;
         }
 
         setLoading(true);
-        const notificheCollection = collection(db, 'notifiche');
-        const q = query(
-            notificheCollection,
-            where('userId', '==', user.uid),
-            orderBy('createdAt', 'desc')
-        );
+        const notificheCollection = collection(firestore, 'notifiche');
+        const allNotifiche: { [id: string]: Notifica } = {};
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notifica));
-            setNotifiche(data);
-            setLoading(false);
-        }, (err) => {
-            console.error(err);
-            setError("Impossibile caricare le notifiche in tempo reale. Riprova più tardi.");
-            setLoading(false);
-        });
+        const queries: Query[] = [];
 
-        // Cleanup: disiscrizione dal listener quando il componente viene smontato
-        return () => unsubscribe();
-    }, [user]);
+        // 1. Query per notifiche dirette
+        queries.push(query(notificheCollection, where('tecnicoId', '==', userProfile.tecnicoId)));
+
+        // 2. Query per notifiche di categoria (se l'utente ha una categoria)
+        if (userProfile.categoriaId) {
+            queries.push(query(notificheCollection, where('categoriaId', '==', userProfile.categoriaId)));
+        }
+
+        // 3. Query per notifiche globali
+        queries.push(query(notificheCollection, where('target', '==', 'all')));
+
+        const processSnapshot = (snapshot: any) => {
+            snapshot.docs.forEach((doc: any) => {
+                // Ignora documenti senza data, potrebbero essere risultati parziali
+                if (doc.data().createdAt) {
+                    allNotifiche[doc.id] = { id: doc.id, ...doc.data() } as Notifica;
+                }
+            });
+
+            // Ordina per data (più recente prima)
+            const mergedList = Object.values(allNotifiche).sort((a, b) => {
+                const timeA = a.createdAt?.toMillis() || 0;
+                const timeB = b.createdAt?.toMillis() || 0;
+                return timeB - timeA;
+            });
+
+            setNotifiche(mergedList);
+            setLoading(false);
+        };
+        
+        const handleError = (err: Error) => {
+            console.error("Errore durante l'ascolto delle notifiche:", err);
+            setError("Impossibile caricare le notifiche. Il servizio potrebbe essere non disponibile.");
+            setLoading(false);
+        };
+
+        // Iscrizione a tutte le query
+        const unsubscribers = queries.map(q => onSnapshot(q, processSnapshot, handleError));
+
+        // Cleanup
+        return () => {
+            unsubscribers.forEach(unsub => unsub());
+        };
+
+    }, [userProfile]);
 
     useEffect(() => {
         localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(dismissedIds));
@@ -75,7 +107,7 @@ const NotifichePage: React.FC = () => {
             await markNotificheAsRead([id]);
         } catch (error) {
             console.error("Errore server su markAsRead:", error);
-            setNotifiche(originalNotifiche); // Ripristina lo stato ottimistico in caso di errore
+            setNotifiche(originalNotifiche);
             setError("Impossibile segnare la notifica come letta.");
         }
     };
@@ -91,7 +123,7 @@ const NotifichePage: React.FC = () => {
             await markNotificheAsRead(unreadIds);
         } catch (error) {
             console.error("Errore server su markAllAsRead:", error);
-            setNotifiche(originalNotifiche); // Ripristina lo stato ottimistico
+            setNotifiche(originalNotifiche); // Ripristina in caso di errore
             setError("Impossibile segnare tutte le notifiche come lette.");
         }
     };
@@ -151,14 +183,15 @@ const NotifichePage: React.FC = () => {
             ) : (
                 <Grid container spacing={2} sx={{ width: '100%' }}>
                     {visibleNotifiche.map((notification) => (
-                        <Grid size={12} key={notification.id}>
+                        <Grid key={notification.id} size={12}>
                             <NotificationItem
                                 notification={notification}
                                 onMarkAsRead={handleMarkAsRead}
                                 onDismiss={handleDismiss}
                             />
                         </Grid>
-                    ))}
+                    ))
+                }
                 </Grid>
             )}
         </Container>

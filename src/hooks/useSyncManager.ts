@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
-import { sincronizzaTutto } from '@/services/offlineSync';
+import { syncAllAnagrafiche } from '@/services/offlineSync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useAuth } from './useAuth';
 import { useOnlineStatus } from './useOnlineStatus';
@@ -28,7 +28,7 @@ export const useSyncManager = () => {
             console.log("Orchestratore (AVVIO): Prima sincronizzazione automatica.");
 
             try {
-                await sincronizzaTutto(userProfile!.tecnicoId);
+                await syncAllAnagrafiche();
                 console.log("SYNC ACTION: Completata con successo (Iniziale).");
             } catch (error) {
                 showSnackbar('Errore di sincronizzazione in background.', 'error');
@@ -72,7 +72,7 @@ export const useSyncManager = () => {
         console.log(`SYNC ACTION: Avviata (Manuale) con ${count} elementi in coda.`);
 
         try {
-            await sincronizzaTutto(userProfile.tecnicoId);
+            await syncAllAnagrafiche();
             showSnackbar('Sincronizzazione completata! I dati sono allineati.', 'success');
             console.log("SYNC ACTION: Completata con successo (Manuale).");
         } catch (error) {

@@ -20,7 +20,6 @@ import { WifiOff, CloudQueue, Gesture, Edit, Share, Delete, AccountCircle } from
 import { format, startOfMonth, addMonths, isAfter, isSameMonth, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEnrichedRapportini } from '@/hooks/useEnrichedRapportini';
 import { EnrichedRapportino } from '@/models/definitions';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
@@ -31,7 +30,8 @@ import { aggiungiAllaCoda } from '@/services/syncService';
 import { generateRapportinoPDF } from '@/services/rapportinoPDFGenerator';
 import { shareOrDownload } from '@/services/shareService';
 import { useSyncManager } from '@/hooks/useSyncManager';
-import { MasterDataContext } from '@/contexts/MasterDataContext'; 
+import { GlobalDataContext } from '@/contexts/GlobalDataContext'; 
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const ReportListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,11 +39,68 @@ const ReportListPage: React.FC = () => {
   const authContext = useContext(AuthContext);
   const userProfile = authContext?.userProfile;
   const { requestManualSync } = useSyncManager();
-  const { rapportini, isLoading: rapportiniLoading, error: rapportiniError } = useEnrichedRapportini();
+  const isOnline = useOnlineStatus();
   
-  const masterDataContext = useContext(MasterDataContext);
-  const masterData = masterDataContext?.masterData;
-  const collectionsLoading = masterDataContext?.loading;
+  const globalDataContext = useContext(GlobalDataContext);
+  const masterData = globalDataContext?.masterData;
+  const collectionsLoading = globalDataContext?.loading;
+
+  const rapportiniGrezzi = useLiveQuery(() => 
+    db.rapportini.orderBy('data').reverse().toArray()
+  , []);
+
+  const enrichedRapportini = useMemo(() => {
+    if (!rapportiniGrezzi || !masterData || !userProfile) return [];
+
+    return rapportiniGrezzi.reduce<EnrichedRapportino[]>((acc, report) => {
+      const isNonWorkingDay = !report.dettaglioOreTecnici || report.dettaglioOreTecnici.length === 0;
+      let isUserInvolved = false;
+
+      if (isNonWorkingDay) {
+        isUserInvolved = report.tecnicoId === userProfile.tecnicoId;
+      } else {
+        isUserInvolved = report.dettaglioOreTecnici.some(d => d.tecnicoId === userProfile.tecnicoId);
+      }
+
+      if (!isUserInvolved) {
+        return acc;
+      }
+
+      const tipoGiornata = masterData.tipiGiornata.find(t => t.id === report.tipoGiornataId);
+      const nave = masterData.navi.find(n => n.id === report.naveId);
+      const luogo = masterData.luoghi.find(l => l.id === report.luogoId);
+      const tecnicoScrivente = masterData.tecnici.find(t => t.id === report.tecnicoScriventeId);
+
+      const dettagliTecnico = report.dettaglioOreTecnici?.filter(d => d.tecnicoId === userProfile.tecnicoId) || [];
+      const oreLavorateTecnico = dettagliTecnico.reduce((acc, curr) => acc + (curr.ore || 0), 0);
+      const orariTecnico = dettagliTecnico.map(d => {
+        if (d.isManual) {
+          return `Manuale: ${d.ore || 0}h`;
+        }
+        if (d.oraInizio && d.oraFine) {
+          return `${d.oraInizio}-${d.oraFine} (${(d.ore || 0).toFixed(2)}h)`;
+        }
+        return '';
+      }).filter(Boolean).join(', ');
+
+      const enrichedReport = {
+        ...report,
+        tipoGiornata: tipoGiornata,
+        naveNome: nave?.nome,
+        luogoNome: luogo?.nome,
+        creatore: tecnicoScrivente?.nome || 'N/D',
+        isEditable: true,
+        isClickable: true,
+        oreDisplay: oreLavorateTecnico > 0 ? `${oreLavorateTecnico.toFixed(2)} ore` : '',
+        orariDisplay: orariTecnico,
+        hasFirma: !!report.firmaVettoriale,
+      } as EnrichedRapportino;
+
+      acc.push(enrichedReport);
+      return acc;
+    }, []);
+  }, [rapportiniGrezzi, masterData, userProfile, masterData?.navi, masterData?.luoghi]);
+
 
   const [menuState, setMenuState] = useState<{ anchorEl: HTMLElement; report: EnrichedRapportino; } | null>(null);
   const [reportToDelete, setReportToDelete] = useState<EnrichedRapportino | null>(null);
@@ -51,20 +108,19 @@ const ReportListPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
   const offlineSyncEventsCount = useLiveQuery(() => db.syncQueue.where('type').equals('rapportino').count(), []);
-  const isOnline = useLiveQuery(() => db.syncState.get('isOnline').then(s => s?.value === 1), [], true);
 
   useEffect(() => {
-    if (!rapportiniLoading && rapportini && !currentMonth) {
-      setCurrentMonth(startOfMonth(rapportini.length > 0 ? rapportini[0].data : new Date()));
+    if (enrichedRapportini && !currentMonth) {
+      setCurrentMonth(startOfMonth(enrichedRapportini.length > 0 ? enrichedRapportini[0].data : new Date()));
     }
-  }, [rapportini, rapportiniLoading, currentMonth]);
+  }, [enrichedRapportini, currentMonth]);
 
   const displayedRapportini = useMemo(() => {
-    if (!rapportini || !currentMonth) return [];
-    return rapportini.filter(r => isSameMonth(r.data, currentMonth));
-  }, [rapportini, currentMonth]);
+    if (!enrichedRapportini || !currentMonth) return [];
+    return enrichedRapportini.filter(r => isSameMonth(r.data, currentMonth));
+  }, [enrichedRapportini, currentMonth]);
 
-  const isLoading = rapportiniLoading || collectionsLoading || !currentMonth;
+  if (collectionsLoading || !rapportiniGrezzi || !currentMonth || !masterData) return <FullScreenLoader />;
 
   const handleRowClick = (event: React.MouseEvent<HTMLElement>, report: EnrichedRapportino) => {
     event.preventDefault();
@@ -147,9 +203,6 @@ const ReportListPage: React.FC = () => {
     }
   };
 
-  if (isLoading) return <FullScreenLoader />;
-  if (rapportiniError) return <Box sx={{ p: 4, textAlign: 'center' }}><Alert severity="error">{rapportiniError.message}</Alert></Box>;
-
   const handleMonthChange = (increment: number) => setCurrentMonth(prev => prev ? addMonths(prev, increment) : new Date());
   const isNextMonthDisabled = () => !currentMonth || isAfter(startOfMonth(addMonths(currentMonth, 1)), new Date());
 
@@ -183,6 +236,8 @@ const ReportListPage: React.FC = () => {
               const isSelected = menuState?.report.id === report.id || reportToDelete?.id === report.id;
               const nextReport = displayedRapportini[index + 1];
               const isLastOfGroup = !nextReport || !isSameDay(report.data, nextReport.data) || nextReport.isDeleted;
+              
+              const tipoGiornataNome = report.tipoGiornata?.nome || '[Tipo sconosciuto]';
 
               return (
                 <Fragment key={report.id}>
@@ -195,19 +250,21 @@ const ReportListPage: React.FC = () => {
                     <ListItemButton onClick={(e) => handleRowClick(e, report)} disabled={!report.isClickable || isProcessing} selected={isSelected} sx={{ py: 1.5, px: 2, opacity: report.isClickable ? 1 : 0.6, ...(isSelected && { border: '2px solid', borderColor: 'primary.main', borderRadius: 1 }) }}>
                       <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                          {report.tipoGiornata?.nome && <Typography variant="body2" sx={{ fontWeight: '500', color: 'primary.main' }}>{report.tipoGiornata.nome}</Typography>}
+                          <Typography variant="body2" sx={{ fontWeight: '500', color: 'primary.main' }}>{tipoGiornataNome}</Typography>
                           {report.oreDisplay && <Typography variant="body2" sx={{fontWeight: 'bold'}} >{report.oreDisplay}</Typography>}
                           {report.orariDisplay && <Typography variant="caption" color="text.secondary">{report.orariDisplay}</Typography>}
                           {report.isOffline && <Chip icon={<CloudQueue />} label="Locale" size="small" color="info" variant="outlined" sx={{mt: 0.5}} />}
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-                          {report.creatore && <Chip icon={<AccountCircle />} label={report.creatore} size="small" variant="outlined" color="info" sx={{ mb: 0.5 }} />}
+                           {report.tecnicoId !== userProfile?.tecnicoId && report.creatore && <Chip icon={<AccountCircle />} label={report.creatore} size="small" variant="outlined" color="info" sx={{ mb: 0.5 }} />}
                           <Typography variant="body2" color="text.secondary" noWrap>{report.descrizioneBreve || ''}</Typography>
                         </Box>
-                        <Box sx={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
-                          {report.hasFirma && <Gesture fontSize="small" color="action" titleAccess="Firmato" />}
-                          <Typography variant="caption" color="text.secondary">{report.naveNome || report.luogoNome || ''}</Typography>
-                          {report.naveNome && report.luogoNome && <Typography variant="caption" color="text.secondary">{report.luogoNome}</Typography>}
+                        <Box sx={{ flex: 1, minWidth: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                            <Box sx={{ height: '24px' }}>
+                                {report.hasFirma && <Gesture fontSize="small" color="action" titleAccess="Firmato" />}
+                            </Box>
+                            <Typography variant="caption" color="text.secondary" noWrap>{report.naveNome || ''}</Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap>{report.luogoNome || ''}</Typography>
                         </Box>
                       </Box>
                     </ListItemButton>
@@ -223,7 +280,7 @@ const ReportListPage: React.FC = () => {
           <MenuItem onClick={handleShare}><ListItemIcon><Share fontSize="small" /></ListItemIcon><ListItemText>Condividi</ListItemText></MenuItem>
           <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}><ListItemIcon><Delete fontSize="small" color="error" /></ListItemIcon><ListItemText>Cancella</ListItemText></MenuItem>
       </Menu>
-      <ConfirmationDialog open={isConfirmDeleteDialogOpen} onClose={handleDialogClose} onConfirm={confirmDelete} title="Conferma Cancellazione" description={`Sei sicuro di voler cancellare questo rapportino? L\'azione è irreversibile.`} />
+      <ConfirmationDialog open={isConfirmDeleteDialogOpen} onClose={handleDialogClose} onConfirm={confirmDelete} title="Conferma Cancellazione" description={`Sei sicuro di voler cancellare questo rapportino? L'azione è irreversibile.`} />
       {isProcessing && <FullScreenLoader />}
     </Box>
   );

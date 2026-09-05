@@ -8,11 +8,29 @@ import { fileURLToPath, URL } from 'url';
 export default defineConfig({
   plugins: [
     react(),
+    // RIABILITATO CON LA CONFIGURAZIONE CORRETTA
     VitePWA({
       registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,json,vue,txt,woff2}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json,vue,txt,woff2}'],
+        // CORREZIONE: Aggiunta regola per ignorare le chiamate API dalla cache.
+        // Qualsiasi richiesta che corrisponde a questo pattern andrà direttamente alla rete.
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/europe-west6-riso-project-app\.cloudfunctions\.net\/.*/,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'api-cache',
+              backgroundSync: {
+                name: 'api-queue',
+                options: {
+                  maxRetentionTime: 24 * 60, // Ore
+                },
+              },
+            },
+          },
+        ],
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
@@ -54,7 +72,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['trim-canvas'],
+    include: [],
   },
   // @ts-expect-error - L'oggetto `test` è aggiunto da Vitest e non fa parte della configurazione standard di Vite.
   test: {

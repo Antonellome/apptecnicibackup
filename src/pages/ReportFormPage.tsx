@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import {
     Paper, Typography, TextField, FormControl, InputLabel, Select, MenuItem,
     Autocomplete, Button, CircularProgress, Alert, Box, Chip, IconButton, Switch, FormControlLabel,
@@ -16,6 +16,7 @@ import { useReportForm } from '@/hooks/useReportForm';
 import OreLavoroSingoloTecnico from '@/components/Rapportini/OreLavoroSingoloTecnico';
 import SignatureDialog from '@/components/form/SignatureDialog';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
+import FullScreenLoader from '@/components/FullScreenLoader';
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <Paper variant="outlined" sx={{ p: 2, mt: 3, borderLeft: '4px solid', borderColor: 'primary.main' }}>
@@ -31,7 +32,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 const ReportFormPage: React.FC = () => {
     const form = useReportForm();
 
-    if (form.state.pageLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
+    if (form.state.pageLoading || form.collectionsLoading) return <FullScreenLoader />;
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={it}>
@@ -50,21 +51,41 @@ const ReportFormPage: React.FC = () => {
                                 <FormControlLabel control={<Switch checked={form.state.isMultiDay} onChange={form.handleMultiDayToggle} />} label="Crea per più giorni (solo Ferie/Malattia)" disabled={form.isEditMode || form.disableActions} />
                             )}
                         </Grid>
-                        <Grid size={{ xs: 12, md: form.state.isMultiDay ? 6 : 4 }}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                md: form.state.isMultiDay ? 6 : 4
+                            }}>
                              <DatePicker label={form.state.isMultiDay ? "Dal" : "Data"} value={form.state.data} onChange={(date) => form.setField('data', date)} disabled={form.disableActions} sx={{width: '100%'}} />
                         </Grid>
                         {form.state.isMultiDay && (
-                            <Grid size={{ xs: 12, md: 4 }}>
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    md: 4
+                                }}>
                                 <DatePicker label="Al" value={form.state.dataFine} onChange={(date) => form.setField('dataFine', date)} disabled={form.disableActions} sx={{width: '100%'}} minDate={form.state.data || undefined} />
                             </Grid>
                         )}
-                         <Grid size={{ xs: 12, md: form.state.isMultiDay ? 12 : 4 }}>
+                         <Grid
+                             size={{
+                                 xs: 12,
+                                 md: form.state.isMultiDay ? 12 : 4
+                             }}>
                             <TextField label="Tecnico Responsabile" value={form.scriventeDettaglio?.nome || 'Caricamento...'} fullWidth disabled />
                         </Grid>
-                        <Grid size={{ xs: 12, md: 4 }}>
+                        <Grid
+                            size={{
+                                xs: 12,
+                                md: 4
+                            }}>
                             <TextField label="Ordine di Lavoro" value={form.state.ordineLavoro || ''} onChange={(e) => form.setField('ordineLavoro', e.target.value)} fullWidth />
                         </Grid>
-                         <Grid size={{ xs: 12, md: 8 }}>
+                         <Grid
+                             size={{
+                                 xs: 12,
+                                 md: 8
+                             }}>
                            <FormControl fullWidth required disabled={form.disableActions}>
                                 <InputLabel id="tipo-giornata-label">Tipo Giornata</InputLabel>
                                 <Select
@@ -135,7 +156,11 @@ const ReportFormPage: React.FC = () => {
                             </Section>
 
                             <Section title="Dettagli Intervento">
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        md: 6
+                                    }}>
                                     <FormControl fullWidth required disabled={form.disableActions}>
                                         <InputLabel id="nave-label">Nave</InputLabel>
                                         <Select labelId="nave-label" value={form.state.naveId || 'Nessuna'} label="Nave" onChange={e => form.setField('naveId', e.target.value as string)}>
@@ -144,7 +169,11 @@ const ReportFormPage: React.FC = () => {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        md: 6
+                                    }}>
                                     <FormControl fullWidth required disabled={form.disableActions}>
                                         <InputLabel id="luogo-label">Luogo</InputLabel>
                                         <Select labelId="luogo-label" value={form.state.luogoId || 'Nessuno'} label="Luogo" onChange={e => form.setField('luogoId', e.target.value as string)}>
@@ -179,10 +208,18 @@ const ReportFormPage: React.FC = () => {
                             </Section>
 
                             <Section title="Firma Cliente">
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        md: 6
+                                    }}>
                                     <TextField label="Nome e Cognome Firmatario" value={form.state.firmaFirmatarioNome || ''} onChange={(e) => form.setField('firmaFirmatarioNome', e.target.value)} fullWidth required disabled={form.disableActions}/>
                                 </Grid>
-                                <Grid size={{ xs: 12, md: 6 }}>
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        md: 6
+                                    }}>
                                     <TextField label="Società" value={form.state.firmaFirmatarioSocieta || ''} onChange={(e) => form.setField('firmaFirmatarioSocieta', e.target.value)} fullWidth disabled={form.disableActions}/>
                                 </Grid>
                                 <Grid size={12}>
@@ -190,7 +227,7 @@ const ReportFormPage: React.FC = () => {
                                         <Box sx={{border: '1px dashed grey', borderRadius: 1, p: 2, textAlign: 'center', backgroundColor: form.state.isReadOnly ? '#f5f5f5' : '#616161' }}>
                                             <Typography variant="body2" gutterBottom sx={{ color: form.state.isReadOnly ? 'black' : 'white' }}>Firma salvata:</Typography>
                                             <img
-                                                key={form.state.firmaVettoriale} /* Consider removing key if firmaVettoriale can be very long */
+                                                key={form.state.firmaVettoriale}
                                                 src={form.state.firmaVettoriale}
                                                 alt="Firma"
                                                 style={{

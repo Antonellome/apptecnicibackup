@@ -1,49 +1,57 @@
-# Blueprint di Progetto e Piano di Lavoro
-Questo documento è la nostra unica fonte di verità. Contiene la descrizione del progetto, le regole di ingaggio, la cronologia delle azioni e il piano di lavoro attivo. **Questo file non deve essere sovrascritto, ma aggiornato.**
+# Blueprint del Progetto
 
-## 1. Regola di Comunicazione Fondamentale
-**CIAO:** Ogni mio commento in questa chat, senza eccezioni, deve iniziare con la parola "CIAO".
+Questo documento descrive l'architettura futura e il piano di sviluppo per risolvere le criticità attuali.
 
-## 2. Descrizione del Progetto
-*   **App Mobile (PWA) per Tecnici:** L'applicazione principale che stiamo analizzando e migliorando.
-*   **App Web (Back-office):** Un'applicazione web per il personale d'ufficio.
+## Regole Fondamentali
 
-## 3. Le Cloud Functions Corrette
-Questa è la lista **ufficiale e completa** delle Cloud Functions disponibili, come confermato il 29/07/2024:
-*   `testcors`, `saveFCMToken`, `getAllRapportiniForSync`, `updateRapportino`, `createRapportino`, `sync_manifest`, `deleteDocumento`, `syncAnagrafica`, `deleteRapportino`, `updateDocumento`, `createCheckin`, `syncAllAnagrafiche`, `admin_getAllUsers`, `getCheckinsUpdates`, `amministrazione_gestisciUtenti`, `createDocumento`, `adminGetAllRapportini`
+1.  **Non modificare MAI il layout delle pagine.** Non è permesso modificare, eliminare, aggiungere o creare nemmeno una virgola di codice relativo alla struttura visiva (es. Grid, Box, layout CSS) se non esplicitamente richiesto.
+2.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica.
 
-## 4. Cronologia e Lezioni Apprese
-Questa sezione documenta il percorso che ci ha portato alla risoluzione del bug principale, preservando le lezioni apprese per il futuro.
+## Obiettivo Corrente: Risolvere bug di visualizzazione e notifiche
 
-*   **Lezione 1 (Separazione delle Responsabilità):** Un provider per la sincronizzazione, un altro per i dati.
-*   **Lezione 2 (Le Fondamenta Prima di Tutto):** Un'architettura robusta richiede uno schema di database (Dexie) corretto e coerente.
-*   **Lezione 3 (Un Passo alla Volta):** Approccio iterativo per evitare il sovraccarico delle risorse e garantire la stabilità.
+L'obiettivo immediato è duplice:
+1.  **Risolvere il bug dei dati mancanti:** Eliminare le label `[Tipo sconosciuto]`, `[Nave sconosciuta]`, ecc., assicurando che l'app visualizzi sempre i nomi corretti.
+2.  **Rendere le notifiche complete:** Garantire che i tecnici ricevano tutte le notifiche pertinenti (personali, di categoria e globali).
 
-## 5. Stato del Progetto e Obiettivi Attuali
-L'obiettivo iniziale - la risoluzione del loop di caricamento infinito - è stato **RAGGIUNTO**. L'architettura software e il database locale sono ora stabili.
+## Architettura della Soluzione (Client-Side)
 
-L'obiettivo attuale è passare da un codice *funzionante* a un codice *di qualità*: **Consolidare la documentazione, eliminare il debito tecnico e preparare il codebase per future evoluzioni.**
+La soluzione si concentra esclusivamente sul client, senza modifiche al backend.
 
-## 6. Piano di Lavoro Attivo
+### 1. Sincronizzazione Completa delle Anagrafiche
 
-Questo piano riflette il nostro nuovo approccio iterativo e robusto.
+Il problema dei dati mancanti sarà risolto potenziando la sincronizzazione iniziale.
 
-### Fase 1: Analisi Sistematica del Codice (COMPLETATA)
-*   **Azione Eseguita:** Ho analizzato, file per file, tutti i componenti presenti in `src/pages`.
-*   **Risultato:** Abbiamo creato il `registro.md`, un documento di verità che mappa l'architettura frontend, le funzionalità di ogni pagina e il debito tecnico iniziale.
+-   **Componente da modificare:** `src/services/offlineSync.ts`
+-   **Logica da implementare:** La funzione `syncAllAnagrafiche` deve essere modificata per scaricare in modo affidabile un set definito di collezioni anagrafiche da Firestore e salvarle nel database locale (Dexie).
 
-### Fase 2: Pulizia del Debito Tecnico (IN CORSO)
-*   **Obiettivo:** Rimuovere codice morto e componenti UI superflui per aumentare la manutenibilità e la pulizia del progetto.
-*   **Azioni Eseguite:**
-    *   **RISOLTO:** Incoerenza nella sintassi del componente `<Grid>` di Material-UI.
-    *   **RISOLTO:** Eliminato il file di codice morto `src/pages/RapportiniList.tsx`.
-    *   **IN CORSO:** Eliminazione del file di codice morto `src/pages/NotesPage.tsx`.
-*   **Prossima Azione:** Rimuovere il pulsante "Cerca" non funzionante da `src/pages/AttendancesPage.tsx`.
+-   **Lista Definitiva delle Anagrafiche da Sincronizzare:**
+    -   `navi`
+    -   `luoghi`
+    -   `categorie`
+    -   `tipiGiornata`
+    -   `veicoli`
+    -   `tecnici`
 
-### Fase 3: Consolidamento della Documentazione (SUCCESSIVA)
-*   **Obiettivo:** Far convergere tutte le fonti di documentazione sparse (`calcoli.md`, etc.) in un unico, autorevole documento di progetto: il `registro.md`.
-*   **Azione:** Leggeremo i file rimanenti uno per uno e integreremo le informazioni pertinenti, eliminando le discrepanze.
+### 2. Correzione della Logica di Recupero Notifiche
 
-### Fase 4: Risoluzione Bug Critici (FUTURA)
-*   **Obiettivo:** Una volta che il codebase sarà pulito e completamente documentato, affronteremo i bug funzionali rimanenti.
-*   **Priorità #1:** Il sistema di notifiche, che attualmente non funziona a causa delle Cloud Functions mancanti.
+Il bug delle notifiche incomplete sarà risolto modificando la query di recupero.
+
+-   **Componente da modificare:** `src/pages/NotifichePage.tsx`
+-   **Logica da implementare:**
+    1.  Ottenere il `profilo` del tecnico loggato, che, grazie alla sincronizzazione estesa, conterrà il suo `categoriaId`.
+    2.  Modificare la query di Firestore per recuperare i documenti dalla collezione `notifiche` where:
+        -   Il campo `tecnicoId` è uguale all'ID del tecnico loggato.
+        -   **oppure** il campo `categoriaId` è uguale alla categoria del tecnico loggato.
+        -   **oppure** il campo `target` è uguale a `'all'` (per le notifiche globali).
+    3.  Questa logica richiede che il backend, quando invia notifiche, popoli correttamente i campi `tecnicoId`, `categoriaId`, o `target`.
+
+## Piano di Esecuzione
+
+1.  **FASE 1: Potenziare la Sincronizzazione (Azione Immediata)**
+    -   [x] **Analisi:** Identificate le anagrafiche corrette (`navi`, `luoghi`, `categorie`, `tipiGiornata`, `veicoli`, `tecnici`).
+    -   [x] **Implementazione:** Modificare `src/services/offlineSync.ts` per scaricare le 6 collezioni definite.
+    -   [x] **Verifica:** Constatare che il bug `[Tipo sconosciuto]` sia scomparso.
+
+2.  **FASE 2: Correggere le Notifiche**
+    -   [x] **Implementazione:** Aggiornare la query in `src/pages/NotifichePage.tsx`.
+    -   [x] **Verifica:** Assicurarsi che un tecnico veda le notifiche dirette, quelle della sua categoria e quelle globali.

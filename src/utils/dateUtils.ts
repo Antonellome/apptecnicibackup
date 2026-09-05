@@ -13,8 +13,12 @@ export const parseAndValidateDate = (dateInput: any): Date | null => {
     
     let candidateDate: Date;
 
+    // CORREZIONE: Il server Firebase restituisce timestamp con _seconds, non seconds.
+    if (typeof dateInput === 'object' && dateInput !== null && typeof dateInput._seconds === 'number') {
+        candidateDate = new Date(dateInput._seconds * 1000);
+    }
     // Caso 1: Timestamp di Firestore (oggetto con `seconds` e `nanoseconds`)
-    if (typeof dateInput === 'object' && dateInput !== null && typeof dateInput.seconds === 'number') {
+    else if (typeof dateInput === 'object' && dateInput !== null && typeof dateInput.seconds === 'number') {
         candidateDate = new Date(dateInput.seconds * 1000);
     }
     // Caso 2: Stringa (es. formato ISO) o Numero (timestamp in ms)
