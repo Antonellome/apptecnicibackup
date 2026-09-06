@@ -9,7 +9,7 @@ import {
     Box,
     Chip
 } from '@mui/material';
-import { collection, query, where, orderBy, onSnapshot, Query } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, Query } from 'firebase/firestore';
 import { db as firestore } from '@/utils/firebase';
 import { markNotificheAsRead } from '@/services/notificationService';
 import { NotificationItem } from '@/components/notifiche/NotificationItem';
@@ -32,44 +32,65 @@ const NotifichePage: React.FC = () => {
     const authContext = useContext(AuthContext);
     const userProfile = authContext?.userProfile;
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [notifiche, setNotifiche] = useState<Notifica[]>([]);
     const [dismissedIds, setDismissedIds] = useState<string[]>(getDismissedNotifiche);
+    
+    // Stati per la gestione della connessione e del caricamento
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Gestione dello stato online/offline
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOnline(true);
+            setError(null); // Pulisce gli errori di rete precedenti
+        };
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     useEffect(() => {
         if (!userProfile?.tecnicoId) {
             setLoading(false);
             setError("Profilo utente non caricato o incompleto. Impossibile caricare le notifiche.");
-            return;
+            return () => {}; // Ritorna una funzione vuota per coerenza
+        }
+
+        // Se siamo offline, non tentare di caricare le notifiche
+        if (!isOnline) {
+            setError("Nessuna connessione di rete. Le notifiche verranno mostrate quando tornerai online.");
+            setLoading(false);
+            return () => {};
         }
 
         setLoading(true);
+        setError(null); // Resetta l'errore all'inizio del caricamento
+
         const notificheCollection = collection(firestore, 'notifiche');
         const allNotifiche: { [id: string]: Notifica } = {};
-
         const queries: Query[] = [];
 
-        // 1. Query per notifiche dirette
         queries.push(query(notificheCollection, where('tecnicoId', '==', userProfile.tecnicoId)));
-
-        // 2. Query per notifiche di categoria (se l'utente ha una categoria)
         if (userProfile.categoriaId) {
             queries.push(query(notificheCollection, where('categoriaId', '==', userProfile.categoriaId)));
         }
-
-        // 3. Query per notifiche globali
         queries.push(query(notificheCollection, where('target', '==', 'all')));
 
         const processSnapshot = (snapshot: any) => {
             snapshot.docs.forEach((doc: any) => {
-                // Ignora documenti senza data, potrebbero essere risultati parziali
                 if (doc.data().createdAt) {
                     allNotifiche[doc.id] = { id: doc.id, ...doc.data() } as Notifica;
                 }
             });
 
-            // Ordina per data (più recente prima)
             const mergedList = Object.values(allNotifiche).sort((a, b) => {
                 const timeA = a.createdAt?.toMillis() || 0;
                 const timeB = b.createdAt?.toMillis() || 0;
@@ -82,19 +103,21 @@ const NotifichePage: React.FC = () => {
         
         const handleError = (err: Error) => {
             console.error("Errore durante l'ascolto delle notifiche:", err);
-            setError("Impossibile caricare le notifiche. Il servizio potrebbe essere non disponibile.");
+            if (!isOnline) {
+                 setError("Nessuna connessione di rete. Riconnessione automatica in corso...");
+            } else {
+                 setError("Impossibile caricare le notifiche. Il servizio potrebbe essere non disponibile.");
+            }
             setLoading(false);
         };
 
-        // Iscrizione a tutte le query
         const unsubscribers = queries.map(q => onSnapshot(q, processSnapshot, handleError));
 
-        // Cleanup
         return () => {
             unsubscribers.forEach(unsub => unsub());
         };
 
-    }, [userProfile]);
+    }, [userProfile, isOnline]); // Aggiunto isOnline alle dipendenze
 
     useEffect(() => {
         localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(dismissedIds));
@@ -123,7 +146,7 @@ const NotifichePage: React.FC = () => {
             await markNotificheAsRead(unreadIds);
         } catch (error) {
             console.error("Errore server su markAllAsRead:", error);
-            setNotifiche(originalNotifiche); // Ripristina in caso di errore
+            setNotifiche(originalNotifiche);
             setError("Impossibile segnare tutte le notifiche come lette.");
         }
     };
@@ -171,11 +194,11 @@ const NotifichePage: React.FC = () => {
                 </Box>
             </Box>
 
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {error && <Alert severity={isOnline ? "error" : "warning"} sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
                 <Grid container justifyContent="center" sx={{ height: '50vh' }}> <CircularProgress /> </Grid>
-            ) : visibleNotifiche.length === 0 ? (
+            ) : !loading && !error && visibleNotifiche.length === 0 ? (
                 <Grid container direction="column" alignItems="center" justifyContent="center" sx={{ py: 8, textAlign: 'center' }}>
                     <Typography variant="h6" color="text.secondary">Non ci sono nuove notifiche.</Typography>
                     <Typography color="text.secondary">Se hai nascosto delle notifiche, puoi ripristinarle.</Typography>

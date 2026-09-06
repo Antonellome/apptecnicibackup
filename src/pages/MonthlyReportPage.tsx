@@ -14,7 +14,7 @@ import {
   Tooltip
 } from '@mui/material';
 import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, isWithinInterval } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { Rapportino, EnrichedRapportino, UserProfile, MasterData } from '@/models/definitions';
@@ -29,6 +29,7 @@ import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 import { useMasterData } from '@/hooks/useMasterData';
 import MonthlyReportSkeleton from '@/components/Rapportini/MonthlyReportSkeleton';
+import { toDateSafe } from '@/utils/dateUtils';
 
 interface MonthlyReportContentProps {
     userProfile: UserProfile;
@@ -52,12 +53,22 @@ const MonthlyReportContent = ({
     const [showCost, setShowCost] = useState(false);
 
     const rapportiniLocali = useLiveQuery(() => {
-        const start = startOfMonth(currentMonth);
-        const end = endOfMonth(currentMonth);
+        if (!userProfile) return [];
+        
+        const interval = { start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) };
+
         return db.rapportini
-            .where('data').between(start, end, true, true)
-            .filter(r => (r.presenze || []).includes(userProfile.tecnicoId) || r.tecnicoId === userProfile.tecnicoId)
+            .filter(r => {
+                const isOwnerOrParticipant = (r.presenze || []).includes(userProfile.tecnicoId) || r.tecnicoId === userProfile.tecnicoId;
+                if (!isOwnerOrParticipant) return false;
+
+                const reportDate = toDateSafe(r.data);
+                if (!reportDate) return false;
+                
+                return isWithinInterval(reportDate, interval);
+            })
             .sortBy('data');
+
     }, [currentMonth, userProfile.tecnicoId]);
 
     const { rapportiniArricchiti, riepilogoMese } = useMemo(() => {
@@ -69,7 +80,7 @@ const MonthlyReportContent = ({
 
     const reportDays = useMemo(() => {
         if (!rapportiniArricchiti) return [];
-        return rapportiniArricchiti.map(r => r.data);
+        return rapportiniArricchiti.map(r => toDateSafe(r.data)).filter(Boolean) as Date[];
     }, [rapportiniArricchiti]);
 
     const handleTitleClick = () => {
@@ -126,7 +137,7 @@ const MonthlyReportContent = ({
                         Report Mensile
                     </Typography>
                 </Grid>
-                <Grid size={6} sx={{ textAlign: 'right' }}>
+                <Grid sx={{ textAlign: 'right' }} size={6}>
                     <Tooltip title="Genera riepilogo PDF del mese corrente">
                         <span>
                         <Button 
@@ -139,15 +150,23 @@ const MonthlyReportContent = ({
                     </Tooltip>
                 </Grid>
             </Grid>
-            
+
             <Grid container spacing={3}>
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid
+                    size={{
+                        xs: 12,
+                        md: 4
+                    }}>
                     <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                         <Typography variant="h5" gutterBottom>Calendario</Typography>
                         <MonthlyCalendarView currentMonth={currentMonth} reportDays={reportDays} />
                     </Paper>
                 </Grid>
-                <Grid size={{ xs: 12, md: 8 }}>
+                <Grid
+                    size={{
+                        xs: 12,
+                        md: 8
+                    }}>
                     {!hasData ? (
                         <Paper sx={{ p: 4, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                             <Typography variant="h6">Nessun dato per questo mese</Typography>
@@ -185,7 +204,7 @@ const MonthlyReportContent = ({
                                         </TableContainer>
                                     </Paper>
                                 </Grid>
-                                <Grid size={12} sx={{ mt: 2 }}>
+                                <Grid sx={{ mt: 2 }} size={12}>
                                     <DailyBreakdownTable rapportini={rapportiniArricchiti as EnrichedRapportino[]} />
                                 </Grid>
                             </Grid>

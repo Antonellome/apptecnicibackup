@@ -1,5 +1,6 @@
 import { Rapportino, MasterData, UserProfile, EnrichedRapportino, RiepilogoMese, Impostazioni } from '@/models/definitions';
 import { format } from 'date-fns';
+import { toDateSafe } from '@/utils/dateUtils'; // Importa la funzione sicura
 
 // --- Funzioni Pure di Arricchimento e Calcolo ---
 
@@ -11,6 +12,9 @@ export const enrichRapportini = (
     const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
 
     return rapportini.map(r => {
+        const dataSicura = toDateSafe(r.data);
+        if (!dataSicura) return null; // Scarta i rapportini con data non valida
+
         const tipoGiornata = tipiGiornataMap.get(r.tipoGiornataId);
         let oreEffettive = 0;
 
@@ -18,25 +22,23 @@ export const enrichRapportini = (
         if (dettaglioTecnico) {
             oreEffettive = dettaglioTecnico.ore || 0;
         } else if (r.tecnicoId === userProfile.tecnicoId) {
-            // Fallback per vecchi rapportini senza dettaglio multiplo
             oreEffettive = r.oreLavoro || 0;
         }
 
-        // Gestione retrocompatibilità per vecchie "trasferte" come tipo giornata
         const isVecchioReportTrasferta = tipoGiornata?.categoria === 'trasferta';
         const tipoGiornataDaUsareId = isVecchioReportTrasferta ? 't_ordinaria' : r.tipoGiornataId;
         const trasfertaId = isVecchioReportTrasferta ? r.tipoGiornataId : r.trasfertaId;
 
         return { 
             ...r, 
-            data: new Date(r.data), 
+            data: dataSicura, // Usa la data sicura
             tipoGiornata: tipiGiornataMap.get(tipoGiornataDaUsareId),
             oreGiorno: oreEffettive,
             trasfertaId,
             tipoGiornataId: tipoGiornataDaUsareId,
             isEditable: r.tecnicoId === userProfile.tecnicoId,
         };
-    }).filter(r => r.oreGiorno > 0 || r.trasfertaId); // Filtra i rapportini dove l'utente non ha lavorato e non c'è trasferta
+    }).filter((r): r is EnrichedRapportino => r !== null && (r.oreGiorno > 0 || !!r.trasfertaId));
 };
 
 export const calculateSummary = (
@@ -51,7 +53,6 @@ export const calculateSummary = (
         costoTotale: 0, oreOrdinarie: 0, oreStraordinarie: 0,
     };
 
-    // Inizializza il riepilogo con tutte le voci possibili
     masterData.tipiGiornata.forEach(tipo => {
         const tariffa = tariffeMap.get(tipo.id);
         riepilogo.dettaglio.set(tipo.id, { 
@@ -60,9 +61,10 @@ export const calculateSummary = (
         });
     });
 
-    // Raggruppa i rapportini per giorno
     const groupedByDay = enrichedRapportini.reduce((acc, r) => {
-        const dayKey = format(r.data, 'yyyy-MM-dd');
+        const date = toDateSafe(r.data);
+        if (!date) return acc; // Salta se la data non è valida
+        const dayKey = format(date, 'yyyy-MM-dd');
         if (!acc[dayKey]) acc[dayKey] = [];
         acc[dayKey].push(r);
         return acc;
@@ -71,18 +73,15 @@ export const calculateSummary = (
     const voceOrdinaria = riepilogo.dettaglio.get('t_ordinaria');
     const voceStraordinaria = riepilogo.dettaglio.get('t_straordinaria');
 
-    // Calcola ore ordinarie, straordinarie e altre voci per ogni giorno
     for (const dayKey in groupedByDay) {
         const reports = groupedByDay[dayKey];
         let oreDaSplittareDelGiorno = 0;
         let trasfertaProcessedForDay = false;
         
         reports.forEach(report => {
-            // Le ore di tipo 'ordinaria' vengono accumulate per essere splittate dopo
             if (report.tipoGiornataId === 't_ordinaria') {
                 oreDaSplittareDelGiorno += report.oreGiorno;
             } else {
-                // Le altre voci (permessi, malattia) vengono sommate direttamente
                 const voceRiepilogo = riepilogo.dettaglio.get(report.tipoGiornataId);
                 if (voceRiepilogo) {
                     voceRiepilogo.oreTotali += report.oreGiorno;
@@ -90,7 +89,6 @@ export const calculateSummary = (
                 }
             }
 
-            // Gestisce il conteggio dei giorni di trasferta (una sola volta al giorno)
             if (report.trasfertaId && !trasfertaProcessedForDay) {
                 const voceTrasferta = riepilogo.dettaglio.get(report.trasfertaId);
                 if (voceTrasferta) {
@@ -104,7 +102,6 @@ export const calculateSummary = (
             voceOrdinaria.giorniSet?.add(dayKey);
         }
 
-        // Splitta le ore lavorate in ordinarie (fino a 8) e straordinarie
         const dailyOrdinarie = Math.min(oreDaSplittareDelGiorno, 8);
         const dailyStraordinarie = Math.max(0, oreDaSplittareDelGiorno - 8);
 
@@ -115,16 +112,21 @@ export const calculateSummary = (
         }
     }
 
-    // Finalizza i calcoli
     riepilogo.oreTotali = enrichedRapportini.reduce((sum, r) => sum + r.oreGiorno, 0);
 
-    const giorniTrasfertaUnici = new Set(enrichedRapportini.filter(r => r.trasfertaId).map(r => format(r.data, 'yyyy-MM-dd')));
+    const giorniTrasfertaUnici = new Set<string>();
+    enrichedRapportini.forEach(r => {
+        if (r.trasfertaId) {
+            const date = toDateSafe(r.data);
+            if (date) giorniTrasfertaUnici.add(format(date, 'yyyy-MM-dd'));
+        }
+    });
     riepilogo.giorniTrasferta = giorniTrasfertaUnici.size;
 
     let costoTotaleFinale = 0;
     for (const voce of riepilogo.dettaglio.values()) {
         voce.giorni = voce.giorniSet?.size || 0;
-        delete voce.giorniSet; // Pulisci il set temporaneo
+        delete voce.giorniSet;
 
         const tariffa = tariffeMap.get(voce.id);
         if (tariffa && tariffa.costo > 0) {

@@ -7,18 +7,38 @@ const getAuthToken = async () => {
     return await currentUser.getIdToken();
 };
 
-const callCloudFunction = async (url: string, data: any) => {
+const prepareDataForJson = (data: any): any => {
+  if (data instanceof Date) {
+    return data.toISOString();
+  }
+  if (Array.isArray(data)) {
+    return data.map(item => prepareDataForJson(item));
+  }
+  if (data !== null && typeof data === 'object') {
+    const newData: { [key: string]: any } = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        newData[key] = prepareDataForJson(data[key]);
+      }
+    }
+    return newData;
+  }
+  return data;
+};
+
+const callCloudFunction = async (url: string, payload: any) => {
     const token = await getAuthToken();
     
+    const sanitizedPayload = prepareDataForJson(payload);
+
     const response = await fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
         },
-        // Modifica: Invia l'oggetto dati direttamente, senza l'involucro { data: ... }.
-        // Questo si allinea a come le funzioni HTTPS standard di Firebase si aspettano il corpo della richiesta.
-        body: JSON.stringify(data),
+        // CORREZIONE DEFINITIVA: Le funzioni onCall chiamate via HTTPS richiedono un involuto { data: ... }
+        body: JSON.stringify({ data: sanitizedPayload }),
     });
 
     if (!response.ok) {
@@ -40,7 +60,8 @@ const callCloudFunction = async (url: string, data: any) => {
  */
 export const createRapportino = async (rapportinoData: any) => {
     const url = 'https://createrapportino-2xbiermwyq-oa.a.run.app';
-    return await callCloudFunction(url, rapportinoData);
+    // La funzione onCall si aspetta un oggetto { rapportinoData: ... }
+    return await callCloudFunction(url, { rapportinoData });
 };
 
 /**
@@ -50,7 +71,7 @@ export const createRapportino = async (rapportinoData: any) => {
  */
 export const updateRapportino = async (reportId: string, rapportinoData: any) => {
     const url = 'https://updaterapportino-2xbiermwyq-oa.a.run.app';
-    // La funzione si aspetta l'ID nel payload dei dati
-    const dataWithId = { ...rapportinoData, id: reportId };
-    return await callCloudFunction(url, dataWithId);
+    // La funzione onCall si aspetta { id: ..., rapportinoData: ... }
+    const payload = { id: reportId, rapportinoData };
+    return await callCloudFunction(url, payload);
 };

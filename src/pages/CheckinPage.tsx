@@ -40,7 +40,7 @@ const CheckinPage = () => {
 
   const allUserEvents = useLiveQuery(() => {
       if (!user?.uid) return [];
-      return db.checkins
+      return db.checkin_giornalieri
           .where('tecnicoId')
           .equals(user.uid)
           .sortBy('timestampImpostato');
@@ -123,13 +123,13 @@ const CheckinPage = () => {
     setLoading(type);
 
     try {
-        await dexieDb.transaction('rw', dexieDb.checkins, dexieDb.syncQueue, async () => {
+        await dexieDb.transaction('rw', dexieDb.checkin_giornalieri, dexieDb.syncQueue, async () => {
             const tecnicoName = currentUserProfile.displayName || currentUser.email || 'N/D';
 
             const addEventToDbAndQueue = async (eventPayload: any, idSuffix: string) => {
                 const localId = `local_${Date.now()}_${idSuffix}`.replace(/\./g, '');
                 const optimisticEvent = { ...eventPayload, id: localId, timestampReale: new Date() };
-                await dexieDb.checkins.add(optimisticEvent);
+                await dexieDb.checkin_giornalieri.add(optimisticEvent);
                 await aggiungiAllaCoda({ type: 'checkin', action: 'create', entityId: localId, payload: eventPayload });
             };
 

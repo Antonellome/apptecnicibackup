@@ -62,7 +62,10 @@ const ReportListPage: React.FC = () => {
   const masterData = globalDataContext?.masterData;
   const collectionsLoading = globalDataContext?.loading;
 
-  const rapportiniGrezzi = useLiveQuery(() => db.rapportini.toArray(), []);
+  const rapportiniGrezzi = useLiveQuery(
+    () => db.rapportini.filter(r => r.isDeleted !== true).toArray(),
+    []
+  );
 
   const syncQueueItems = useLiveQuery(() => db.syncQueue.toArray(), []);
 
@@ -77,7 +80,6 @@ const ReportListPage: React.FC = () => {
     });
 
     const rapportini = rapportiniGrezzi.map(report => {
-      // CORREZIONE CHIRURGICA
       const reportDate = toDateSafe(report.data);
       if (!reportDate) {
         console.error("Data non valida, rapportino scartato:", report.id, report.data);
@@ -119,7 +121,7 @@ const ReportListPage: React.FC = () => {
 
       return {
         ...report,
-        data: reportDate, // DATA CORRETTA
+        data: reportDate,
         tipoGiornata: tipoGiornata,
         naveNome: nave?.nome,
         luogoNome: luogo?.nome,
@@ -133,7 +135,6 @@ const ReportListPage: React.FC = () => {
       } as EnrichedRapportino;
     }).filter((r): r is EnrichedRapportino => r !== null);
 
-    // Ordinamento sicuro su oggetti Date validi
     rapportini.sort((a, b) => b.data.getTime() - a.data.getTime());
 
     return rapportini;
@@ -154,7 +155,6 @@ const ReportListPage: React.FC = () => {
 
   const displayedRapportini = useMemo(() => {
     if (!enrichedRapportini || !currentMonth) return [];
-    // Filtro sicuro su oggetti Date validi
     return enrichedRapportini.filter(r => isSameMonth(r.data, currentMonth));
   }, [enrichedRapportini, currentMonth]);
 
@@ -185,7 +185,6 @@ const ReportListPage: React.FC = () => {
       const fullReport = await db.rapportini.get(report.id);
       if (!fullReport) throw new Error("Rapportino non trovato nel database locale.");
       
-      // Passiamo la data già convertita
       const pdfBlob = await generateRapportinoPDF({ ...fullReport, data: report.data }, masterData);
       await shareOrDownload(pdfBlob, `Rapportino_${format(report.data, 'dd-MM-yyyy')}.pdf`);
     } catch (error) {
@@ -266,12 +265,11 @@ const ReportListPage: React.FC = () => {
             <Typography sx={{ textAlign: 'center', p: 4, fontStyle: 'italic', color: 'text.secondary' }}>Nessun report per questo mese.</Typography>
           ) : (
             displayedRapportini.map((report, index) => {
-              if (report.isDeleted) return null;
-              const prevReport = displayedRapportini.slice(0, index).reverse().find(r => !r.isDeleted);
+              const prevReport = index > 0 ? displayedRapportini[index - 1] : null;
               const isNewDay = !prevReport || !isSameDay(report.data, prevReport.data);
               const isSelected = menuState?.report.id === report.id || reportToDelete?.id === report.id;
               const nextReport = displayedRapportini[index + 1];
-              const isLastOfGroup = !nextReport || !isSameDay(report.data, nextReport.data) || nextReport.isDeleted;
+              const isLastOfGroup = !nextReport || !isSameDay(report.data, nextReport.data);
               
               const tipoGiornataNome = report.tipoGiornata?.nome || '[Tipo sconosciuto]';
 

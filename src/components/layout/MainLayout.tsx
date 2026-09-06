@@ -48,7 +48,7 @@ const MainLayout: React.FC = () => {
                     {!isOnline && (
                         <Tooltip title="Sei offline">
                             <IconButton color="inherit">
-                                <WifiOffIcon sx={{ color: 'yellow' }} />
+                                <WifiOffIcon sx={{ color: 'yellow', fontSize: '1.25rem' }} />
                             </IconButton>
                         </Tooltip>
                     )}
