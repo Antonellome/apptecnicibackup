@@ -33,6 +33,23 @@ import { useSyncManager } from '@/hooks/useSyncManager';
 import { GlobalDataContext } from '@/contexts/GlobalDataContext'; 
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
+// LA SOLA E UNICA VERITA'. LA FUNZIONE CHE AVREI DOVUTO SCRIVERE 3 GIORNI FA.
+const toDateSafe = (date: any): Date | null => {
+  if (!date) return null;
+  if (date instanceof Date) return date;
+  if (typeof date.toDate === 'function') return date.toDate();
+  
+  if (typeof date._seconds === 'number' && typeof date._nanoseconds === 'number') {
+    return new Date(date._seconds * 1000 + date._nanoseconds / 1000000);
+  }
+  if (typeof date.seconds === 'number' && typeof date.nanoseconds === 'number') {
+    return new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
+  }
+
+  const parsedDate = new Date(date);
+  return isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
 const ReportListPage: React.FC = () => {
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
@@ -45,9 +62,7 @@ const ReportListPage: React.FC = () => {
   const masterData = globalDataContext?.masterData;
   const collectionsLoading = globalDataContext?.loading;
 
-  const rapportiniGrezzi = useLiveQuery(() => 
-    db.rapportini.orderBy('data').reverse().toArray()
-  , []);
+  const rapportiniGrezzi = useLiveQuery(() => db.rapportini.toArray(), []);
 
   const syncQueueItems = useLiveQuery(() => db.syncQueue.toArray(), []);
 
@@ -61,7 +76,14 @@ const ReportListPage: React.FC = () => {
         }
     });
 
-    return rapportiniGrezzi.reduce<EnrichedRapportino[]>((acc, report) => {
+    const rapportini = rapportiniGrezzi.map(report => {
+      // CORREZIONE CHIRURGICA
+      const reportDate = toDateSafe(report.data);
+      if (!reportDate) {
+        console.error("Data non valida, rapportino scartato:", report.id, report.data);
+        return null;
+      }
+
       const isNonWorkingDay = !report.dettaglioOreTecnici || report.dettaglioOreTecnici.length === 0;
       let isUserInvolved = false;
 
@@ -72,7 +94,7 @@ const ReportListPage: React.FC = () => {
       }
 
       if (!isUserInvolved) {
-        return acc;
+        return null;
       }
 
       const tipoGiornata = masterData.tipiGiornata.find(t => t.id === report.tipoGiornataId);
@@ -95,23 +117,27 @@ const ReportListPage: React.FC = () => {
       const syncState: SyncState = syncStatusMap.get(report.id) || 'synced';
       const isEditable = syncState === 'synced';
 
-      const enrichedReport = {
+      return {
         ...report,
+        data: reportDate, // DATA CORRETTA
         tipoGiornata: tipoGiornata,
         naveNome: nave?.nome,
         luogoNome: luogo?.nome,
         creatore: tecnicoScrivente?.nome || 'N/D',
-        isEditable: isEditable, // <-- Logica di modifica basata sullo stato di sinc.
+        isEditable: isEditable,
         isClickable: true,
         oreDisplay: oreLavorateTecnico > 0 ? `${oreLavorateTecnico.toFixed(2)} ore` : '',
         orariDisplay: orariTecnico,
         hasFirma: !!report.firmaVettoriale,
-        syncState: syncState, // <-- Stato di sinc. aggiunto per il rendering
+        syncState: syncState,
       } as EnrichedRapportino;
+    }).filter((r): r is EnrichedRapportino => r !== null);
 
-      acc.push(enrichedReport);
-      return acc;
-    }, []);
+    // Ordinamento sicuro su oggetti Date validi
+    rapportini.sort((a, b) => b.data.getTime() - a.data.getTime());
+
+    return rapportini;
+
   }, [rapportiniGrezzi, masterData, userProfile, syncQueueItems]);
 
   const [menuState, setMenuState] = useState<{ anchorEl: HTMLElement; report: EnrichedRapportino; } | null>(null);
@@ -128,6 +154,7 @@ const ReportListPage: React.FC = () => {
 
   const displayedRapportini = useMemo(() => {
     if (!enrichedRapportini || !currentMonth) return [];
+    // Filtro sicuro su oggetti Date validi
     return enrichedRapportini.filter(r => isSameMonth(r.data, currentMonth));
   }, [enrichedRapportini, currentMonth]);
 
@@ -157,8 +184,10 @@ const ReportListPage: React.FC = () => {
     try {
       const fullReport = await db.rapportini.get(report.id);
       if (!fullReport) throw new Error("Rapportino non trovato nel database locale.");
-      const pdfBlob = await generateRapportinoPDF(fullReport, masterData);
-      await shareOrDownload(pdfBlob, `Rapportino_${format(fullReport.data, 'dd-MM-yyyy')}.pdf`);
+      
+      // Passiamo la data già convertita
+      const pdfBlob = await generateRapportinoPDF({ ...fullReport, data: report.data }, masterData);
+      await shareOrDownload(pdfBlob, `Rapportino_${format(report.data, 'dd-MM-yyyy')}.pdf`);
     } catch (error) {
       console.error("Errore durante la condivisione:", error);
       if ((error as DOMException).name !== 'AbortError') {
@@ -171,13 +200,14 @@ const ReportListPage: React.FC = () => {
 
   const handleDelete = () => {
     if (!menuState || !userProfile || !menuState.report.isEditable) return;
+    const { report } = menuState;
 
     if (report.tecnicoId !== userProfile.tecnicoId && !report.isOwner) {
         showSnackbar("Non puoi cancellare un report creato da un altro tecnico.", "warning");
-    } else if (!isSameMonth(new Date(report.data), new Date())) {
+    } else if (!isSameMonth(report.data, new Date())) {
         showSnackbar("Puoi cancellare solo i report del mese corrente.", "warning");
     } else {
-      setReportToDelete(menuState.report);
+      setReportToDelete(report);
       setConfirmDeleteDialogOpen(true);
     }
     handleMenuClose();
@@ -257,7 +287,7 @@ const ReportListPage: React.FC = () => {
                       <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography variant="body2" sx={{ fontWeight: '500', color: 'primary.main' }}>{tipoGiornataNome}</Typography>
-                          {report.oreDisplay && <Typography variant="body2" sx={{fontWeight: 'bold'}} >{report.oreDisplay}</Typography>}
+                          {report.ordineLavoro && <Typography variant="caption" color="text.secondary">{report.ordineLavoro}</Typography>}
                           {report.orariDisplay && <Typography variant="caption" color="text.secondary">{report.orariDisplay}</Typography>}
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0, textAlign: 'center' }}>

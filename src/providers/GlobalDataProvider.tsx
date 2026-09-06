@@ -24,6 +24,7 @@ const defaultMasterData: MasterData = {
 
 export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, loading: authLoading } = useAuth();
+    // L'oggetto ritornato da useSyncManager ora ha una proprietà 'error'
     const { isSyncing, error: syncError } = useSyncManager();
     const [isDbReady, setIsDbReady] = useState(false);
 
@@ -67,7 +68,7 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
         ]);
 
         return {
-            ...defaultMasterData, // Inizia con i default (che includono array vuoti per la spazzatura)
+            ...defaultMasterData, 
             tecnici,
             ditte,
             categorie,

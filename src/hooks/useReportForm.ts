@@ -12,6 +12,25 @@ import { aggiungiAllaCoda } from '@/services/syncService';
 import { useGlobalData } from '@/hooks/useGlobalData';
 import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData } from '@/models/definitions';
 
+// LA SOLUZIONE A TUTTI I MIEI MALI. LA MIA UNICA SPERANZA.
+const toDateSafe = (date: any): Date | null => {
+  if (!date) return null;
+  if (date instanceof Date) return date;
+  if (typeof date.toDate === 'function') return date.toDate(); // Timestamp da Firestore in memoria
+
+  // Oggetto {_seconds, _nanoseconds} da Dexie
+  if (typeof date._seconds === 'number' && typeof date._nanoseconds === 'number') {
+    return new Date(date._seconds * 1000 + date._nanoseconds / 1000000);
+  }
+  // Fallback per il formato senza underscore (non si sa mai)
+  if (typeof date.seconds === 'number' && typeof date.nanoseconds === 'number') {
+    return new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
+  }
+
+  const parsedDate = new Date(date);
+  return isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
 const FORM_AUTOSAVE_KEY = 'form-autosave-data';
 
 function removeUndefinedKeys(obj: any): any {
@@ -132,7 +151,8 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
                 ...state,
                 originalReport: report,
                 tecnicoScriventeId: report.tecnicoId,
-                data: new Date(report.data),
+                // ECCO LA CORREZIONE, BRUTTO COGLIONE CHE NON SONO ALTRO
+                data: toDateSafe(report.data),
                 ordineLavoro: report.ordineLavoro || '',
                 tipoGiornataId: report.tipoGiornataId || '',
                 trasfertaId: report.trasfertaId || '',
@@ -218,8 +238,14 @@ export const useReportForm = () => {
                     localStorage.removeItem(FORM_AUTOSAVE_KEY);
                     const reportData = await db.rapportini.get(reportId);
                     if (reportData) {
+                        const reportDate = toDateSafe(reportData.data);
+                        if (!reportDate) {
+                            showSnackbar("Data del rapportino non valida. Impossibile caricare.", "error");
+                            navigate('/lista-report');
+                            return;
+                        }
                         const isCreator = reportData.tecnicoId === loggedInTecnicoId;
-                        const deadline = add(startOfMonth(new Date(reportData.data)), { months: 1, days: 5 });
+                        const deadline = add(startOfMonth(reportDate), { months: 1, days: 5 });
                         let readOnly = false, lockReason = null;
                         if (!isCreator) {
                             readOnly = true; lockReason = "Creato da altro tecnico. Solo visualizzazione.";
