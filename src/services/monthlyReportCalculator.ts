@@ -35,10 +35,11 @@ export const enrichRapportini = (
             tipoGiornata: tipiGiornataMap.get(tipoGiornataDaUsareId),
             oreGiorno: oreEffettive,
             trasfertaId,
+            trasferta: tipiGiornataMap.get(trasfertaId), // Arricchisco l'oggetto trasferta
             tipoGiornataId: tipoGiornataDaUsareId,
             isEditable: r.tecnicoId === userProfile.tecnicoId,
         };
-    }).filter((r): r is EnrichedRapportino => r !== null && (r.oreGiorno > 0 || !!r.trasfertaId));
+    }).filter((r): r is EnrichedRapportino => r !== null && !r.isDeleted && (r.oreGiorno > 0 || !!r.trasfertaId)); // <<< NUOVA MODIFICA: Aggiunto filtro !r.isDeleted
 };
 
 export const calculateSummary = (

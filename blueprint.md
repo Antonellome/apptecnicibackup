@@ -1,60 +1,56 @@
 # Blueprint del Progetto
 
-Questo documento descrive l'architettura futura e il piano di sviluppo per risolvere le criticità attuali.
+Questo documento descrive l'architettura e il piano di sviluppo per l'applicazione.
 
 ## Regole Fondamentali
 
 1.  **Inizio Comunicazione:** Ogni interazione deve iniziare con la frase: "CIAO, sono Gemini, non posso procedere a indovinare quindi leggerò tutti i file che modificherò e mi accerterò delle chiamate che inserisco. seguirò tutte le regole compresa quella di scrivere in italiano."
-2.  **Non modificare MAI il layout delle pagine.** Non è permesso modificare, eliminare, aggiungere o creare nemmeno una virgola di codice relativo alla struttura visiva (es. Grid, Box, layout CSS) se non esplicitamente richiesto.
-3.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica.
-4.  ## questa è l'app TECNICI, sul campo per creare report e altro, esiste la app MASTER che gestisce i report e altro, quest'ultima ha le cloud function, solo lei le gestisce ed esegue i deploy.
+2.  **Non modificare MAI la Grid:** Non è permesso modificare, eliminare, aggiungere o creare manualmente codice relativo al componente `Grid` di Material UI. La migrazione e la gestione di tale componente devono avvenire esclusivamente tramite codemod ufficiali.
+3.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica o sul layout.
 
-## Obiettivo Completato: Bug di visualizzazione e notifiche risolti
+## Architettura Dati Tariffe (Client-Side)
 
-L'obiettivo è stato raggiunto attraverso due interventi principali.
+Questa sezione definisce il flusso di gestione delle tariffe, che deve rimanere **esclusivamente locale** al dispositivo.
 
-1.  **Risolto il bug dei dati mancanti:** Eliminate le label `[Tipo sconosciuto]`, `[Nave sconosciuta]`, ecc., assicurando che l'app visualizzi sempre i nomi corretti.
-2.  **Rese le notifiche complete:** Garantito che i tecnici ricevano tutte le notifiche pertinenti (personali, di categoria e globali).
+1.  **Fonte dei Valori di Default:** I valori di base delle tariffe sono definiti nel file `src/providers/GlobalDataProvider.tsx`. Questi valori vengono usati solo per popolare il database locale la prima volta o in caso di corruzione.
+2.  **Database Locale:** Le tariffe modificate dal tecnico vengono salvate nel database locale (Dexie) attraverso la pagina `Impostazioni`.
+3.  **Nessuna Sincronizzazione con Firestore:** I dati delle tariffe **NON devono MAI** essere sincronizzati o inviati a Firestore. Rimangono un'impostazione puramente locale.
+4.  **Flusso di Lettura per Calcoli:** La pagina `Report Mensili`, per calcolare il "costo stimato", **DEVE** leggere le tariffe esclusivamente dal database locale (tramite il `GlobalDataContext`), mai direttamente da Firestore.
 
-## Architettura della Soluzione (Client-Side)
+### Tabella dei Valori di Default
 
-La soluzione si è concentrata esclusivamente sul client, senza modifiche al backend.
+Questa è la tabella di riferimento che deve essere usata come fonte di verità per i valori iniziali.
 
-### 1. Sincronizzazione Completa delle Anagrafiche
+| Voce | Valore | Unità |
+| :--- | :--- | :--- |
+| Ordinaria | 10.00 | € / ora |
+| Straordinario | 15.00 | € / ora |
+| Trasferta Italia | 20.00 | € / giorno |
+| Trasferta Europa | 40.00 | € / giorno |
+| Trasferta ExtraEuropea| 80.00 | € / giorno |
+| Festivo | 80.00 | € / giorno |
+| Ferie | 80.00 | € / giorno |
+| Malattia | 80.00 | € / giorno |
+| Legge 104 | 10.00 | € / ora |
+| Permesso | 10.00 | € / ora |
 
-Il problema dei dati mancanti è stato risolto potenziando la sincronizzazione iniziale.
+## Piano di Esecuzione
 
--   **Componente modificato:** `src/services/offlineSync.ts`
--   **Logica implementata:** La funzione `syncAllAnagrafiche` è stata modificata per scaricare in modo affidabile un set definito di collezioni anagrafiche da Firestore e salvarle nel database locale (Dexie).
+1.  **FASE 1: Aggiornamento Blueprint**
+    *   [x] **Analisi:** Lettura delle nuove istruzioni.
+    *   [x] **Implementazione:** Aggiornato `blueprint.md` con le regole per le tariffe e la migrazione della Grid.
+    *   [x] **Verifica:** Il documento ora riflette lo stato attuale delle regole.
 
--   **Lista Definitiva delle Anagrafiche Sincronizzate:**
-    -   `navi`
-    -   `luoghi`
-    -   `categorie`
-    -   `tipiGiornata`
-    -   `veicoli`
-    -   `tecnici`
+2.  **FASE 2: Migrazione Componente Grid**
+    *   [ ] **Azione:** Eseguire il codemod per la migrazione dalla `GridLegacy` alla nuova `Grid`.
+    *   [ ] **Comando:** `npx @mui/codemod@next v7.0.0/grid-props src`
 
-### 2. Correzione della Logica di Recupero Notifiche
+3.  **FASE 3: Correzione Sincronizzazione Anagrafiche e Notifiche**
+    *   [x] **Azione:** Estesa la sincronizzazione (`offlineSync.ts`) per includere tutte le anagrafiche necessarie (`navi`, `luoghi`, `categorie`, `tipiGiornata`, `veicoli`, `tecnici`).
+    *   [x] **Azione:** Corretta la query in `NotifichePage.tsx` per recuperare le notifiche personali, di categoria e globali.
+    *   [x] **Stato:** **Completata.** I problemi di dati mancanti (`[Tipo sconosciuto]`) e notifiche incomplete sono stati risolti.
 
-Il bug delle notifiche incomplete è stato risolto modificando la query di recupero.
-
--   **Componente modificato:** `src/pages/NotifichePage.tsx`
--   **Logica implementata:**
-    1.  Ottenuto il `profilo` del tecnico loggato, che, grazie alla sincronizzazione estesa, contiene il suo `categoriaId`.
-    2.  Modificata la query di Firestore per recuperare i documenti dalla collezione `notifiche` dove:
-        -   Il campo `tecnicoId` è uguale all'ID del tecnico loggato.
-        -   **oppure** il campo `categoriaId` è uguale alla categoria del tecnico loggato.
-        -   **oppure** il campo `target` è uguale a `'all'` (per le notifiche globali).
-    3.  Questa logica richiede che il backend, quando invia notifiche, popoli correttamente i campi `tecnicoId`, `categoriaId`, o `target`.
-
-## Piano di Esecuzione (Completato)
-
-1.  **FASE 1: Potenziare la Sincronizzazione**
-    -   [x] **Analisi:** Identificate le anagrafiche corrette.
-    -   [x] **Implementazione:** Modificato `src/services/offlineSync.ts`.
-    -   [x] **Verifica:** Constatato che il bug `[Tipo sconosciuto]` è scomparso.
-
-2.  **FASE 2: Correggere le Notifiche**
-    -   [x] **Implementazione:** Aggiornata la query in `src/pages/NotifichePage.tsx`.
-    -   [x] **Verifica:** Assicurato che un tecnico veda le notifiche dirette, quelle della sua categoria e quelle globali.
+4.  **FASE 4: Stabilizzazione Sincronizzazione Offline**
+    *   [x] **Azione:** Risolto un bug critico in `CheckinPage.tsx` che impediva la sincronizzazione degli eventi di check-in a causa di un ID mancante nel payload.
+    *   [x] **Azione:** Resa la funzione `syncCheckin` in `offlineSync.ts` robusta, per gestire e recuperare anche i dati corrotti preesistenti nella coda di sincronizzazione.
+    *   [x] **Stato:** **Completata.** La sincronizzazione offline è ora stabile e non si blocca più su dati vecchi.

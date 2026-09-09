@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { MasterData, Rapportino, Checkin, WebAppUser } from '@/models/definitions';
+import type { Impostazioni, MasterData, Rapportino, Checkin, WebAppUser } from '@/models/definitions';
 
 // Definisce la struttura completa dei dati globali dell'applicazione
 export interface GlobalData {
@@ -9,6 +9,8 @@ export interface GlobalData {
     userProfile: WebAppUser | null;
     loading: boolean;
     error: any | null;
+    // Aggiungiamo la funzione per aggiornare le impostazioni (tariffe)
+    updateImpostazioni: (newImpostazioni: Impostazioni) => Promise<void>;
 }
 
 // Crea il contesto React con valori di default
@@ -19,4 +21,6 @@ export const GlobalDataContext = createContext<GlobalData>({
     userProfile: null,      // Profilo dell'utente loggato
     loading: true,          // Stato di caricamento globale
     error: null,            // Eventuali errori critici
+    // Forniamo un'implementazione di default che non fa nulla ma evita errori
+    updateImpostazioni: async () => { console.error('updateImpostazioni non implementato'); },
 });

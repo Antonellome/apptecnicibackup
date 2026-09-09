@@ -69,6 +69,7 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     const margin = 15;
     const pageWidth = doc.internal.pageSize.getWidth();
     const contentWidth = pageWidth - (margin * 2);
+    const middle = pageWidth / 2;
     let cursorY = margin;
 
     // --- DEFINIZIONE COLORI ---
@@ -114,20 +115,17 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.setTextColor(COLOR_BLUE);
-    cursorY = addText('RAPPORTO DI INTERVENTO TECNICO', pageWidth / 2, cursorY, { align: 'center' });
+    cursorY = addText('REPORT DI INTERVENTO TECNICO', pageWidth / 2, cursorY, { align: 'center' });
     cursorY += 5;
     
-    // --- 3. DATI INIZIALI ---
-    const { navi = [], luoghi = [], veicoli = [] } = masterData;
+    // --- 3. DATI INIZIALI (SU DUE COLONNE) ---
+    const { navi = [], luoghi = [], veicoli = [], tipiGiornata = [] } = masterData;
     
     let dateObject: Date | null = null;
     if (rapportino.data) {
-        // Se è un Timestamp di Firestore, avrà un metodo toDate.
         if (typeof (rapportino.data as any).toDate === 'function') {
             dateObject = (rapportino.data as any).toDate();
-        } 
-        // Altrimenti, presumiamo sia un oggetto Date di JS o una stringa/numero convertibile.
-        else {
+        } else {
             dateObject = new Date(rapportino.data as any);
         }
     }
@@ -146,59 +144,113 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         ? 'Nessuno' 
         : (veicoloData ? `${veicoloData.marca} ${veicoloData.modello} - ${veicoloData.targa}` : rapportino.veicoloId || '');
 
-    
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(COLOR_BLACK);
 
-    const initialData = [
-        { label: 'Data', value: dataRapportino },
-        { label: 'Nave/Impianto', value: nave },
-        { label: 'Luogo', value: luogo },
-        { label: 'Veicolo', value: veicolo },
-    ];
-    initialData.forEach(item => {
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${item.label}:`, margin, cursorY);
-        doc.setFont('helvetica', 'normal');
-        doc.text(item.value || '', margin + 40, cursorY);
-        cursorY += 7;
-    });
+    const col1X = margin;
+    const col2X = middle;
+    const labelOffset = 35;
+
+    // Colonna Sinistra
+    let col1Y = cursorY;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Data:', col1X, col1Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(dataRapportino, col1X + labelOffset, col1Y);
+    col1Y += 7;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Ordine di Lavoro:', col1X, col1Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(rapportino.ordineLavoro || 'N/D', col1X + labelOffset, col1Y);
+    col1Y += 7;
+
+    // NUOVA SEZIONE TRASFERTA
+    if (rapportino.trasfertaId) {
+        const trasferta = tipiGiornata.find(t => t.id === rapportino.trasfertaId);
+        if (trasferta) {
+            doc.setFont('helvetica', 'bold');
+            doc.text('Trasferta:', col1X, col1Y);
+            doc.setFont('helvetica', 'normal');
+            doc.text(trasferta.nome, col1X + labelOffset, col1Y);
+            col1Y += 7;
+        }
+    }
+
+    // Colonna Destra
+    let col2Y = cursorY;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Nave:', col2X, col2Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(nave, col2X + labelOffset, col2Y);
+    col2Y += 7;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Luogo:', col2X, col2Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(luogo, col2X + labelOffset, col2Y);
+    col2Y += 7;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Veicolo:', col2X, col2Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(veicolo, col2X + labelOffset, col2Y);
+    col2Y += 7;
+
+    cursorY = Math.max(col1Y, col2Y);
 
     // --- 4. SECONDO SEPARATORE E TABELLA TECNICI ---
     cursorY = addSeparatorLine(cursorY) + 5;
     
+    let totalHours = 0;
+    const bodyData = (rapportino.dettaglioOreTecnici || []).map(dett => {
+        const tecnico = masterData.tecnici.find(t => t.id === dett.tecnicoId);
+        const nomeTecnico = tecnico ? `${tecnico.cognome} ${tecnico.nome}` : 'Sconosciuto';
+        const oreTecnico = dett.ore || 0;
+        totalHours += oreTecnico;
+        
+        let orario;
+        if (dett.isManual || !dett.oraInizio || !dett.oraFine) {
+            orario = 'Inserimento manuale';
+        } else {
+            const pausaText = (dett.pausa || 0) > 0 ? ` (Pausa: ${dett.pausa} min)` : '';
+            orario = `${dett.oraInizio} - ${dett.oraFine}${pausaText}`;
+        }
+        
+        return [nomeTecnico, orario, oreTecnico.toFixed(2)];
+    });
+
     autoTable(doc, {
         startY: cursorY,
-        head: [[{
-            content: 'Tecnici Intervenuti',
-            styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' }
-        }, {
-            content: 'Orari',
-            styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' }
-        }]],
-        body: (rapportino.dettaglioOreTecnici || []).map(dett => {
-            const tecnico = masterData.tecnici.find(t => t.id === dett.tecnicoId);
-            const nomeTecnico = tecnico ? `${tecnico.cognome} ${tecnico.nome}` : 'Sconosciuto';
-            
-            let orario;
-            if (dett.isManual || !dett.oraInizio || !dett.oraFine) {
-                orario = `${(dett.ore || 0).toFixed(2)} ore`;
-            } else {
-                const pausaText = (dett.pausa || 0) > 0 ? ` (Pausa: ${dett.pausa} min)` : '';
-                orario = `${dett.oraInizio} - ${dett.oraFine}${pausaText}`;
-            }
-            
-            return [nomeTecnico, orario];
-        }),
+        head: [[
+            { content: 'Tecnici Intervenuti', styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' } },
+            { content: 'Orari', styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' } },
+            { content: 'Ore', styles: { fillColor: COLOR_GREY, textColor: '#FFFFFF', halign: 'center' } }
+        ]],
+        body: bodyData,
         theme: 'grid',
+        columnStyles: {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 'auto' },
+            2: { halign: 'right', cellWidth: 20 }
+        },
         didDrawPage: (data) => {
             if (data.cursor) {
                 cursorY = data.cursor.y;
             }
         }
     });
-    cursorY = (doc as any).lastAutoTable.finalY + 5;
+    cursorY = (doc as any).lastAutoTable.finalY;
+
+    // Aggiunta totale ore sotto la tabella
+    cursorY += 6;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(COLOR_GREY);
+    doc.text(`Totale ore tecnici: ${totalHours.toFixed(2)}`, pageWidth - margin, cursorY, { align: 'right' });
+    cursorY += 5;
+
 
     // --- 5. TERZO SEPARATORE E DETTAGLI LAVORO ---
     cursorY = addSeparatorLine(cursorY) + 5;
@@ -233,31 +285,31 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.setTextColor(COLOR_BLACK);
 
     // Colonna 1: Firma Cliente
-    const col1X = margin;
-    let col1Y = cursorY;
-    doc.text('Per accettazione (firma del responsabile)', col1X, col1Y);
-    col1Y += 10;
+    const col1X_firma = margin;
+    let col1Y_firma = cursorY;
+    doc.text('Per accettazione (firma del responsabile)', col1X_firma, col1Y_firma);
+    col1Y_firma += 10;
     const nomeFirmatario = rapportino.firmaFirmatarioNome || '_________________';
     const societaFirmatario = rapportino.firmaFirmatarioSocieta || '_________________';
-    doc.text(`Nome Firmatario: ${nomeFirmatario}`, col1X, col1Y);
-    col1Y += 7;
-    doc.text(`Società: ${societaFirmatario}`, col1X, col1Y);
-    col1Y += 5;
+    doc.text(`Nome Firmatario: ${nomeFirmatario}`, col1X_firma, col1Y_firma);
+    col1Y_firma += 7;
+    doc.text(`Società: ${societaFirmatario}`, col1X_firma, col1Y_firma);
+    col1Y_firma += 5;
     if (rapportino.firmaVettoriale) {
         const processedSignature = await processSignatureForPdf(rapportino.firmaVettoriale);
         if (processedSignature) {
-            doc.addImage(processedSignature, 'PNG', col1X, col1Y, 50, 20);
+            doc.addImage(processedSignature, 'PNG', col1X_firma, col1Y_firma, 50, 20);
         }
     }
 
     // Colonna 2: Firma Tecnico
-    const col2X = pageWidth / 2 + 15;
-    let col2Y = cursorY;
+    const col2X_firma = pageWidth / 2 + 15;
+    let col2Y_firma = cursorY;
     const tecnicoScrivente = masterData.tecnici.find(t => t.id === rapportino.tecnicoId);
     const nomeTecnicoScrivente = tecnicoScrivente ? `${tecnicoScrivente.cognome} ${tecnicoScrivente.nome}` : '';
-    doc.text('Firma Tecnico Responsabile', col2X, col2Y);
-    col2Y += 10;
-    doc.text(nomeTecnicoScrivente, col2X, col2Y);
+    doc.text('Firma Tecnico Responsabile', col2X_firma, col2Y_firma);
+    col2Y_firma += 10;
+    doc.text(nomeTecnicoScrivente, col2X_firma, col2Y_firma);
     
     // --- FINE E OUTPUT ---
     return doc.output('blob');

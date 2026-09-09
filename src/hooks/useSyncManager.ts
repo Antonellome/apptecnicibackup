@@ -11,20 +11,28 @@ export const useSyncManager = () => {
     const { showSnackbar } = useSnackbar();
     const { userProfile } = useAuth();
     const isSyncing = useRef(false);
-    const isOnline = useOnlineStatus(); // <-- ECCO LA CAZZATA. NON È UN OGGETTO.
+    const isOnline = useOnlineStatus();
+
+    // Usiamo un ref per l'ID del tecnico per stabilizzare le callback
+    const tecnicoIdRef = useRef(userProfile?.tecnicoId);
+    useEffect(() => {
+        tecnicoIdRef.current = userProfile?.tecnicoId;
+    }, [userProfile?.tecnicoId]);
 
     const runFullSync = useCallback(async (syncType: 'Iniziale' | 'Manuale') => {
         if (isSyncing.current) {
             if (syncType === 'Manuale') showSnackbar("Sincronizzazione già in corso.", "info");
             return;
         }
-        if (!userProfile?.tecnicoId) {
+        
+        const tecnicoId = tecnicoIdRef.current;
+        if (!tecnicoId) {
              console.error("SYNC ABORTED: ID Tecnico non disponibile.");
              return;
         }
 
         isSyncing.current = true;
-        console.log(`Orchestratore (AVVIO): Sincronizzazione ${syncType} per utente ${userProfile.tecnicoId}.`);
+        console.log(`Orchestratore (AVVIO): Sincronizzazione ${syncType} per utente ${tecnicoId}.`);
 
         try {
             await processSyncQueue();
@@ -33,7 +41,7 @@ export const useSyncManager = () => {
             await syncAllAnagrafiche();
             console.log("SYNC ACTION (Download): Anagrafiche aggiornate.");
             console.log("SYNC ACTION (Download): Avvio download Rapportini Utente...");
-            await syncUserRapportini(userProfile.tecnicoId);
+            await syncUserRapportini(tecnicoId);
             console.log("SYNC ACTION (Download): Rapportini Utente aggiornati.");
             
             if (syncType === 'Manuale') {
@@ -48,15 +56,17 @@ export const useSyncManager = () => {
         } finally {
             isSyncing.current = false;
         }
-    }, [showSnackbar, userProfile, isOnline]); // Aggiungo isOnline alle dipendenze
+    }, [showSnackbar, isOnline]); // Rimosso tecnicoId dalle dipendenze, usiamo il ref
 
     useEffect(() => {
-        if (isOnline && userProfile?.tecnicoId && !hasInitialSyncBeenTriggered()) {
+        // Leggiamo il valore corrente dal ref all'interno dell'effetto
+        const tecnicoId = tecnicoIdRef.current;
+        if (isOnline && tecnicoId && !hasInitialSyncBeenTriggered()) {
             markInitialSyncAsTriggered();
             console.log("TRIGGER: Avvio sincronizzazione iniziale.");
             runFullSync('Iniziale');
         }
-    }, [isOnline, userProfile, runFullSync]);
+    }, [isOnline, runFullSync]); // L'ID del tecnico non è più una dipendenza diretta
 
     const requestManualSync = useCallback(() => {
         if (!isOnline) {

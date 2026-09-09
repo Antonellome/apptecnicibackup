@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState, useReducer } from 'react';
+import React, { useEffect, useState, useReducer, useContext, useMemo } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
@@ -7,9 +6,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useNavigate } from 'react-router-dom';
-import { TariffaLocale } from '@/models/definitions';
-import { useMasterData } from '@/hooks/useMasterData';
+import { Impostazioni, TariffaLocale, TipoGiornata } from '@/models/definitions';
 import { ForceUpdateButton } from '@/components/ForceUpdateButton';
+import { GlobalDataContext } from '@/contexts/GlobalDataContext';
 
 // --- STATE MANAGEMENT ---
 interface SettingsState {
@@ -18,9 +17,10 @@ interface SettingsState {
     isDirty: boolean;
 }
 
+
 type SettingsAction =
-    | { type: 'SYNC_TARIFFE'; payload: TariffaLocale[] }
-    | { type: 'UPDATE_TARIFFA_COSTO'; payload: { id: string; costo: number } }
+    | { type: 'SET_TARIFFE'; payload: TariffaLocale[] }
+    | { type: 'UPDATE_TARIFFA_COSTO'; payload: { tipoGiornataId: string; costo: number } }
     | { type: 'SET_SAVING'; payload: boolean }
     | { type: 'SAVE_SUCCESS' };
 
@@ -32,20 +32,18 @@ const initialState: SettingsState = {
 
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
     switch (action.type) {
-        case 'SYNC_TARIFFE':
-            if (state.isDirty) return state; // Non sovrascrivere se ci sono modifiche non salvate
-            const sortedTariffe = [...action.payload].sort((a, b) => a.nome.localeCompare(b.nome));
-            return { ...state, tariffe: sortedTariffe };
-        
-        case 'UPDATE_TARIFFA_COSTO': {
+        case 'SET_TARIFFE':
+             if (state.isDirty) return state; 
+            return { ...state, tariffe: action.payload };
+
+        case 'UPDATE_TARIFFA_COSTO':
             return {
                 ...state,
-                isDirty: true, 
+                isDirty: true,
                 tariffe: state.tariffe.map(t =>
-                    t.id === action.payload.id ? { ...t, costo: action.payload.costo } : t
+                    t.tipoGiornataId === action.payload.tipoGiornataId ? { ...t, costo: action.payload.costo } : t
                 ),
             };
-        }
 
         case 'SET_SAVING':
             return { ...state, isSaving: action.payload };
@@ -58,11 +56,11 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
     }
 }
 
-// --- Componente per una singola tariffa ---
+// --- Componente TariffaRow ---
 interface TariffaRowProps {
     tariffa: TariffaLocale;
     isSaving: boolean;
-    onCostoChange: (id: string, costo: number) => void;
+    onCostoChange: (tipoGiornataId: string, costo: number) => void;
 }
 
 const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChange }) => {
@@ -82,10 +80,10 @@ const TariffaRow: React.FC<TariffaRowProps> = ({ tariffa, isSaving, onCostoChang
         }
 
         if (numericValue !== tariffa.costo) {
-             onCostoChange(tariffa.id, numericValue);
+             onCostoChange(tariffa.tipoGiornataId, numericValue);
         }
 
-        setInputValue(null); // Esci dalla modalità di modifica
+        setInputValue(null);
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,7 +124,8 @@ const SettingsPage: React.FC = () => {
     const { user, resetPassword, logout } = useAuth();
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
-    const { masterData, loading: masterDataLoading, updateTariffe } = useMasterData() as any;
+    
+    const { masterData, updateImpostazioni, loading: masterDataLoading } = useContext(GlobalDataContext);
 
     const [state, dispatch] = useReducer(settingsReducer, initialState);
     const { tariffe, isSaving, isDirty } = state;
@@ -134,11 +133,35 @@ const SettingsPage: React.FC = () => {
     const [clickCount, setClickCount] = useState(0);
     const [showTariffe, setShowTariffe] = useState(false);
 
+    // =====================================================================================
+    // --- LOGICA DI INIZIALIZZAZIONE TARIFFE --- V3 - DEFINITIVA
+    // =====================================================================================
     useEffect(() => {
-        if (masterData?.impostazioni?.tariffe) {
-             dispatch({ type: 'SYNC_TARIFFE', payload: masterData.impostazioni.tariffe });
+        if (masterData?.tipiGiornata && masterData.impostazioni) {
+            const tariffeSalvate = masterData.impostazioni.tariffe || [];
+            
+            // Costruisce la lista UI partendo dai tipiGiornata per garantire che tutte le voci siano presenti.
+            const tariffeComplete = masterData.tipiGiornata.map((tipoGiornata: TipoGiornata) => {
+                const tariffaSalvata = tariffeSalvate.find(t => t.tipoGiornataId === tipoGiornata.id);
+                
+                return {
+                    id: tipoGiornata.id,
+                    tipoGiornataId: tipoGiornata.id,
+                    nome: tipoGiornata.nome,
+                    // USA L'UNITA' DELLA TARIFFA SALVATA, NON QUELLA DEL TIPO GIORNATA.
+                    // Se la tariffa non è salvata, fa un fallback basato sul tipo, ma dovrebbe sempre esserci.
+                    unita: tariffaSalvata ? tariffaSalvata.unita : (tipoGiornata.tipo === 'oraria' ? 'h' : 'g'),
+                    costo: tariffaSalvata ? tariffaSalvata.costo : 0, 
+                    tariffa: tariffaSalvata ? tariffaSalvata.tariffa : 0,
+                };
+            });
+
+            const tariffeOrdinate = tariffeComplete.sort((a, b) => a.nome.localeCompare(b.nome));
+
+            dispatch({ type: 'SET_TARIFFE', payload: tariffeOrdinate });
         }
-    }, [masterData?.impostazioni?.tariffe]);
+    }, [masterData]); // Dipendenza semplificata: reagisce a qualsiasi cambio di masterData.
+    // =====================================================================================
 
     const handleTitleClick = () => {
         const newClickCount = clickCount + 1;
@@ -150,24 +173,37 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    const handleTariffaCostoChange = (id: string, costo: number) => {
-        dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { id, costo } });
+    const handleTariffaCostoChange = (tipoGiornataId: string, costo: number) => {
+        dispatch({ type: 'UPDATE_TARIFFA_COSTO', payload: { tipoGiornataId, costo } });
     };
     
     const handleSalva = async () => {
-        if (!updateTariffe) {
+        if (!updateImpostazioni) {
             showSnackbar('Funzione di aggiornamento non disponibile.', 'error');
             return;
         }
         dispatch({ type: 'SET_SAVING', payload: true });
 
         try {
-            await updateTariffe(tariffe);
+            const impostazioniDaSalvare: Impostazioni = {
+                id: masterData?.impostazioni?.id || 'main',
+                tariffe: tariffe.map(t => ({ 
+                    id: t.id,
+                    tipoGiornataId: t.tipoGiornataId,
+                    nome: t.nome,
+                    costo: t.costo,
+                    unita: t.unita,
+                    tariffa: t.costo,
+                })),
+            };
+
+            await updateImpostazioni(impostazioniDaSalvare);
+            
             showSnackbar('Tariffe salvate e applicate con successo!', 'success');
             dispatch({ type: 'SAVE_SUCCESS' });
         } catch (error) {
             console.error("Errore durante il salvataggio delle tariffe:", error);
-            showSnackbar('Errore during il salvataggio delle tariffe.', 'error');
+            showSnackbar('Errore durante il salvataggio delle tariffe.', 'error');
             dispatch({ type: 'SET_SAVING', payload: false });
         }
     };
@@ -178,8 +214,8 @@ const SettingsPage: React.FC = () => {
                 await resetPassword(user.email);
                 showSnackbar(`Email di reset inviata a ${user.email}`, 'success');
             } catch (error) {
-                console.error("Errore nell\'invio della mail di reset:", error);
-                showSnackbar("Errore nell&apos;invio della mail di reset.", 'error');
+                console.error("Errore nell'invio della mail di reset:", error);
+                showSnackbar("Errore nell'invio della mail di reset.", 'error');
             }
         }
     };
@@ -203,14 +239,14 @@ const SettingsPage: React.FC = () => {
             <Typography variant="h4" gutterBottom sx={{ mb: 3, cursor: 'pointer' }} onClick={handleTitleClick}>Impostazioni</Typography>
 
             <Accordion elevation={3} sx={{ mb: 4 }} defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography variant="h6">Guida App Tecnici</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                     <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2, mb: 2 }}>
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Installazione App</Typography>
                         <Typography paragraph>
-                            Per un accesso più rapido, puoi installare questa applicazione sulla schermata principale del tuo dispositivo, come se fosse un&apos;app nativa.
+                            Per un accesso più rapido, puoi installare questa applicazione sulla schermata principale del tuo dispositivo, come se fosse un'app nativa.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Android:</Typography>
                         <Typography paragraph>
@@ -218,7 +254,7 @@ const SettingsPage: React.FC = () => {
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>iOS (iPhone/iPad):</Typography>
                         <Typography paragraph>
-                            Tocca il pulsante di condivisione (il quadrato con la freccia verso l&apos;alto) nella barra di navigazione di Safari e scorri fino a trovare &quot;Aggiungi a Home&quot;.
+                            Tocca il pulsante di condivisione (il quadrato con la freccia verso l'alto) nella barra di navigazione di Safari e scorri fino a trovare &quot;Aggiungi a Home&quot;.
                         </Typography>
                     </Box>
 
@@ -226,7 +262,7 @@ const SettingsPage: React.FC = () => {
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Funzionalità delle Pagine</Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Home:</Typography>
                         <Typography paragraph>
-                            La pagina principale da cui puoi navigare verso tutte le sezioni principali dell&apos;app.
+                            La pagina principale da cui puoi navigare verso tutte le sezioni principali dell'app.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Nuovo Report:</Typography>
                         <Typography paragraph>
@@ -242,18 +278,18 @@ const SettingsPage: React.FC = () => {
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Notifiche:</Typography>
                         <Typography paragraph>
-                            Leggi le comunicazioni importanti inviate dall&apos;azienda.
+                            Leggi le comunicazioni importanti inviate dall'azienda.
                         </Typography>
                         <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Check-in:</Typography>
                         <Typography paragraph>
-                            Registra l&apos;inizio e la fine delle tue attività giornaliere.
+                            Registra l'inizio e la fine delle tue attività giornaliere.
                         </Typography>
                     </Box>
 
                     <Box sx={{ border: '1px solid #1976d2', borderRadius: 2, p: 2 }}>
                         <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>Modalità Offline</Typography>
                         <Typography paragraph>
-                            L&apos;applicazione è progettata per funzionare anche senza una connessione a Internet. Puoi continuare a creare report e utilizzare le altre funzionalità. I dati verranno sincronizzati automaticamente non appena il dispositivo tornerà online.
+                            L'applicazione è progettata per funzionare anche senza una connessione a Internet. Puoi continuare a creare report e utilizzare le altre funzionalità. I dati verranno sincronizzati automaticamente non appena il dispositivo tornerà online.
                         </Typography>
                     </Box>
                 </AccordionDetails>
@@ -267,7 +303,7 @@ const SettingsPage: React.FC = () => {
                     </Typography>
                     <List>
                         {tariffe.map((tariffa, index) => (
-                            <React.Fragment key={tariffa.id}>
+                            <React.Fragment key={tariffa.tipoGiornataId}>
                                 {index > 0 && <Divider component="li" />}
                                 <TariffaRow
                                     tariffa={tariffa}
@@ -302,7 +338,7 @@ const SettingsPage: React.FC = () => {
              <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
                 <Typography variant="h6" gutterBottom>Manutenzione App</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Se riscontri problemi o l&apos;app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
+                    Se riscontri problemi o l'app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
                     <strong>Attenzione: questa operazione può cancellare i dati non ancora sincronizzati con il server, come i report creati offline.</strong>
                 </Typography>
                 <ForceUpdateButton />
@@ -313,7 +349,7 @@ const SettingsPage: React.FC = () => {
                     APP TECNICI
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    V 2.1
+                    V 2.4
                 </Typography>
             </Box>
 

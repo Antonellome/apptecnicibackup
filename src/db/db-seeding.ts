@@ -24,9 +24,9 @@ const IMPOSTAZIONI_PREDEFINITE = {
         { tipoGiornataId: 'Trasferta Italia', costo: 20.00, unita: 'g' as const },
         { tipoGiornataId: 'Trasferta Europa', costo: 40.00, unita: 'g' as const },
         { tipoGiornataId: 'Trasferta ExtraEuropea', costo: 80.00, unita: 'g' as const },
-        { tipoGiornataId: 'Festivo', costo: 640.00, unita: 'g' as const },
-        { tipoGiornataId: 'Ferie', costo: 640.00, unita: 'g' as const },
-        { tipoGiornataId: 'Malattia', costo: 640.00, unita: 'g' as const },
+        { tipoGiornataId: 'Festivo', costo: 80.00, unita: 'g' as const },
+        { tipoGiornataId: 'Ferie', costo: 80.00, unita: 'g' as const },
+        { tipoGiornataId: 'Malattia', costo: 80.00, unita: 'g' as const },
         { tipoGiornataId: 'Legge 104', costo: 10.00, unita: 'h' as const },
         { tipoGiornataId: 'Permesso', costo: 10.00, unita: 'h' as const },
     ]

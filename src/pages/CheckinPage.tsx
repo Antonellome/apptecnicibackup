@@ -52,9 +52,15 @@ const CheckinPage = () => {
     }
   }, [allUserEvents?.length]);
 
-  const { giornataIniziata, inLuogo, eventiDelGiorno } = useMemo(() => {
+  const recentEvents = useMemo(() => {
+    if (!allUserEvents) return [];
+    const twentyFourHoursAgo = new Date().getTime() - (24 * 60 * 60 * 1000);
+    return allUserEvents.filter(e => new Date(e.timestampImpostato).getTime() >= twentyFourHoursAgo);
+  }, [allUserEvents]);
+
+  const { giornataIniziata, inLuogo } = useMemo(() => {
     if (!allUserEvents || allUserEvents.length === 0) {
-        return { giornataIniziata: false, inLuogo: null, eventiDelGiorno: [] };
+        return { giornataIniziata: false, inLuogo: null };
     }
 
     const ultimoEventoTimestamp = allUserEvents[allUserEvents.length - 1].timestampImpostato;
@@ -72,28 +78,24 @@ const CheckinPage = () => {
     }
 
     if (lastInizioGiornataIndex === -1) {
-        return { giornataIniziata: false, inLuogo: null, eventiDelGiorno: [] };
+        return { giornataIniziata: false, inLuogo: null };
     }
 
     const eventiPotenziali = allUserEvents.slice(lastInizioGiornataIndex);
     const fineGiornataEsiste = eventiPotenziali.some(e => e.tipo === 'fine_giornata');
 
     const isGiornataIniziata = !fineGiornataEsiste;
-    
-    const eventiDaMostrare = eventiPotenziali;
 
-    const ultimoEventoLuogo = isGiornataIniziata ? [...eventiDaMostrare].reverse().find(e => e.tipo === 'check_in_luogo' || e.tipo === 'check_out_luogo') : undefined;
+    const ultimoEventoLuogo = isGiornataIniziata ? [...eventiPotenziali].reverse().find(e => e.tipo === 'check_in_luogo' || e.tipo === 'check_out_luogo') : undefined;
     const isInLuogo = ultimoEventoLuogo?.tipo === 'check_in_luogo' 
         ? (ultimoEventoLuogo.naveId ? `navi_${ultimoEventoLuogo.naveId}` : `luoghi_${ultimoEventoLuogo.luogoId}`) 
         : null;
 
     return { 
         giornataIniziata: isGiornataIniziata, 
-        inLuogo: isInLuogo, 
-        eventiDelGiorno: eventiDaMostrare 
+        inLuogo: isInLuogo,
     };
   }, [allUserEvents]);
-
 
   const handleTimeChange = (type: string, value: string) => {
     setError(null);
@@ -130,7 +132,7 @@ const CheckinPage = () => {
                 const localId = `local_${Date.now()}_${idSuffix}`.replace(/\./g, '');
                 const optimisticEvent = { ...eventPayload, id: localId, timestampReale: new Date() };
                 await dexieDb.checkin_giornalieri.add(optimisticEvent);
-                await aggiungiAllaCoda({ type: 'checkin', action: 'create', entityId: localId, payload: eventPayload });
+                await aggiungiAllaCoda({ type: 'checkin', action: 'create', entityId: localId, payload: optimisticEvent });
             };
 
             if (type === 'fine_giornata' && inLuogo) {
@@ -193,13 +195,13 @@ const CheckinPage = () => {
             
             {error && <Alert severity='error' sx={{ mt: 2 }} onClose={() => setError(null)}>{error}</Alert>}
             
-            {eventiDelGiorno && eventiDelGiorno.length > 0 && (
+            {recentEvents && recentEvents.length > 0 && (
                 <Alert severity='info' sx={{ my: 2 }}>
-                    <Typography variant='body2'>Eventi della Giornata Corrente:</Typography>
+                    <Typography variant='body2'>Eventi delle ultime 24 ore:</Typography>
                     <Box ref={scrollBoxRef} component='ul' sx={{ m: 0, pl: '20px', maxHeight: '110px', overflowY: 'auto', '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' } }}>
-                        {eventiDelGiorno.map((e: any) => {
+                        {recentEvents.map((e: any) => {
                             const nome = e.naveId ? navi?.find(n=>n.id === e.naveId)?.nome : luoghi?.find(l=>l.id === e.luogoId)?.nome;
-                            return (<li key={e.id}><b>{e.tipo.replace(/_/g, ' ')}</b>alle {new Date(e.timestampImpostato).toLocaleString()} {nome ? `- ${nome}` : ''}</li>);
+                            return (<li key={e.id}><b>{e.tipo.replace(/_/g, ' ')}</b> alle {new Date(e.timestampImpostato).toLocaleString()} {nome ? `- ${nome}` : ''}</li>);
                         })}
                     </Box>
                 </Alert>

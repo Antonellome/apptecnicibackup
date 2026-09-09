@@ -14,9 +14,14 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton
 } from '@mui/material';
-import { WifiOff, CloudQueue, Gesture, Edit, Share, Delete, AccountCircle, ErrorOutline } from '@mui/icons-material';
+import { WifiOff, CloudQueue, Gesture, Edit, Share, Delete, AccountCircle, ErrorOutline, Close } from '@mui/icons-material';
 import { format, startOfMonth, addMonths, isAfter, isSameMonth, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -33,7 +38,29 @@ import { useSyncManager } from '@/hooks/useSyncManager';
 import { GlobalDataContext } from '@/contexts/GlobalDataContext'; 
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
-// LA SOLA E UNICA VERITA'. LA FUNZIONE CHE AVREI DOVUTO SCRIVERE 3 GIORNI FA.
+// Componente per l'anteprima del PDF
+const PdfPreviewDialog = ({ open, onClose, pdfUrl, onShare, isProcessing }: { open: boolean, onClose: () => void, pdfUrl: string | null, onShare: () => void, isProcessing: boolean }) => {
+  if (!pdfUrl) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg" PaperProps={{ sx: { height: '90vh' } }}>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        Anteprima Rapportino
+        <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent sx={{ p: 0, overflow: 'hidden' }}>
+        <iframe src={pdfUrl} width="100%" height="100%" style={{ border: 'none' }} />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={isProcessing}>Chiudi</Button>
+        <Button onClick={onShare} variant="contained" disabled={isProcessing}>{isProcessing ? 'Condivisione...' : 'Condividi'}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const toDateSafe = (date: any): Date | null => {
   if (!date) return null;
   if (date instanceof Date) return date;
@@ -146,12 +173,26 @@ const ReportListPage: React.FC = () => {
   const [isConfirmDeleteDialogOpen, setConfirmDeleteDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
+
+  // State for PDF preview
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfToShare, setPdfToShare] = useState<{blob: Blob, filename: string} | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   useEffect(() => {
     if (enrichedRapportini && !currentMonth) {
       setCurrentMonth(startOfMonth(enrichedRapportini.length > 0 ? enrichedRapportini[0].data : new Date()));
     }
   }, [enrichedRapportini, currentMonth]);
+
+  // Cleanup for the PDF URL
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
 
   const displayedRapportini = useMemo(() => {
     if (!enrichedRapportini || !currentMonth) return [];
@@ -173,6 +214,7 @@ const ReportListPage: React.FC = () => {
     handleMenuClose();
   };
 
+  // Modified to show the preview
   const handleShare = async () => {
     if (!menuState || !masterData) {
       showSnackbar("Dati non pronti per la condivisione.", "error");
@@ -186,7 +228,32 @@ const ReportListPage: React.FC = () => {
       if (!fullReport) throw new Error("Rapportino non trovato nel database locale.");
       
       const pdfBlob = await generateRapportinoPDF({ ...fullReport, data: report.data }, masterData);
-      await shareOrDownload(pdfBlob, `Rapportino_${format(report.data, 'dd-MM-yyyy')}.pdf`);
+      const url = URL.createObjectURL(pdfBlob);
+      
+      setPdfPreviewUrl(url);
+      setPdfToShare({ blob: pdfBlob, filename: `Rapportino_${format(report.data, 'dd-MM-yyyy')}.pdf` });
+      setIsPreviewOpen(true);
+
+    } catch (error) {
+      console.error("Errore durante la generazione del PDF:", error);
+      showSnackbar(`Impossibile generare anteprima: ${(error as Error).message}`, "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePreviewClose = () => {
+    setIsPreviewOpen(false);
+    // The URL is revoked by the cleanup useEffect
+  };
+
+  // Executes the actual sharing from the dialog
+  const executeShare = async () => {
+    if (!pdfToShare) return;
+
+    setIsProcessing(true);
+    try {
+      await shareOrDownload(pdfToShare.blob, pdfToShare.filename);
     } catch (error) {
       console.error("Errore durante la condivisione:", error);
       if ((error as DOMException).name !== 'AbortError') {
@@ -194,6 +261,7 @@ const ReportListPage: React.FC = () => {
       }
     } finally {
       setIsProcessing(false);
+      handlePreviewClose();
     }
   };
 
@@ -316,7 +384,8 @@ const ReportListPage: React.FC = () => {
           <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }} disabled={!menuState?.report.isEditable}><ListItemIcon><Delete fontSize="small" color="error" /></ListItemIcon><ListItemText>Cancella</ListItemText></MenuItem>
       </Menu>
       <ConfirmationDialog open={isConfirmDeleteDialogOpen} onClose={handleDialogClose} onConfirm={confirmDelete} title="Conferma Cancellazione" description={`Sei sicuro di voler cancellare questo rapportino? L'azione è irreversibile.`} />
-      {isProcessing && <FullScreenLoader />}
+      {isProcessing && !isPreviewOpen && <FullScreenLoader />}
+      <PdfPreviewDialog open={isPreviewOpen} onClose={handlePreviewClose} pdfUrl={pdfPreviewUrl} onShare={executeShare} isProcessing={isProcessing} />
     </Box>
   );
 };

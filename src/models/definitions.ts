@@ -1,288 +1,181 @@
-import { Timestamp } from 'firebase/firestore';
+import { Table } from 'dexie';
 
-// =================================================================
-// INTERFACCE DI BASE E UTILITY
-// =================================================================
+// =====================================================================================
+// --- INTERFACCE DATABASE LOCALE (DEXIE) ---
+// =====================================================================================
 
-export interface FirebaseDoc {
-  id: string;
-}
-
-export type GenericItem = FirebaseDoc & { nome: string; [key: string]: any };
-
-// =================================================================
-// MODELLI DATI PRINCIPALI (CORE)
-// =================================================================
-
-export interface DettaglioOreData {
-  tecnicoId: string;
-  nome: string;
-  isManual: boolean;
-  oraInizio: string;
-  oraFine: string;
-  pausa: number;
-  ore: number;
-}
-
-// *** MODELLO DATI RAPPORTO CONSOLIDATO ***
-export interface Rapportino extends FirebaseDoc {
-  nome: string;
-  data: Date; 
-  tecnicoId: string; 
-  tipoGiornataId: string;
-  giornataId: string; 
-  
-  // Dati principali
-  ordineLavoro?: string;
-  dettaglioOreTecnici: DettaglioOreData[];
-  presenze: string[]; 
-  
-  // Sezioni opzionali
-  veicoloId?: string;
-  naveId?: string;
-  luogoId?: string;
-
-  // Campi descrittivi
-  descrizioneBreve?: string;
-  lavoroEseguito: string;
-  materialiImpiegati?: string;
-
-  // Gestione Trasferta
-  includeTrasferta: boolean;
-  trasfertaId?: string;
-  
-  // Dati Firma
-  firmaFirmatarioNome?: string;
-  firmaFirmatarioSocieta?: string;
-  firmaVettoriale?: string | null;
-  
-  // Metadati e controllo
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string; 
-  version: number;   
-  isLocked: boolean; 
-
-  // Flag di stato
-  isMultiDay?: boolean;
-  isOffline?: boolean;
-  isDeleted?: boolean; // <-- AGGIUNTO FLAG PER SOFT DELETE
-
-  // Campi deprecati o da verificare
-  oreLavoro?: number; 
-  tecnicoScriventeId: string; 
-}
-
-
-// =================================================================
-// ANAGRAFICHE
-// =================================================================
-
-export interface Tecnico extends FirebaseDoc {
-  nome: string;
-  cognome: string;
-  email: string;
-  categoriaId?: string;
-  nomeCompleto?: string;
-  attivo?: boolean;
-  fcmTokens: string[];
-  abilitato: boolean;
-  categoria: string;
-  [key: string]: any;
-}
-
-export interface Cliente extends FirebaseDoc { nome: string; }
-export interface Sede extends FirebaseDoc { nome: string; indirizzo: string; }
-
-export interface TipoGiornata extends FirebaseDoc { 
-  nome: string; 
-  descrizione?: string; 
-  tariffa?: number; 
-  tipo: 'oraria' | 'giornaliera';
-  colore: string;
-  sigla?: string;
-  lavorativo: boolean; 
-  icona: string;
-  categoria?: 'normale' | 'trasferta' | 'ferie' | 'malattia' | 'altro' | string;
-}
-
-export interface Veicolo extends FirebaseDoc { 
-    marca: string; 
-    modello: string; 
-    targa: string;
-    nome: string;
-}
-
-export interface Luogo extends FirebaseDoc { nome: string; }
-export interface Nave extends FirebaseDoc { nome: string; }
-export interface Ditta extends FirebaseDoc { nome: string; }
-export interface Categoria extends FirebaseDoc { nome: string; }
-export interface Documento extends FirebaseDoc { nome: string; url: string; }
-export interface Anagrafica extends FirebaseDoc { nome: string; }
-export interface Qualifica extends FirebaseDoc { nome: string; }
-
-// =================================================================
-// IMPOSTAZIONI E TARIFFE
-// =================================================================
-
-export interface Tariffa {
-    id: string;
-    tipoGiornataId: string;
-    nome: string;
-    tariffa: number;
-}
-
-export interface TariffaLocale extends Tariffa {
-    costo: number;
-    unita: 'g' | 'h';
-}
-
-export interface Impostazioni extends FirebaseDoc {
+// Impostazioni dell'applicazione, salvate localmente.
+export interface Impostazioni {
+    id: 'main'; // Chiave primaria fissa per l'unico record di impostazioni
+    version?: number; // V8 - introdotto per forzare l'aggiornamento
     tariffe: TariffaLocale[];
 }
 
-// =================================================================
-// PROFILI UTENTE
-// =================================================================
+// Tariffa come salvata nel database locale (Dexie).
+export interface TariffaLocale {
+    id: string; // Solitamente corrisponde a tipoGiornataId
+    tipoGiornataId: string;
+    nome: string;
+    costo: number;
+    unita: 'h' | 'g'; 
+    tariffa: number; // Mantenuto per compatibilità
+}
 
-export interface UserProfile {
+// =====================================================================================
+// --- INTERFACCE DATI DA FIRESTORE ---
+// =====================================================================================
+
+export interface Rapportino {
+    id?: string;
+    data: string;
+    tecnicoId: string;
+    clienteId: string;
+    dittaId: string; 
+    luogoId: string;
+    attivita: Record<string, AttivitaRapportino>;
+    veicoloId?: string;
+    km?: number;
+    note?: string;
+    completed: boolean;
+    userId: string;
+    updatedAt: any; // serverTimestamp
+    createdAt: any; // serverTimestamp
+}
+
+export interface AttivitaRapportino {
+    lavorazioneId: string;
+    tipoGiornataId: string;
+    oreLavorate: number;
+    note?: string;
+}
+
+
+// --- ANAGRAFICHE --- 
+
+export interface Tecnico {
+    id?: string;
+    nome: string;
+    userId: string;
+}
+
+export interface Cliente {
+    id?: string;
+    nome: string;
+}
+
+export interface Ditta {
+    id?: string;
+    nome: string;
+}
+
+export interface Categoria {
+    id?: string;
+    nome: string;
+}
+
+export interface Lavorazione {
+    id?: string;
+    nome: string;
+    categoriaId: string;
+}
+
+export interface Nave {
+    id?: string;
+    nome: string;
+    clienteId: string;
+}
+
+export interface Luogo {
+    id?: string;
+    nome: string;
+    naveId?: string;
+    clienteId?: string;
+}
+
+export interface TipoGiornata {
+    id: string;
+    nome: string;
+    tipo: 'oraria' | 'giornaliera';
+}
+
+export interface Veicolo {
+    id?: string;
+    nome: string;
+}
+
+export interface Qualifica {
+    id?: string;
+    nome: string;
+}
+
+export interface Sistema {
+    id?: string;
+    nome: string;
+}
+
+export interface WebAppUser {
     uid: string;
-    email: string | null;
-    displayName: string | null;
+    email: string;
+    displayName: string;
     tecnicoId: string;
-    isAdmin: boolean;
-    theme: 'light' | 'dark';
-    isSuperAdmin?: boolean;
-    nome?: string;
-    cognome?: string;
-    categoria?: { id: string, nome: string } | string;
+    dittaId: string;
 }
 
-// =================================================================
-// SISTEMA (Sync, Offline, Notifiche)
-// =================================================================
-
-export interface SyncManifest {
-  [key: string]: Timestamp;
-}
-
-export interface SyncEvent {
-    id?: number;
-    entityId: string; 
-    type: 'rapportino' | 'impostazioni' | 'NOTIFICATION_READ' | 'checkin';
-    action: 'create' | 'update'; 
-    payload: object; 
-    timestamp: Date;
-    syncStatus: 'pending' | 'syncing' | 'success' | 'error';
-    attempts?: number;
-    error?: string;
-}
-
-export interface CondivisioneInSospeso {
-    id?: number;
-    blob: Blob;
-    fileName: string;
-}
-
-export interface CheckinGiornaliero extends FirebaseDoc {
-  tecnicoId: string;
-  tecnicoName: string;
-  tipo: 'inizio_giornata' | 'fine_giornata' | 'check_in_luogo' | 'check_out_luogo';
-  timestampImpostato: Date;
-  timestampReale: Date;
-  naveId?: string;
-  luogoId?: string;
-  isOffline?: boolean;
-}
-
-export interface Notifica extends FirebaseDoc {
-    title: string;
-    body: string;
-    createdAt: Date;
-    isRead: boolean;
+export interface CheckinGiornaliero {
+    id?: string; // data_tecnicoId
+    data: string; 
     tecnicoId: string;
-    link?: string;
-    letta?: boolean; 
+    checkIn: any; // serverTimestamp
+    checkOut: any; // serverTimestamp | null
+    isSync: boolean;
+    userId: string;
 }
 
-// =================================================================
-// MODELLI ARRICCHITI E CALCOLATI
-// =================================================================
+// =====================================================================================
+// --- INTERFACCE DATI PER UI E CONTESTI ---
+// =====================================================================================
 
-export type SyncState = 'synced' | 'pending' | 'error';
-
-export interface EnrichedRapportino extends Rapportino {
-    tecnico?: Tecnico;
-    tipoGiornata?: TipoGiornata;
-    veicolo?: Veicolo;
-    isEditable: boolean;
-    oreGiorno: number;
-    naveNome?: string;
-    luogoNome?: string;
-    tecnicoScrivente?: Tecnico;
-    isClickable?: boolean;
-    oreDisplay?: string;
-    creatore?: string;
-    orariDisplay?: string;
-    hasFirma?: boolean;
-    syncState?: SyncState;
-}
-
-export interface DayInfo {
-    date: string;
-    sigla: string;
-    colore: string;
-    isTrasferta: boolean;
-    tipo: string;
-    ore: number;
-    tooltip: string;
-    [key: string]: any;
-}
-
-export type Giorno = DayInfo;
-
-export interface RiepilogoMensile {
-    [key: string]: DayInfo;
-}
-
-export interface DettaglioVoce {
-  id: string;
-  nome: string;
-  colore: string;
-  unita: 'h' | 'g';
-  oreTotali: number;
-  giorni: number;
-  costo: number;
-  giorniSet?: Set<string>;
-}
-
-export interface RiepilogoMese {
-  oreTotali: number;
-  costoTotale: number;
-  giorniTotaliLavorati: number;
-  giorniTrasferta: number;
-  oreOrdinarie: number;
-  oreStraordinarie: number;
-  dettaglio: Map<string, DettaglioVoce>;
-}
-
+// Contiene tutte le anagrafiche necessarie all'app.
 export interface MasterData {
     tecnici: Tecnico[];
     clienti: Cliente[];
-    sedi: Sede[];
-    tipiGiornata: TipoGiornata[];
-    veicoli: Veicolo[];
-    luoghi: Luogo[];
-    navi: Nave[];
     ditte: Ditta[];
     categorie: Categoria[];
+    lavorazioni: Lavorazione[];
+    navi: Nave[];
+    luoghi: Luogo[];
+    tipiGiornata: TipoGiornata[];
+    veicoli: Veicolo[];
+    qualifiche: Qualifica[];
+    sistemi: Sistema[];
     impostazioni: Impostazioni;
 }
 
-export interface FormField {
-    id: string;
-    name: string;
-    label: string;
-    type: 'text' | 'number' | 'email' | 'password' | 'select' | 'boolean' | 'date';
-    options?: { value: string; label: string }[];
+// Interfaccia per la tabella Dexie, per specificare le chiavi primarie.
+export interface MyDatabaseTables {
+    rapportini: Table<Rapportino>;
+    tecnici: Table<Tecnico>;
+    clienti: Table<Cliente>;
+    ditte: Table<Ditta>;
+    categorie: Table<Categoria>;
+    lavorazioni: Table<Lavorazione>;
+    navi: Table<Nave>;
+    luoghi: Table<Luogo>;
+    tipiGiornata: Table<TipoGiornata>;
+    veicoli: Table<Veicolo>;
+    qualifiche: Table<Qualifica>;
+    sistemi: Table<Sistema>;
+    impostazioni: Table<Impostazioni>;
+    checkin_giornalieri: Table<CheckinGiornaliero>;
+    webAppUsers: Table<WebAppUser>;
 }
+
+// Questa è la vecchia interfaccia, la tengo per riferimento per ora.
+export interface Tariffa {
+    id: string;
+    nome: string;
+    tariffa: number;
+    unita: 'h' | 'g'; // ora o giorno
+    tipoGiornataId: string; 
+}
+

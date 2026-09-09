@@ -2,8 +2,8 @@ import { db } from '@/db/local-db';
 import { functions, db as firestore } from '@/utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { createRapportino, updateRapportino } from './rapportiniService';
-import { onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
-import { Rapportino } from '@/models/definitions';
+import { onSnapshot, collection, query, where, getDocs, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { Rapportino, CheckinGiornaliero } from '@/models/definitions';
 
 // --- Funzioni di Sincronizzazione basate su Cloud Functions ---
 
@@ -11,7 +11,7 @@ const syncAllAnagraficheCallable = httpsCallable(functions, 'syncAllAnagrafiche'
 const getAllRapportiniForSyncCallable = httpsCallable(functions, 'getAllRapportiniForSync');
 
 /**
- * Esegue la sincronizzazione delle sole anagrafiche con una chiamata al backend.
+ * Esegue la sincronizzazione delle anagrafiche, ESCLUDENDO le impostazioni locali.
  */
 export const syncAllAnagrafiche = async () => {
   console.log("Avvio procedura di sincronizzazione ANAGRAFICHE...");
@@ -24,11 +24,13 @@ export const syncAllAnagrafiche = async () => {
       return;
     }
 
-    const tablesToUpdate = Object.keys(allData).filter(key => db.table(key));
+    const tablesToUpdate = Object.keys(allData).filter(key => db.table(key) && key !== 'impostazioni');
+    
     if (tablesToUpdate.length === 0) {
-        console.warn("Nessuna delle collezioni anagrafiche ricevute corrisponde a una tabella.");
+        console.warn("Nessuna delle collezioni anagrafiche ricevute corrisponde a una tabella da aggiornare.");
         return;
     }
+    
     const dexieTables = tablesToUpdate.map(name => (db as any)[name]);
 
     await db.transaction('rw', dexieTables, async () => {
@@ -50,7 +52,6 @@ export const syncAllAnagrafiche = async () => {
 
 /**
  * Esegue la sincronizzazione dei soli rapportini utente con una chiamata al backend.
- * @param tecnicoId L'ID del tecnico per cui scaricare i rapportini.
  */
 export const syncUserRapportini = async (tecnicoId: string) => {
   console.log(`Avvio procedura di sincronizzazione RAPPORTINI per tecnico: ${tecnicoId}...`);
@@ -82,9 +83,38 @@ export const syncUserRapportini = async (tecnicoId: string) => {
   }
 }
 
+/**
+ * Sincronizza un singolo record di check-in/check-out con Firestore.
+ * Questa funzione è ora ROBUSTA: gestisce sia i nuovi eventi (con ID) che i vecchi eventi corrotti (senza ID).
+ */
+const syncCheckin = async (payload: CheckinGiornaliero) => {
+    // Rimuovo 'isSync' perché è un campo puramente locale e non va su Firestore.
+    const { isSync, ...dataToSync } = payload;
 
-// --- Le altre funzioni rimangono invariate ---
+    if (payload.id) {
+        // CASO NORMALE (nuovi eventi): l'ID esiste, quindi uso setDoc per creare/aggiornare.
+        const checkinRef = doc(firestore, 'checkin_giornalieri', payload.id);
+        await setDoc(checkinRef, dataToSync, { merge: true });
+        console.log(`Check-in ${payload.id} sincronizzato con successo (metodo: setDoc).`);
+        return { id: payload.id };
+    } else {
+        // CASO DI RECUPERO (vecchi eventi corrotti): l'ID manca.
+        // Aggiungo l'evento come un nuovo documento in Firestore e lascio che generi un ID.
+        console.warn(`Check-in senza ID rilevato (dato vecchio/corrotto). Procedo con il recupero.`);
+        const collectionRef = collection(firestore, 'checkin_giornalieri');
+        const docRef = await addDoc(collectionRef, {
+            ...dataToSync,
+            timestampSync: serverTimestamp(),
+            recuperato: true // Aggiungo un flag per riconoscere questi dati
+        });
+        console.log(`Check-in recuperato sincronizzato con successo (metodo: addDoc). Nuovo ID: ${docRef.id}`);
+        return { id: docRef.id };
+    }
+};
 
+/**
+ * Processa la coda di sincronizzazione salvata in Dexie.
+ */
 export const processSyncQueue = async () => {
     const itemsToSync = await db.syncQueue.where('syncStatus').equals('pending').toArray();
     if (itemsToSync.length === 0) return;
@@ -102,12 +132,18 @@ export const processSyncQueue = async () => {
                 result = await updateRapportino(item.entityId, item.payload);
                 break;
               default:
-                throw new Error(`Azione non supportata: ${item.action}`);
+                throw new Error(`Azione non supportata per rapportino: ${item.action}`);
             }
             break;
+          
+          case 'checkin':
+            result = await syncCheckin(item.payload);
+            break;
+
           default:
             throw new Error(`Tipo non supportato: ${item.type}`);
         }
+        // Se la sincronizzazione ha successo, rimuovi l'elemento dalla coda.
         await db.syncQueue.delete(item.id!);
       } catch (error) {
         console.error(`Errore sync elemento ${item.id}:`, error);
@@ -115,6 +151,9 @@ export const processSyncQueue = async () => {
     }
   };
 
+/**
+ * Ascolta gli aggiornamenti in tempo reale dei rapportini per il tecnico loggato.
+ */
 export const listenForRapportiniUpdates = (tecnicoId: string, onUpdate: (rapportini: Rapportino[]) => void) => {
   const rapportiniRef = collection(firestore, 'rapportini');
   const q = query(
