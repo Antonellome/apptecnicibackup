@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useContext } from 'react';
+import { useState, useMemo, useContext, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -17,19 +17,20 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, isWithinInterval } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { Rapportino, EnrichedRapportino, UserProfile, MasterData } from '@/models/definitions';
+import { Rapportino, UserProfile, MasterData, RiepilogoMese } from '@/models/definitions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import DailyBreakdownTable from '@/components/Rapportini/DailyBreakdownTable';
 import FullScreenLoader from '@/components/FullScreenLoader';
-import { generateMonthlyReportPDF, calculateMonthlyReportData } from '@/services/monthlyReportGenerator';
-import { shareOrDownload } from '@/services/shareService';
+import { generateMonthlyReportPDF } from '@/lib/report-generator';
+import { calculateMonthlyReportData } from '@/lib/report-calculator';
+import { shareOrDownload } from '@/lib/share-utils';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 import MonthlyReportSkeleton from '@/components/Rapportini/MonthlyReportSkeleton';
-import { toDateSafe } from '@/utils/dateUtils';
-import { GlobalDataContext } from '@/contexts/GlobalDataContext'; // --- IMPORTA IL CONTESTO CORRETTO ---
+import { toDateSafe as toDate } from '@/lib/date-utils'; 
+import { GlobalDataContext } from '@/contexts/GlobalDataContext';
 
 interface MonthlyReportContentProps {
     userProfile: UserProfile;
@@ -52,63 +53,55 @@ const MonthlyReportContent = ({
     const [clickCount, setClickCount] = useState(0);
     const [showCost, setShowCost] = useState(false);
 
-    // Rimossa la diagnostica non più necessaria
+    const tariffe = useLiveQuery(() => db.impostazioni.get('main').then(imp => imp?.tariffe || []), []);
 
     const rapportiniLocali = useLiveQuery(() => {
-        if (!userProfile) return [];
-        
+        if (!userProfile?.tecnicoId) return [];
         const interval = { start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) };
-
         return db.rapportini
             .filter(r => {
-                const isOwnerOrParticipant = (r.presenze || []).includes(userProfile.tecnicoId) || r.tecnicoId === userProfile.tecnicoId;
-                if (!isOwnerOrParticipant) return false;
-
-                const reportDate = toDateSafe(r.data);
-                if (!reportDate) return false;
-                
-                return isWithinInterval(reportDate, interval);
+                const isParticipant = (r.presenze || []).includes(userProfile.tecnicoId!);
+                const reportDate = toDate(r.data);
+                return !!(reportDate && isWithinInterval(reportDate, interval) && isParticipant);
             })
             .sortBy('data');
-
     }, [currentMonth, userProfile.tecnicoId]);
 
     const { rapportiniArricchiti, riepilogoMese } = useMemo(() => {
-        if (!rapportiniLocali || !masterData || !userProfile) {
+        if (!rapportiniLocali || !masterData || !userProfile || !tariffe) {
             return { rapportiniArricchiti: [], riepilogoMese: null };
         }
-        return calculateMonthlyReportData(rapportiniLocali as Rapportino[], masterData, userProfile);
-    }, [rapportiniLocali, masterData, userProfile]);
+        return calculateMonthlyReportData(rapportiniLocali as Rapportino[], masterData, userProfile, tariffe);
+    }, [rapportiniLocali, masterData, userProfile, tariffe]);
 
     const reportDays = useMemo(() => {
         if (!rapportiniArricchiti) return [];
-        return rapportiniArricchiti.map(r => toDateSafe(r.data)).filter(Boolean) as Date[];
+        return rapportiniArricchiti.map(r => r.data).filter(Boolean);
     }, [rapportiniArricchiti]);
 
-    const handleTitleClick = () => {
-        const newClickCount = clickCount + 1;
-        if (newClickCount >= 5) {
-            setShowCost(!showCost);
+    const handleTitleClick = () => setClickCount(c => c + 1);
+    
+    useEffect(() => {
+        if (clickCount >= 5) {
+            setShowCost(s => !s);
             setClickCount(0);
-        } else {
-            setClickCount(newClickCount);
         }
-    };
+    }, [clickCount]);
 
     const handleGenerateMonthlyReport = async () => {
-        if (!rapportiniArricchiti || rapportiniArricchiti.length === 0) {
-            showSnackbar('Nessun dato valido da includere nel PDF.', 'info');
+        if (!rapportiniArricchiti || rapportiniArricchiti.length === 0 || !riepilogoMese) {
+            showSnackbar('Nessun dato da includere nel PDF.', 'info');
             return;
         }
         setIsGeneratingPdf(true);
         try {
             const monthStr = format(currentMonth, 'MMMM yyyy', { locale: it });
-            const pdfBlob = await generateMonthlyReportPDF(rapportiniArricchiti as EnrichedRapportino[], monthStr);
+            const pdfBlob = await generateMonthlyReportPDF(rapportiniArricchiti, monthStr, riepilGogoMese as RiepilogoMese);
             setPdfPreviewBlob(pdfBlob);
             setIsPreviewOpen(true);
         } catch (error) {
-            console.error("Errore PDF:", error);
-            showSnackbar('Errore generazione report.', 'error');
+            console.error("Errore durante la generazione del PDF:", error);
+            showSnackbar('Errore nella generazione del report.', 'error');
         } finally {
             setIsGeneratingPdf(false);
         }
@@ -118,14 +111,14 @@ const MonthlyReportContent = ({
         try {
             await shareOrDownload(blob, fileName);
         } catch (error) {
-            console.error("Errore condivisione:", error);
-            showSnackbar('Errore durante la condivisione.', 'error');
+            console.error("Errore durante la condivisione:", error);
+            showSnackbar('Errore durante la condivisione del file.', 'error');
         } finally {
             setIsPreviewOpen(false);
         }
     };
 
-    if (rapportiniLocali === undefined) {
+    if (rapportiniLocali === undefined || tariffe === undefined) {
         return <MonthlyReportSkeleton />;
     }
     
@@ -185,7 +178,7 @@ const MonthlyReportContent = ({
                                                 <TableBody>
                                                     <TableRow>
                                                         <TableCell><Typography fontWeight="bold">Ore Lavorate</Typography></TableCell>
-                                                        <TableCell align="right"><Typography variant="h6">{(riepilogoMese.oreTotali || 0).toFixed(2)}</Typography></TableCell>
+                                                        <TableCell align="right"><Typography variant="h6">{riepilogoMese.oreTotali.toFixed(2)}</Typography></TableCell>
                                                     </TableRow>
                                                     <TableRow>
                                                         <TableCell><Typography fontWeight="bold">Giorni di Presenza</Typography></TableCell>
@@ -198,7 +191,7 @@ const MonthlyReportContent = ({
                                                     {showCost && (
                                                         <TableRow>
                                                             <TableCell><Typography fontWeight="bold" sx={{ color: '#1976d2' }}>Costo Stimato</Typography></TableCell>
-                                                            <TableCell align="right"><Typography variant="h5" fontWeight="bold" sx={{ color: '#1976d2' }}>€ {(riepilogoMese.costoTotale || 0).toFixed(2)}</Typography></TableCell>
+                                                            <TableCell align="right"><Typography variant="h5" fontWeight="bold" sx={{ color: '#1976d2' }}>€ {riepilogoMese.costoTotale.toFixed(2)}</Typography></TableCell>
                                                         </TableRow>
                                                     )}
                                                 </TableBody>
@@ -207,7 +200,7 @@ const MonthlyReportContent = ({
                                     </Paper>
                                 </Grid>
                                 <Grid sx={{ mt: 2 }} size={12}>
-                                    <DailyBreakdownTable rapportini={rapportiniArricchiti as EnrichedRapportino[]} />
+                                    <DailyBreakdownTable rapportini={rapportiniArricchiti} />
                                 </Grid>
                             </Grid>
                         )
@@ -215,28 +208,28 @@ const MonthlyReportContent = ({
                 </Grid>
             </Grid>
 
-            <PdfPreviewModal
+            {userProfile.cognome && <PdfPreviewModal
                 open={isPreviewOpen}
                 onClose={() => setIsPreviewOpen(false)}
                 pdfBlob={pdfPreviewBlob}
                 fileName={`Riepilogo_Mensile_${userProfile.cognome}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.pdf`}
                 onShare={handleShareFromPreview}
-            />
+            />}
         </>
     );
 }
 
 const MonthlyReportPage = () => {
     const { userProfile } = useAuth();
-    // --- USA IL CONTESTO GLOBALE, NON L'HOOK OBSOLETO ---
-    const { masterData, loading } = useContext(GlobalDataContext);
+    const globalDataContext = useContext(GlobalDataContext);
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     
-    // --- GESTIONE DELLO STATO DI CARICAMENTO --- 
-    if (loading || !userProfile || !masterData) {
+    if (!globalDataContext || globalDataContext.loading || !userProfile || !globalDataContext.masterData) {
         return <FullScreenLoader />;
     }
+
+    const { masterData } = globalDataContext;
     
     const handleMonthChange = (increment: number) => {
         setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));

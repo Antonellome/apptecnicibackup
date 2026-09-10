@@ -31,12 +31,13 @@ import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { AuthContext } from '@/contexts/AuthContextDefinition';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { db } from '@/db/local-db';
-import { aggiungiAllaCoda } from '@/services/syncService';
-import { generateRapportinoPDF } from '@/services/rapportinoPDFGenerator';
-import { shareOrDownload } from '@/services/shareService';
+import { aggiungiAllaCoda } from '@/lib/sync-service';
+import { generateRapportinoPDF } from '@/lib/rapportino-pdf-generator';
+import { shareOrDownload } from '@/lib/share-service';
 import { useSyncManager } from '@/hooks/useSyncManager';
 import { GlobalDataContext } from '@/contexts/GlobalDataContext'; 
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { toDateSafe } from '@/lib/date-utils';
 
 // Componente per l'anteprima del PDF
 const PdfPreviewDialog = ({ open, onClose, pdfUrl, onShare, isProcessing }: { open: boolean, onClose: () => void, pdfUrl: string | null, onShare: () => void, isProcessing: boolean }) => {
@@ -59,22 +60,6 @@ const PdfPreviewDialog = ({ open, onClose, pdfUrl, onShare, isProcessing }: { op
       </DialogActions>
     </Dialog>
   );
-};
-
-const toDateSafe = (date: any): Date | null => {
-  if (!date) return null;
-  if (date instanceof Date) return date;
-  if (typeof date.toDate === 'function') return date.toDate();
-  
-  if (typeof date._seconds === 'number' && typeof date._nanoseconds === 'number') {
-    return new Date(date._seconds * 1000 + date._nanoseconds / 1000000);
-  }
-  if (typeof date.seconds === 'number' && typeof date.nanoseconds === 'number') {
-    return new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
-  }
-
-  const parsedDate = new Date(date);
-  return isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
 const ReportListPage: React.FC = () => {

@@ -3,8 +3,9 @@ import React from 'react';
 import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, TableFooter
 } from '@mui/material';
-import { Rapportino, TipoGiornata } from '@/models/definitions';
+import { Rapportino, TipoGiornata, DettaglioOreData } from '@/models/definitions';
 import { format } from 'date-fns';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 // Interfaccia per il report arricchito che la tabella riceve
 interface EnrichedReport extends Rapportino {
@@ -18,6 +19,12 @@ interface Totals {
     totalEarnings: number;
 }
 
+// Funzione per calcolare le ore totali di un rapportino
+const getReportTotalHours = (dettaglio: DettaglioOreData[]): number => {
+    if (!dettaglio) return 0;
+    return dettaglio.reduce((sum, item) => sum + (item.ore || 0), 0);
+};
+
 // Funzione di calcolo: robusta e chiara
 const calculateTotals = (reports: EnrichedReport[]): Totals => {
     const totals: Totals = {
@@ -27,7 +34,7 @@ const calculateTotals = (reports: EnrichedReport[]): Totals => {
     };
 
     reports.forEach(report => {
-        const hours = typeof report.oreLavoro === 'number' ? report.oreLavoro : 0;
+        const hours = getReportTotalHours(report.dettaglioOreTecnici);
         totals.totalHours += hours;
 
         const tipoGiornataInfo = report.tipoGiornata;
@@ -71,12 +78,8 @@ const ConsuntivoTable: React.FC<ConsuntivoTableProps> = ({ reports }) => {
     const totals = calculateTotals(reports);
 
     const formatDate = (date: any): string => {
-        try {
-            const d = date?.toDate ? date.toDate() : new Date(date);
-            return format(d, 'dd/MM/yyyy');
-        } catch {
-            return 'N/D';
-        }
+        const d = toDate(date);
+        return d ? format(d, 'dd/MM/yyyy') : 'N/D';
     };
 
     return (
@@ -95,7 +98,7 @@ const ConsuntivoTable: React.FC<ConsuntivoTableProps> = ({ reports }) => {
                             <TableCell>{formatDate(report.data)}</TableCell>
                             <TableCell>{report.tipoGiornata?.nome || 'N/A'}</TableCell>
                             <TableCell align="right">
-                                {typeof report.oreLavoro === 'number' ? report.oreLavoro.toFixed(2) : '-'}
+                                {getReportTotalHours(report.dettaglioOreTecnici).toFixed(2)}
                             </TableCell>
                         </TableRow>
                     )) : (

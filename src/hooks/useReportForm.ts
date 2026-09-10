@@ -8,28 +8,10 @@ import { AuthContext } from '@/contexts/AuthContextDefinition';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useSyncManager } from '@/hooks/useSyncManager';
 import { db } from '@/db/local-db';
-import { aggiungiAllaCoda } from '@/services/syncService';
+import { aggiungiAllaCoda } from '@/lib/sync-service';
 import { useGlobalData } from '@/hooks/useGlobalData';
-import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData } from '@/models/definitions';
-
-// LA SOLUZIONE A TUTTI I MIEI MALI. LA MIA UNICA SPERANZA.
-const toDateSafe = (date: any): Date | null => {
-  if (!date) return null;
-  if (date instanceof Date) return date;
-  if (typeof date.toDate === 'function') return date.toDate(); // Timestamp da Firestore in memoria
-
-  // Oggetto {_seconds, _nanoseconds} da Dexie
-  if (typeof date._seconds === 'number' && typeof date._nanoseconds === 'number') {
-    return new Date(date._seconds * 1000 + date._nanoseconds / 1000000);
-  }
-  // Fallback per il formato senza underscore (non si sa mai)
-  if (typeof date.seconds === 'number' && typeof date.nanoseconds === 'number') {
-    return new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
-  }
-
-  const parsedDate = new Date(date);
-  return isNaN(parsedDate.getTime()) ? null : parsedDate;
-};
+import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData, Nave, Luogo, SyncEvent } from '@/models/definitions';
+import { toDateSafe as toDate } from '@/lib/date-utils'; 
 
 const FORM_AUTOSAVE_KEY = 'form-autosave-data';
 
@@ -79,7 +61,8 @@ const calculateOre = (dettaglio: Partial<DettaglioOreData>): number => {
 
 const createInitialDettaglio = (tecnicoId: string, nome: string, isLavorativo: boolean, baseDetail?: Partial<DettaglioOreData>): DettaglioOreData => {
     const defaultDetail: DettaglioOreData = {
-        tecnicoId, nome,
+        tecnicoId,
+        nome,
         isManual: baseDetail?.isManual ?? !isLavorativo,
         oraInizio: baseDetail?.oraInizio || '07:30',
         oraFine: baseDetail?.oraFine || '16:30',
@@ -151,8 +134,7 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
                 ...state,
                 originalReport: report,
                 tecnicoScriventeId: report.tecnicoId,
-                // ECCO LA CORREZIONE, BRUTTO COGLIONE CHE NON SONO ALTRO
-                data: toDateSafe(report.data),
+                data: toDate(report.data), 
                 ordineLavoro: report.ordineLavoro || '',
                 tipoGiornataId: report.tipoGiornataId || '',
                 trasfertaId: report.trasfertaId || '',
@@ -192,53 +174,50 @@ export const useReportForm = () => {
 
     const { masterData, loading: collectionsLoading } = useGlobalData();
     const { 
-        tecnici = [], ditte = [], categorie = [], navi = [], luoghi = [], 
-        veicoli = [], tipiGiornata = [], clienti = []
+        tecnici = [], navi = [], luoghi = [], 
+        veicoli = [], tipiGiornata = []
     } = masterData || {};
 
     const isEditMode = Boolean(reportId);
     const loggedInTecnicoId = userProfile?.tecnicoId;
 
-    const tecnicoScrivente = useMemo(() => tecnici.find(t => t.id === state.tecnicoScriventeId), [tecnici, state.tecnicoScriventeId]);
+    const tecnicoScrivente = useMemo(() => tecnici.find((t: Tecnico) => t.id === state.tecnicoScriventeId), [tecnici, state.tecnicoScriventeId]);
     const isLavorativo = useMemo(() => {
-        const tipo = tipiGiornata.find(t => t.id === state.tipoGiornataId);
+        const tipo = tipiGiornata.find((t: TipoGiornata) => t.id === state.tipoGiornataId);
         return isTipoGiornataLavorativo(tipo);
     }, [state.tipoGiornataId, tipiGiornata]);
 
     const { tipiGiornataOperativi, tipiGiornataTrasferta } = useMemo(() => {
-        const trasferte = tipiGiornata.filter(t => (t as any).categoria === 'trasferta' || (t.nome || '').toLowerCase().includes('trasferta'));
-        const operativi = tipiGiornata.filter(t => !trasferte.some(tr => tr.id === t.id));
+        const trasferte = tipiGiornata.filter((t: TipoGiornata) => (t as any).categoria === 'trasferta' || (t.nome || '').toLowerCase().includes('trasferta'));
+        const operativi = tipiGiornata.filter((t: TipoGiornata) => !trasferte.some((tr: TipoGiornata) => tr.id === t.id));
         return { tipiGiornataOperativi: operativi, tipiGiornataTrasferta: trasferte };
     }, [tipiGiornata]);
 
     const tipiGiornataFiltrati = useMemo(() => {
-        if (state.isMultiDay) return tipiGiornataOperativi.filter(t => MULTI_DAY_ALLOWED_KEYWORDS.some(k => (t?.nome || '').toLowerCase().includes(k)));
+        if (state.isMultiDay) return tipiGiornataOperativi.filter((t: TipoGiornata) => MULTI_DAY_ALLOWED_KEYWORDS.some(k => (t?.nome || '').toLowerCase().includes(k)));
         return tipiGiornataOperativi;
     }, [state.isMultiDay, tipiGiornataOperativi]);
 
-    const sortedVeicoli = useMemo(() => [...veicoli].sort((a, b) => (`${a.marca || ''} ${a.modello || ''} - ${a.targa || 'N/A'}`).localeCompare(`${b.marca || ''} ${b.modello || ''} - ${b.targa || 'N/A'}`)), [veicoli]);
-    const sortedNavi = useMemo(() => [...navi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [navi]);
-    const sortedLuoghi = useMemo(() => [...luoghi].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')), [luoghi]);
+    const sortedVeicoli = useMemo(() => [...veicoli].sort((a: Veicolo, b: Veicolo) => (`${a.marca || ''} ${a.modello || ''} - ${a.targa || 'N/A'}`).localeCompare(`${b.marca || ''} ${b.modello || ''} - ${b.targa || 'N/A'}`)), [veicoli]);
+    const sortedNavi = useMemo(() => [...navi].sort((a: Nave, b: Nave) => (a?.nome || '').localeCompare(b?.nome || '')), [navi]);
+    const sortedLuoghi = useMemo(() => [...luoghi].sort((a: Luogo, b: Luogo) => (a?.nome || '').localeCompare(b?.nome || '')), [luoghi]);
 
     const scriventeDettaglio = useMemo(() => state.dettaglioOreTecnici.find(d => d.tecnicoId === state.tecnicoScriventeId), [state.dettaglioOreTecnici, state.tecnicoScriventeId]);
-    const otherTecnicos = useMemo(() => tecnici.filter(t => t.id !== state.tecnicoScriventeId).sort((a, b) => (`${a.cognome} ${a.nome}`).localeCompare(`${b.cognome} ${b.nome}`)), [tecnici, state.tecnicoScriventeId]);
-    const selectedTecnicos = useMemo(() => otherTecnicos.filter(t => state.dettaglioOreTecnici.some(d => d.tecnicoId === t.id && t.id !== state.tecnicoScriventeId)), [state.dettaglioOreTecnici, otherTecnicos, state.tecnicoScriventeId]);
+    const otherTecnicos = useMemo(() => tecnici.filter((t: Tecnico) => t.id !== state.tecnicoScriventeId).sort((a: Tecnico, b: Tecnico) => (`${a.cognome} ${a.nome}`).localeCompare(`${b.cognome} ${b.nome}`)), [tecnici, state.tecnicoScriventeId]);
+    const selectedTecnicos = useMemo(() => otherTecnicos.filter((t: Tecnico) => state.dettaglioOreTecnici.some(d => d.tecnicoId === t.id && t.id !== state.tecnicoScriventeId)), [state.dettaglioOreTecnici, otherTecnicos, state.tecnicoScriventeId]);
     const disableActions = state.isProcessing || state.isReadOnly;
 
     useEffect(() => { return () => { isUnmounting.current = true; }; }, []);
 
     useEffect(() => {
         const loadData = async () => {
-            if (collectionsLoading) {
-                return;
-            }
-
+            if (collectionsLoading) return;
             try {
                 if (isEditMode && reportId) {
                     localStorage.removeItem(FORM_AUTOSAVE_KEY);
                     const reportData = await db.rapportini.get(reportId);
                     if (reportData) {
-                        const reportDate = toDateSafe(reportData.data);
+                        const reportDate = toDate(reportData.data); 
                         if (!reportDate) {
                             showSnackbar("Data del rapportino non valida. Impossibile caricare.", "error");
                             navigate('/lista-report');
@@ -264,8 +243,8 @@ export const useReportForm = () => {
                         const parsedData = { ...savedData, data: savedData.data ? new Date(savedData.data) : new Date(), dataFine: savedData.dataFine ? new Date(savedData.dataFine) : new Date(), tecnicoScriventeId: loggedInTecnicoId };
                         dispatch({ type: 'LOAD_AUTOSAVE_DATA', payload: parsedData });
                     } else {
-                        const scrivente = tecnici.find(t => t.id === loggedInTecnicoId);
-                        if (scrivente) {
+                        const scrivente = tecnici.find((t: Tecnico) => t.id === loggedInTecnicoId);
+                        if (scrivente && scrivente.id) { // Controllo aggiunto
                             const nome = `${scrivente.cognome} ${scrivente.nome}`.trim();
                             const initialDettaglio = [createInitialDettaglio(scrivente.id, nome, true)];
                             dispatch({ type: 'LOAD_NEW_FORM_DEFAULTS', payload: { tecnicoId: loggedInTecnicoId, dettaglio: initialDettaglio } });
@@ -318,7 +297,7 @@ export const useReportForm = () => {
             return null;
         }
 
-        const baseData: Omit<Rapportino, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'isLocked' | 'createdBy'> = {
+        const baseData: Omit<Rapportino, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'isLocked' | 'createdBy' | 'isDeleted'> = {
             data: Timestamp.fromDate(dateToUse),
             nome: `Rapportino del ${format(dateToUse, 'dd-MM-yyyy')}`,
             tecnicoId: loggedInTecnicoId,
@@ -327,10 +306,10 @@ export const useReportForm = () => {
             tipoGiornataId: state.tipoGiornataId,
             giornataId: state.tipoGiornataId, 
             includeTrasferta: state.includeTrasferta,
-            trasfertaId: state.includeTrasferta ? state.trasfertaId : undefined,
-            naveId: state.naveId || undefined,
-            luogoId: state.luogoId || undefined,
-            veicoloId: state.veicoloId || undefined,
+            trasfertaId: state.includeTrasferta ? state.trasfertaId : '',
+            naveId: state.naveId || '',
+            luogoId: state.luogoId || '',
+            veicoloId: state.veicoloId || '',
             lavoroEseguito: state.lavoroEseguito.trim(),
             descrizioneBreve: state.descrizioneBreve,
             materialiImpiegati: state.materialiImpiegati,
@@ -338,7 +317,7 @@ export const useReportForm = () => {
             dettaglioOreTecnici: state.dettaglioOreTecnici,
             firmaFirmatarioNome: state.firmaFirmatarioNome,
             firmaFirmatarioSocieta: state.firmaFirmatarioSocieta,
-            firmaVettoriale: state.firmaVettoriale,
+            firmaVettoriale: state.firmaVettoriale ?? '',
         };
 
         const now = Timestamp.now();
@@ -350,7 +329,8 @@ export const useReportForm = () => {
                 createdAt: state.originalReport.createdAt, 
                 createdBy: state.originalReport.createdBy, 
                 updatedAt: now,
-                isLocked: state.originalReport.isLocked, 
+                isLocked: state.originalReport.isLocked,
+                isDeleted: state.originalReport.isDeleted,
                 version: (state.originalReport.version || 1) + 1, 
             };
         } else {
@@ -360,6 +340,7 @@ export const useReportForm = () => {
                 updatedAt: now,
                 createdBy: loggedInTecnicoId,
                 isLocked: false,
+                isDeleted: false, // Aggiunto isDeleted
                 version: 1, 
             };
         }
@@ -377,26 +358,23 @@ export const useReportForm = () => {
                     const entityId = `local-${uuidv4()}`;
                     const finalData = { ...dataToSave, id: entityId };
 
-                    // Salva immediatamente nel DB locale per visibilità UI
                     await db.rapportini.put(finalData as Rapportino);
 
-                    await aggiungiAllaCoda({ type: 'rapportino', action: 'create', entityId, payload: removeUndefinedKeys(dataToSave) });
+                    await aggiungiAllaCoda({ type: 'create', collection: 'rapportini', entityId, payload: removeUndefinedKeys(dataToSave), status: 'pending', retries: 0 });
                 }
                 showSnackbar(`Creati ${days.length} rapportini!`, "success");
             } else {
                 const dataToSave = getFullReportData();
                 if (!dataToSave) { showSnackbar("Dati incompleti.", "error"); return null; }
                 
-                const actionType = isEditMode ? 'update' : 'create';
+                const actionType: SyncEvent['type'] = isEditMode ? 'update' : 'create';
                 const entityId = dataToSave.id || `local-${uuidv4()}`;
                 
                 const finalData = { ...dataToSave, id: entityId };
 
-                // Salva immediatamente nel DB locale per visibilità UI
                 await db.rapportini.put(finalData as Rapportino);
 
-                // Aggiungi alla coda di sincronizzazione
-                await aggiungiAllaCoda({ type: 'rapportino', action: actionType, entityId, payload: removeUndefinedKeys(dataToSave) });
+                await aggiungiAllaCoda({ type: actionType, collection: 'rapportini', entityId, payload: removeUndefinedKeys(dataToSave), status: 'pending', retries: 0 });
                 
                 showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
                 savedId = entityId;
@@ -438,7 +416,7 @@ export const useReportForm = () => {
         nuoviTecniciSelezionati.forEach(tecnico => {
             const existing = state.dettaglioOreTecnici.find(d => d.tecnicoId === tecnico.id);
             const nome = `${tecnico.cognome} ${tecnico.nome}`.trim();
-            newDettagli.push(existing || createInitialDettaglio(tecnico.id, nome, isLavorativo, scriventeDettaglio));
+            newDettagli.push(existing || createInitialDettaglio(tecnico.id || '', nome, isLavorativo, scriventeDettaglio));
         });
         dispatch({ type: 'SET_DETTAGLIO_ORE', payload: newDettagli });
     };
@@ -466,7 +444,7 @@ export const useReportForm = () => {
     const handleSaveFromModal = () => { if (state.tempDettaglioOre) handleOreUpdate(state.tempDettaglioOre); handleCloseModal(); };
 
     const handleTipoGiornataChange = (id: string) => {
-        const tipo = tipiGiornata.find(t => t.id === id);
+        const tipo = tipiGiornata.find((t: TipoGiornata) => t.id === id);
         const lavorativo = isTipoGiornataLavorativo(tipo);
         if (!state.isMultiDay) {
             const newDettagli = state.dettaglioOreTecnici.map(d => ({ ...d, isManual: !lavorativo, ore: lavorativo ? calculateOre(d) : 8 }));
@@ -480,7 +458,7 @@ export const useReportForm = () => {
         const isChecked = e.target.checked;
         let newTipoGiornataId = state.tipoGiornataId;
         if (isChecked) {
-            const currentTipo = tipiGiornata.find(t => t.id === state.tipoGiornataId);
+            const currentTipo = tipiGiornata.find((t: TipoGiornata) => t.id === state.tipoGiornataId);
             if (currentTipo && !MULTI_DAY_ALLOWED_KEYWORDS.some(k => (currentTipo?.nome || '').toLowerCase().includes(k))) newTipoGiornataId = '';
         }
         const lavorativo = isLavorativo && !isChecked;

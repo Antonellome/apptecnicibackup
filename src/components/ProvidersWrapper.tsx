@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { MasterDataProvider } from '../providers/MasterDataProvider';
 import { GlobalDataProvider } from '../providers/GlobalDataProvider';
 
 interface ProvidersWrapperProps {
@@ -17,11 +16,9 @@ const ProvidersWrapper: React.FC<ProvidersWrapperProps> = ({ children }) => {
     // di chiamate a `setState` negli `useEffect` che causavano gli errori di linting.
     // Usiamo `user?.uid` o una stringa statica per garantire che la chiave sia sempre presente.
     return (
-        <MasterDataProvider key={`master-${user?.uid || 'logged-out'}`}>
-            <GlobalDataProvider>
-                {children}
-            </GlobalDataProvider>
-        </MasterDataProvider>
+        <GlobalDataProvider key={`global-${user?.uid || 'logged-out'}`}>
+            {children}
+        </GlobalDataProvider>
     );
 };
 

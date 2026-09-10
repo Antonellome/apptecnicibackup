@@ -6,7 +6,8 @@ import ShareIcon from '@mui/icons-material/Share';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import { useMasterData } from '@/hooks/useMasterData';
-import { Rapportino } from '@/models/definitions';
+import { Rapportino, Tecnico, TipoGiornata, Nave, Luogo, Veicolo } from '@/models/definitions';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 interface PdfPreviewDialogProps {
     reportData: Rapportino | null;
@@ -21,7 +22,7 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
     const [isGenerating, setIsGenerating] = useState(false);
 
     const isGiornataLavorativa = useCallback((tipoId: string): boolean => {
-        const tipo = tipiGiornata.find(t => t.id === tipoId);
+        const tipo = tipiGiornata.find((t: TipoGiornata) => t.id === tipoId);
         if (!tipo || !tipo.nome) return true;
         return !['ferie', 'malattia', 'permesso', 'legge 104'].some(keyword => tipo.nome.toLowerCase().includes(keyword));
     }, [tipiGiornata]);
@@ -69,12 +70,12 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
             pdf.text('T.I.N. srl - Report di Lavoro', pageWidth / 2, y, { align: 'center' });
             y += 15;
 
-            const reportDate = data.data ? ((data.data as any).toDate ? (data.data as any).toDate() : data.data) : null;
+            const reportDate = toDate(data.data);
             y = drawField('Data:', reportDate ? format(reportDate, 'dd/MM/yyyy') : 'N/D', y);
-            const mainTecnico = tecnici.find(t => t.id === data.tecnicoId);
+            const mainTecnico = tecnici.find((t: Tecnico) => t.id === data.tecnicoId);
             const mainTecnicoName = mainTecnico ? `${mainTecnico.cognome} ${mainTecnico.nome}` : 'N/D';
             y = drawField('Tecnico Resp.:', mainTecnicoName, y);
-            const tipoGiornataNome = tipiGiornata.find(t => t.id === data.tipoGiornataId)?.nome || 'N/D';
+            const tipoGiornataNome = tipiGiornata.find((t: TipoGiornata) => t.id === data.tipoGiornataId)?.nome || 'N/D';
             y = drawField('Tipo Giornata:', tipoGiornataNome, y);
             y += 5;
 
@@ -88,7 +89,7 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
 
                 const dettagliDaRenderizzare = (data as any).dettaglioOreTecnici || [];
                 dettagliDaRenderizzare.forEach((dettagli: any) => {
-                    const tecnico = tecnici.find(t => t.id === dettagli.tecnicoId);
+                    const tecnico = tecnici.find((t: Tecnico) => t.id === dettagli.tecnicoId);
                     const nomeTecnico = tecnico ? `${tecnico.cognome} ${tecnico.nome}` : `ID: ${dettagli.tecnicoId}`;
                     const orarioText = `Orario: ${dettagli?.oraInizio || '-'} - ${dettagli?.oraFine || '-'} | Pausa: ${dettagli?.pausa || '0'} min | Totale: ${dettagli?.ore || '0'} ore`;
                     y = drawField(nomeTecnico, orarioText, y, true);
@@ -102,11 +103,11 @@ const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ reportData, onClose
                 pdf.text('Dettagli Intervento', margin, y);
                 y += 8;
 
-                const naveNome = navi.find(n => n.id === data.naveId)?.nome || 'Nessuna';
+                const naveNome = navi.find((n: Nave) => n.id === data.naveId)?.nome || 'Nessuna';
                 y = drawField('Nave:', naveNome, y);
-                const luogoNome = luoghi.find(l => l.id === data.luogoId)?.nome || 'Nessuno';
+                const luogoNome = luoghi.find((l: Luogo) => l.id === data.luogoId)?.nome || 'Nessuno';
                 y = drawField('Luogo:', luogoNome, y);
-                const veicoloInfo = veicoli.find(v => v.id === data.veicoloId);
+                const veicoloInfo = veicoli.find((v: Veicolo) => v.id === data.veicoloId);
                 const veicoloDisplay = veicoloInfo ? `${veicoloInfo.targa} - ${veicoloInfo.nome}` : 'Nessuno';
                 y = drawField('Veicolo:', veicoloDisplay, y);
 

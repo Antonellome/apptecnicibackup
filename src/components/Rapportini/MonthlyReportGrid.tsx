@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import { getDaysInMonth, startOfMonth } from 'date-fns';
 import { EnrichedRapportino, TipoGiornata } from '@/models/definitions';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 interface MonthlyReportGridProps {
   rapportini: EnrichedRapportino[];
@@ -21,8 +22,8 @@ const MonthlyReportGrid: React.FC<MonthlyReportGridProps> = ({ rapportini, tipiG
 
   const renderCellContent = (day: number) => {
     const reportForDay = rapportini.find(r => {
-        const date = (r.data as any).toDate ? (r.data as any).toDate() : r.data;
-        return date.getDate() === day;
+        const date = toDate(r.data);
+        return date && date.getDate() === day;
     });
 
     if (reportForDay) {

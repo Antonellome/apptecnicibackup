@@ -4,6 +4,7 @@ import { Box, Typography, Divider } from '@mui/material';
 import type { Tecnico, FormField, Ditta, Categoria } from '@/models/definitions';
 import { useMasterData } from '@/hooks/useMasterData';
 import logo from '@/assets/react.svg';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 interface PrintableTechnicianListProps {
     data: Tecnico[];
@@ -30,15 +31,15 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
     const { masterData } = useMasterData();
 
     const ditteMap = useMemo(() => 
-        masterData?.ditte.reduce((acc, d) => {
-            acc.set(d.id, d);
+        masterData?.ditte.reduce((acc: Map<string, Ditta>, d: Ditta) => {
+            if (d.id) acc.set(d.id, d);
             return acc;
         }, new Map<string, Ditta>()) 
     , [masterData?.ditte]);
 
     const categorieMap = useMemo(() => 
-        masterData?.categorie.reduce((acc, c) => {
-            acc.set(c.id, c);
+        masterData?.categorie.reduce((acc: Map<string, Categoria>, c: Categoria) => {
+            if (c.id) acc.set(c.id, c);
             return acc;
         }, new Map<string, Categoria>()) 
     , [masterData?.categorie]);
@@ -51,36 +52,22 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
         }
 
         if (field.type === 'date') {
-            if (!value) return null;
-            try {
-                let dateValue = value;
-                if (typeof dateValue === 'object' && dateValue !== null && typeof (dateValue as any).toDate === 'function') {
-                    dateValue = (dateValue as any).toDate();
-                }
+            const date = toDate(value as string | number | Date);
+            if (!date) return null;
 
-                const date = new Date(dateValue as string | number | Date);
-
-                if (isNaN(date.getTime())) {
-                    return null;
-                }
-
-                const day = String(date.getDate()).padStart(2, '0');
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const year = date.getFullYear();
-                
-                return `${day}/${month}/${year}`;
-            } catch (error) {
-                console.error("Failed to parse date:", value, error);
-                return null;
-            }
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            
+            return `${day}/${month}/${year}`;
         }
         
         if (field.name === 'dittaId') return ditteMap?.get(value as string)?.nome || null;
         if (field.name === 'categoriaId') return categorieMap?.get(value as string)?.nome || null;
         
         if (field.type === 'select' && field.options && field.options.length > 0) {
-            const foundOption = field.options.find(opt => opt.value === String(value));
-            return foundOption?.label || String(value);
+            const foundOption = field.options.find(opt => opt.id === String(value));
+            return foundOption?.nome || String(value);
         }
 
         const stringValue = String(value);

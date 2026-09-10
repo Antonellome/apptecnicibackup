@@ -1,10 +1,10 @@
 import { useContext } from 'react';
-import { GlobalDataContext, GlobalData } from '@/contexts/GlobalDataContext';
+import { GlobalDataContext, IGlobalDataContext } from '@/contexts/GlobalDataContext';
 
 // Definiamo un tipo per l'output dell'hook, che sia compatibile con il passato.
 // Le funzioni non più disponibili verranno simulate.
 export interface LegacyMasterDataType {
-    masterData: GlobalData['masterData'];
+    masterData: IGlobalDataContext['masterData'];
     loading: boolean;
     error: any;
     refetchData: () => Promise<void>; // Funzione non più necessaria, simulata.
@@ -32,7 +32,7 @@ export const useMasterData = (): LegacyMasterDataType => {
         refetchData: async () => {
             console.warn('refetchData is deprecated and no longer works.');
         },
-        updateTariffe: async (tariffe: any[]) => {
+        updateTariffe: async () => { // Rimosso il parametro 'tariffe'
             console.warn('updateTariffe is deprecated. Tariff management should be handled differently.');
         },
     };

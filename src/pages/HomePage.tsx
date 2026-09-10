@@ -16,7 +16,7 @@ const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const unreadCount = useUnreadNotificationsCount();
-    const { pendingSyncCount } = useSyncManager(); // Ottieni il conteggio
+    const { pendingSyncItems: pendingSyncCount } = useSyncManager(); // Ottieni il conteggio
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
@@ -69,7 +69,7 @@ const HomePage: React.FC = () => {
                       Benvenuto
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                      {pendingSyncCount > 0 && <CloudQueueIcon color="warning" />}
+                      {(pendingSyncCount ?? 0) > 0 && <CloudQueueIcon color="warning" />}
                       <Typography variant="body1" sx={{ color: 'white' }}>
                         {user?.email}
                       </Typography>

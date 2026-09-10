@@ -43,14 +43,16 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
     const isUnread = !isRead;
 
     const handleAccordionChange = (_event: React.SyntheticEvent, isExpanded: boolean) => {
-        if (isExpanded && isUnread) {
+        if (isExpanded && isUnread && id) {
             onMarkAsRead(id);
         }
     };
 
     const handleDismissClick = (event: React.MouseEvent) => {
         event.stopPropagation(); // Impedisce all'accordion di aprirsi/chiudersi
-        onDismiss(id);
+        if (id) {
+            onDismiss(id);
+        }
     };
 
     const notificationDate = formatDate(createdAt);

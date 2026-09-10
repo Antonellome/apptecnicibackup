@@ -4,6 +4,7 @@ import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
 import { Paper, Typography, Box } from '@mui/material';
 import { Tooltip as ReactTooltip } from 'react-tooltip';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 interface CalendarioViewProps {
     reports: any[];
@@ -25,13 +26,8 @@ const CalendarioView: React.FC<CalendarioViewProps> = ({ reports, year, month })
     const endDate = new Date(year, month + 1, 0);
 
     const values = reports.map((report: any) => {
-        const reportData = report.data;
-        let dateVal: Date;
-        if (reportData && typeof reportData.toDate === 'function') {
-            dateVal = reportData.toDate();
-        } else {
-            dateVal = new Date(reportData || report.date || "2026-01-01");
-        }
+        const dateVal = toDate(report.data);
+        if (!dateVal) return null;
 
         const tipoNome = typeof report.tipoGiornata === 'object'
             ? report.tipoGiornata?.nome
@@ -48,7 +44,7 @@ const CalendarioView: React.FC<CalendarioViewProps> = ({ reports, year, month })
             cliente: report.cliente || report.breveDescrizione || '',
             ore: report.oreLavoro || report.oreLavorate || 0
         };
-    });
+    }).filter(Boolean);
 
     return (
         <Paper sx={{ p: 3, mt: 2 }}>

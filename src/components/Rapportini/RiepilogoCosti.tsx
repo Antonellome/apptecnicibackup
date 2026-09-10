@@ -10,7 +10,7 @@ interface RiepilogoCostiProps {
 const RiepilogoCosti = ({ riepilogo }: RiepilogoCostiProps) => {
     if (!riepilogo) return null;
 
-    const { oreTotali, costoTotale } = riepilogo;
+    const { oreTotali, costoTotale } = riepilogo as any;
 
     return (
         <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
@@ -19,7 +19,7 @@ const RiepilogoCosti = ({ riepilogo }: RiepilogoCostiProps) => {
                 <Grid size={6} sx={{ textAlign: 'center' }}>
                     <Box>
                         <Typography variant="h4" component="p" sx={{ fontWeight: 'bold' }}>
-                            {oreTotali.toFixed(2)}
+                            {(oreTotali as any).ore.toFixed(2)}
                         </Typography>
                         <Typography variant="body1" color="text.secondary">
                             Ore Totali
@@ -29,7 +29,7 @@ const RiepilogoCosti = ({ riepilogo }: RiepilogoCostiProps) => {
                 <Grid size={6} sx={{ textAlign: 'center' }}>
                     <Box>
                         <Typography variant="h4" component="p" sx={{ fontWeight: 'bold' }}>
-                            {formatCurrency(costoTotale)}
+                            {formatCurrency((costoTotale as any).ore)}
                         </Typography>
                         <Typography variant="body1" color="text.secondary">
                             Costo Stimato

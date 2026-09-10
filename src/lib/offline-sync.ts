@@ -1,7 +1,7 @@
 import { db } from '@/db/local-db';
-import { functions, db as firestore } from '@/utils/firebase';
+import { functions, db as firestore } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
-import { createRapportino, updateRapportino } from './rapportiniService';
+import { createRapportino, updateRapportino } from '@/lib/rapportini-service';
 import { onSnapshot, collection, query, where, getDocs, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Rapportino, CheckinGiornaliero } from '@/models/definitions';
 

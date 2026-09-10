@@ -4,8 +4,8 @@ import autoTable from 'jspdf-autotable';
 import { Rapportino, MasterData } from '@/models/definitions';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
-// --- Funzione per processare l'immagine della firma per il PDF ---
 const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string | null> => {
     return new Promise((resolve) => {
         if (!whiteSignatureDataUrl || typeof whiteSignatureDataUrl !== 'string') {
@@ -26,13 +26,11 @@ const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string |
             canvas.height = img.height;
 
             try {
-                // 1. Colora la firma di nero
                 ctx.drawImage(img, 0, 0);
                 ctx.globalCompositeOperation = 'source-in';
                 ctx.fillStyle = 'black';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // 2. Rendi il tratto più spesso
                 const thickness = 0.5;
                 ctx.globalCompositeOperation = 'source-over';
                 ctx.drawImage(canvas, thickness, 0);
@@ -40,12 +38,10 @@ const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string |
                 ctx.drawImage(canvas, 0, thickness);
                 ctx.drawImage(canvas, 0, -thickness);
 
-                // 3. Aggiungi uno sfondo bianco
                 ctx.globalCompositeOperation = 'destination-over';
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // 4. Ripristina e restituisci
                 ctx.globalCompositeOperation = 'source-over';
                 resolve(canvas.toDataURL('image/png'));
             } catch (error) {
@@ -61,8 +57,6 @@ const processSignatureForPdf = (whiteSignatureDataUrl: string): Promise<string |
     });
 };
 
-
-// --- Funzione per generare il PDF --- 
 export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: MasterData): Promise<Blob> => {
 
     const doc = new jsPDF('p', 'mm', 'a4');
@@ -72,12 +66,10 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     const middle = pageWidth / 2;
     let cursorY = margin;
 
-    // --- DEFINIZIONE COLORI ---
     const COLOR_BLUE = '#0D47A1';
     const COLOR_GREY = '#424242';
     const COLOR_BLACK = '#000000';
 
-    // --- FUNZIONI HELPER ---
     const addSeparatorLine = (y: number) => {
         doc.setDrawColor(COLOR_BLUE);
         doc.setLineWidth(0.5);
@@ -91,7 +83,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         return y + textHeight;
     };
     
-    // --- 1. INTESTAZIONE AZIENDALE ---
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(20);
     doc.setTextColor(COLOR_BLUE);
@@ -109,7 +100,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     cursorY = addText(companyInfo, pageWidth / 2, cursorY, { align: 'center' });
     cursorY += 2;
 
-    // --- 2. PRIMO SEPARATORE E TITOLO ---
     cursorY = addSeparatorLine(cursorY);
     cursorY += 5;
     doc.setFont('helvetica', 'bold');
@@ -118,17 +108,9 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     cursorY = addText('REPORT DI INTERVENTO TECNICO', pageWidth / 2, cursorY, { align: 'center' });
     cursorY += 5;
     
-    // --- 3. DATI INIZIALI (SU DUE COLONNE) ---
     const { navi = [], luoghi = [], veicoli = [], tipiGiornata = [] } = masterData;
     
-    let dateObject: Date | null = null;
-    if (rapportino.data) {
-        if (typeof (rapportino.data as any).toDate === 'function') {
-            dateObject = (rapportino.data as any).toDate();
-        } else {
-            dateObject = new Date(rapportino.data as any);
-        }
-    }
+    const dateObject = toDate(rapportino.data);
     const dataRapportino = dateObject ? format(dateObject, 'dd MMMM yyyy', { locale: it }) : 'N/D';
 
     const nave = rapportino.naveId === 'Nessuna' 
@@ -152,7 +134,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     const col2X = middle;
     const labelOffset = 35;
 
-    // Colonna Sinistra
     let col1Y = cursorY;
     doc.setFont('helvetica', 'bold');
     doc.text('Data:', col1X, col1Y);
@@ -166,7 +147,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.text(rapportino.ordineLavoro || 'N/D', col1X + labelOffset, col1Y);
     col1Y += 7;
 
-    // NUOVA SEZIONE TRASFERTA
     if (rapportino.trasfertaId) {
         const trasferta = tipiGiornata.find(t => t.id === rapportino.trasfertaId);
         if (trasferta) {
@@ -178,7 +158,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         }
     }
 
-    // Colonna Destra
     let col2Y = cursorY;
     doc.setFont('helvetica', 'bold');
     doc.text('Nave:', col2X, col2Y);
@@ -200,7 +179,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
 
     cursorY = Math.max(col1Y, col2Y);
 
-    // --- 4. SECONDO SEPARATORE E TABELLA TECNICI ---
     cursorY = addSeparatorLine(cursorY) + 5;
     
     let totalHours = 0;
@@ -243,7 +221,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     });
     cursorY = (doc as any).lastAutoTable.finalY;
 
-    // Aggiunta totale ore sotto la tabella
     cursorY += 6;
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
@@ -251,8 +228,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.text(`Totale ore tecnici: ${totalHours.toFixed(2)}`, pageWidth - margin, cursorY, { align: 'right' });
     cursorY += 5;
 
-
-    // --- 5. TERZO SEPARATORE E DETTAGLI LAVORO ---
     cursorY = addSeparatorLine(cursorY) + 5;
 
     const addWorkDetail = (label: string, content: string | undefined | null) => {
@@ -275,7 +250,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     addWorkDetail('Materiali Impiegati', rapportino.materialiImpiegati);
     addWorkDetail('Lavoro Eseguito', rapportino.lavoroEseguito);
 
-    // --- 6. QUARTO SEPARATORE E SEZIONE FIRMA ---
     const firmaSectionStartY = Math.max(cursorY, doc.internal.pageSize.getHeight() - 75);
     cursorY = addSeparatorLine(firmaSectionStartY);
     cursorY += 8;
@@ -284,7 +258,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     doc.setFontSize(10);
     doc.setTextColor(COLOR_BLACK);
 
-    // Colonna 1: Firma Cliente
     const col1X_firma = margin;
     let col1Y_firma = cursorY;
     doc.text('Per accettazione (firma del responsabile)', col1X_firma, col1Y_firma);
@@ -302,7 +275,6 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
         }
     }
 
-    // Colonna 2: Firma Tecnico
     const col2X_firma = pageWidth / 2 + 15;
     let col2Y_firma = cursorY;
     const tecnicoScrivente = masterData.tecnici.find(t => t.id === rapportino.tecnicoId);
@@ -311,6 +283,5 @@ export const generateRapportinoPDF = async (rapportino: Rapportino, masterData: 
     col2Y_firma += 10;
     doc.text(nomeTecnicoScrivente, col2X_firma, col2Y_firma);
     
-    // --- FINE E OUTPUT ---
     return doc.output('blob');
 };

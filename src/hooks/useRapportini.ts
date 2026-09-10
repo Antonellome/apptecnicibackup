@@ -12,7 +12,7 @@ export const useRapportini = () => {
   const { user, userProfile } = useAuth();
 
   const rapportini = useLiveQuery(() => {
-    if (!user || !userProfile) return [];
+    if (!user || !userProfile || !userProfile.tecnicoId) return [];
 
     console.log(`useRapportini (LiveQuery): Avvio query locale per tecnico ${userProfile.tecnicoId}`);
 
@@ -28,7 +28,8 @@ export const useRapportini = () => {
   // Dexie non ordina di default in modo decrescente, quindi lo facciamo in memoria.
   const sortedRapportini = useMemo(() => {
     if (!rapportini) return undefined; // Mantiene lo stato di caricamento
-    return rapportini.reverse(); // .reverse() modifica l'array originale, ma sortBy ne crea uno nuovo
+    // Create a new reversed array to avoid mutating the original from useLiveQuery
+    return [...rapportini].reverse();
   }, [rapportini]);
 
   return {

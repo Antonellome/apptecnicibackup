@@ -10,8 +10,8 @@ import {
     Chip
 } from '@mui/material';
 import { collection, query, where, onSnapshot, Query } from 'firebase/firestore';
-import { db as firestore } from '@/utils/firebase';
-import { markNotificheAsRead } from '@/services/notificationService';
+import { db as firestore } from '@/lib/firebase';
+import { markNotificheAsRead } from '@/lib/notification-service';
 import { NotificationItem } from '@/components/notifiche/NotificationItem';
 import type { Notifica } from '@/models/definitions';
 import { AuthContext } from '@/contexts/AuthContextDefinition';
@@ -213,8 +213,7 @@ const NotifichePage: React.FC = () => {
                                 onDismiss={handleDismiss}
                             />
                         </Grid>
-                    ))
-                }
+                    ))}
                 </Grid>
             )}
         </Container>

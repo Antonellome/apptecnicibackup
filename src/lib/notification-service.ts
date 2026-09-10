@@ -1,6 +1,6 @@
 
 import { writeBatch, collection, doc } from 'firebase/firestore';
-import { db } from '@/utils/firebase';
+import { db } from '@/lib/firebase';
 
 /**
  * Segna un elenco di notifiche come lette direttamente nel database.

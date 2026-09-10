@@ -6,6 +6,7 @@ import {
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { EnrichedRapportino, Tecnico } from '@/models/definitions';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 interface ReportMensileDialogProps {
   open: boolean;
@@ -18,7 +19,7 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
   if (!report) return null;
 
   const oreTotali = (report.dettaglioOreTecnici || []).reduce((acc, curr) => acc + (curr.ore || 0), 0);
-  const reportDate = (report.data as any).toDate ? (report.data as any).toDate() : report.data;
+  const reportDate = toDate(report.data);
 
   const getTecnicoNome = (tecnicoId: string) => {
     const tecnico = tecnici.find(t => t.id === tecnicoId);
@@ -30,7 +31,7 @@ const ReportMensileDialog: React.FC<ReportMensileDialogProps> = ({ open, onClose
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6">Dettaglio Report</Typography>
-          <Chip label={format(reportDate, 'eeee dd/MM/yyyy', { locale: it })} />
+          {reportDate && <Chip label={format(reportDate, 'eeee dd/MM/yyyy', { locale: it })} />}
         </Box>
       </DialogTitle>
       <DialogContent dividers>

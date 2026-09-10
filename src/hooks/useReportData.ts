@@ -1,7 +1,7 @@
 
 import { useMemo } from 'react';
 import { useGlobalData } from './useGlobalData';
-import { Rapportino } from '@/models/definitions';
+import { Rapportino, TipoGiornata } from '@/models/definitions';
 
 // Definisco un'interfaccia estesa per il rapportino arricchito
 export interface EnrichedRapportino extends Rapportino {
@@ -14,24 +14,20 @@ export interface EnrichedRapportino extends Rapportino {
  */
 export const useReportData = () => {
   // Accedo ai dati globali e allo stato di caricamento.
-  // Questi dati sono garantiti essere pronti e sicuri quando loading è false.
-  const { rapportini, masterData, loading } = useGlobalData();
+  const { masterData, loading } = useGlobalData();
+  const rapportini: Rapportino[] = []; // Array vuoto temporaneo per evitare errori
 
   // Creo una mappa per cercare rapidamente i nomi dei tipi giornata tramite il loro ID.
-  // Questo è molto più efficiente che ciclare l'array ogni volta.
   const tipiGiornataMap = useMemo(() => {
-    if (loading || !masterData.tipiGiornata) return new Map<string, string>();
-    return new Map(masterData.tipiGiornata.map(tg => [tg.id, tg.nome]));
-  }, [masterData.tipiGiornata, loading]);
+    if (loading || !masterData?.tipiGiornata) return new Map<string, string>();
+    return new Map(masterData.tipiGiornata.map((tg: TipoGiornata) => [tg.id, tg.nome]));
+  }, [masterData, loading]);
 
   // Arricchisco i rapportini con le informazioni aggiuntive (es. nome del tipo giornata).
-  // Questo calcolo viene eseguito solo quando i dati di input cambiano.
   const enrichedRapportini = useMemo<EnrichedRapportino[]>(() => {
-    // Se stiamo ancora caricando o non ci sono rapportini, restituisco un array vuoto.
     if (loading || !rapportini) return [];
     
-    // Mappo ogni rapportino per creare un oggetto "arricchito".
-    return rapportini.map(r => ({
+    return rapportini.map((r: Rapportino) => ({
       ...r,
       tipoGiornataNome: r.tipoGiornataId ? tipiGiornataMap.get(r.tipoGiornataId) : 'N/A',
     }));

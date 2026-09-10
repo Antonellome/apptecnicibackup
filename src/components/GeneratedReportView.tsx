@@ -8,6 +8,7 @@ import { useReactToPrint } from 'react-to-print';
 import type { Rapportino, Tecnico, Nave, Luogo, DettaglioOreData } from '@/models/definitions';
 import dayjs from 'dayjs';
 import { useTheme } from '@mui/material/styles';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 interface GeneratedReportViewProps {
   rapportini: Rapportino[];
@@ -27,28 +28,29 @@ interface ReportData {
 const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, tecnici, navi, luoghi, anno, mese }) => {
   const printRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
-  // FIX: Cast to `any` to bypass a potential issue with outdated or mismatched type definitions for the library.
   const handlePrint = useReactToPrint({ content: () => printRef.current } as any);
 
   const meseNome = new Date(anno, mese - 1).toLocaleString('it-IT', { month: 'long' });
 
   const { naviMap, luoghiMap } = useMemo(() => {
     const naviMap = (navi || []).reduce((acc: Record<string, string>, n) => {
-        acc[n.id] = n.nome;
+        if (n.id) acc[n.id] = n.nome;
         return acc;
     }, {});
     const luoghiMap = (luoghi || []).reduce((acc: Record<string, string>, l) => {
-        acc[l.id] = l.nome;
+        if (l.id) acc[l.id] = l.nome;
         return acc;
     }, {});
     return { naviMap, luoghiMap };
   }, [navi, luoghi]);
 
   const reportData: ReportData[] = useMemo(() => {
-    return tecnici.map(tecnico => {
+    // FILTRO I TECNICI SENZA ID PER EVITARE ERRORI
+    return tecnici.filter(t => t.id).map(tecnico => {
         const reportsForTecnico = rapportini
             .map(r => {
-                if (!r.presenze?.includes(tecnico.id)) return null;
+                // Uso l'ID sicuro del tecnico filtrato
+                if (!r.presenze?.includes(tecnico.id!)) return null;
                 
                 const dettaglioTecnico = (r.dettaglioOreTecnici || []).find(d => d.tecnicoId === tecnico.id);
                 return dettaglioTecnico ? { ...r, dettaglioTecnico } : null;
@@ -110,11 +112,11 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
                                 </TableHead>
                                 <TableBody>
                                     {data.rapportini.map(r => {
-                                        const dateObject = (r.data as any)?.toDate ? (r.data as any).toDate() : r.data;
+                                        const dateObject = toDate(r.data);
                                         return (
                                             <TableRow key={r.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                                <TableCell>{dayjs(dateObject).format('DD/MM/YY')}</TableCell>
-                                                <TableCell>{(r.naveId ? naviMap[r.naveId] : '-') || (r.luogoId ? luoghiMap[r.luogoId] : '-')}</TableCell>
+                                                <TableCell>{dateObject ? dayjs(dateObject).format('DD/MM/YY') : 'Data non valida'}</TableCell>
+                                                <TableCell>{(r.naveId && naviMap[r.naveId]) || (r.luogoId && luoghiMap[r.luogoId]) || '-'}</TableCell>
                                                 <TableCell>{r.descrizioneBreve}</TableCell>
                                                 <TableCell>{r.dettaglioTecnico.oraInizio} - {r.dettaglioTecnico.oraFine}</TableCell>
                                                 <TableCell align="right">{r.dettaglioTecnico.ore?.toFixed(2) || '-'}</TableCell>

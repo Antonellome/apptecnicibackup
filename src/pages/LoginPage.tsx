@@ -12,7 +12,7 @@ import {
     Grid, // Grid v2
     Link as MuiLink
 } from '@mui/material';
-import { auth } from '@/utils/firebase';
+import { auth } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 
 const LoginPage = () => {

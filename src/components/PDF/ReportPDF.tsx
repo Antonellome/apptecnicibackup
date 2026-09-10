@@ -2,7 +2,7 @@ import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 import { EnrichedRapportino, Ditta } from '@/models/definitions';
 import { format } from 'date-fns';
-import { Timestamp } from 'firebase/firestore';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 // --- Stili per il documento PDF ---
 const styles = StyleSheet.create({
@@ -121,14 +121,9 @@ interface ReportPDFProps {
     ditta?: Ditta; // Aggiungo la ditta come prop opzionale
 }
 
-// Type guard to safely check if a value is a Firestore Timestamp
-const isTimestamp = (value: unknown): value is Timestamp => {
-    return !!value && typeof (value as Timestamp).toDate === 'function';
-};
-
 const ReportPDF: React.FC<ReportPDFProps> = ({ report, ditta }) => {
-    // Safely convert Timestamp to Date if necessary
-    const dateToFormat = isTimestamp(report.data) ? report.data.toDate() : report.data;
+    const dateToFormat = toDate(report.data);
+    const createdAtDate = toDate(report.createdAt);
 
     return (
         <Document>
@@ -142,7 +137,7 @@ const ReportPDF: React.FC<ReportPDFProps> = ({ report, ditta }) => {
                     <Text style={styles.headerCenter}>RAPPORTO DI INTERVENTO TECNICO</Text>
                     <View style={styles.headerRight}>
                         <Text>ID: {report.id}</Text>
-                        <Text>Data: {report.createdAt ? format(report.createdAt, 'dd/MM/yyyy HH:mm') : 'N/A'}</Text>
+                        <Text>Data: {createdAtDate ? format(createdAtDate, 'dd/MM/yyyy HH:mm') : 'N/A'}</Text>
                     </View>
                 </View>
 
@@ -151,7 +146,7 @@ const ReportPDF: React.FC<ReportPDFProps> = ({ report, ditta }) => {
                     <Text style={styles.sectionTitle}>Dettagli Intervento</Text>
                     <View style={styles.row}>
                         <Text style={styles.label}>Data Intervento:</Text>
-                        <Text>{format(dateToFormat, 'eeee dd MMMM yyyy')}</Text>
+                        <Text>{dateToFormat ? format(dateToFormat, 'eeee dd MMMM yyyy') : 'Data non disponibile'}</Text>
                     </View>
                     <View style={styles.row}>
                         <Text style={styles.label}>Nave/Cliente:</Text>

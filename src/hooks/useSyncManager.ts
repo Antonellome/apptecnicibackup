@@ -1,11 +1,11 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
-import { syncAllAnagrafiche, syncUserRapportini, processSyncQueue } from '@/services/offlineSync';
+import { syncAllAnagrafiche, syncUserRapportini, processSyncQueue } from '@/lib/offline-sync';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useAuth } from './useAuth';
 import { useOnlineStatus } from './useOnlineStatus';
-import { hasInitialSyncBeenTriggered, markInitialSyncAsTriggered } from '@/services/syncV2/syncState';
+import { hasInitialSyncBeenTriggered, markInitialSyncAsTriggered } from '@/lib/sync-state';
 
 export const useSyncManager = () => {
     const { showSnackbar } = useSnackbar();

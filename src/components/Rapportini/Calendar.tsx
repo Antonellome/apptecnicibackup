@@ -2,7 +2,8 @@
 import { Paper, Typography, Grid, Box, Tooltip } from '@mui/material';
 import { getDaysInMonth, startOfMonth, format, getDay } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { Rapportino, TipoGiornata, Giorno } from '@/models/definitions';
+import { Rapportino, TipoGiornata } from '@/models/definitions';
+import { toDateSafe as toDate } from '@/lib/date-utils';
 
 interface Props {
     rapportino?: Rapportino;
@@ -13,16 +14,18 @@ interface Props {
 const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
     const daysInMonth = getDaysInMonth(selectedDate);
     const firstDayOfMonth = startOfMonth(selectedDate);
-    const startingDayIndex = (getDay(firstDayOfMonth) + 6) % 7; 
+    const startingDayIndex = (getDay(firstDayOfMonth) + 6) % 7;
     const weekDays = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 
     const renderDay = (day: number) => {
         
-        let giornoData: Giorno | undefined;
+        let giornoData; 
 
         if (rapportino && rapportino.data) {
-            const rapportinoDate = new Date(rapportino.data);
+            const rapportinoDate = toDate(rapportino.data);
+            
             if (
+                rapportinoDate &&
                 rapportinoDate.getDate() === day &&
                 rapportinoDate.getMonth() === selectedDate.getMonth() &&
                 rapportinoDate.getFullYear() === selectedDate.getFullYear()
@@ -38,8 +41,8 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
                     tipo: rapportino.tipoGiornataId,
                     ore: totalHours,
                     tooltip: rapportino.lavoroEseguito ?? 'Nessuna descrizione',
-                    straordinari: 0, // Campo non presente in Rapportino, default a 0
-                    trasferta: rapportino.includeTrasferta ? 'Sì' : 'No', // Conversione da boolean a stringa
+                    straordinari: 0, 
+                    trasferta: rapportino.includeTrasferta ? 'Sì' : 'No', 
                 };
             }
         }
@@ -106,15 +109,18 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
             </Typography>
             <Grid container spacing={0.5}>
                 {weekDays.map(day => (
-                    <Grid size={12 / 7} key={day} sx={{ textAlign: 'center', fontWeight: 'bold', mb: 1 }}>
+                    <Grid
+                        key={day}
+                        sx={{ textAlign: 'center', fontWeight: 'bold', mb: 1 }}
+                        size={12 / 7}>
                         <Typography variant="caption" color="text.secondary">{day}</Typography>
                     </Grid>
                 ))}
                 {Array.from({ length: startingDayIndex }).map((_, i) => (
-                    <Grid size={12/7} key={`empty-${i}`} />
+                    <Grid key={`empty-${i}`} size={12/7} />
                 ))}
                 {Array.from({ length: daysInMonth }).map((_, i) => (
-                    <Grid size={12 / 7} key={i}>
+                    <Grid key={i} size={12 / 7}>
                         {renderDay(i + 1)}
                     </Grid>
                 ))}

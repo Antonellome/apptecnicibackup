@@ -1,7 +1,7 @@
 
 import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, db as firestoreDb } from '@/utils/firebase'; // <-- CORREZIONE: puntare al file di utils
+import { auth, db as firestoreDb } from '@/lib/firebase'; // <-- CORREZIONE: puntare al file di utils
 import { doc, getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/models/definitions';
 import { AuthContext, AuthContextType } from '../contexts/AuthContextDefinition';

@@ -7,13 +7,13 @@ export const TIPI_GIORNATA_PREDEFINITI: Omit<TipoGiornata, 'id'>[] = [
     { nome: 'Ordinaria', colore: '#4caf50', categoria: 'normale', tipo: 'oraria', lavorativo: true, icona: 'work' },
     { nome: 'Straordinario', colore: '#f44336', categoria: 'straordinario', tipo: 'oraria', lavorativo: true, icona: 'add_alarm' },
     { nome: 'Trasferta Italia', colore: '#2196f3', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'flight' },
-    { nome: 'Trasferta Europa', colore: '#ff9800', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'public' },
-    { nome: 'Trasferta ExtraEuropea', colore: '#9c27b0', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'language' },
+    { nome: 'Trasferta Europa', colore: '#ff9800', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'flight' },
+    { nome: 'Trasferta ExtraEuropea', colore: '#9c27b0', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'public' },
     { nome: 'Festivo', colore: '#e91e63', categoria: 'festivo', tipo: 'giornaliera', lavorativo: false, icona: 'celebration' },
     { nome: 'Ferie', colore: '#00bcd4', categoria: 'ferie', tipo: 'giornaliera', lavorativo: false, icona: 'beach_access' },
     { nome: 'Malattia', colore: '#607d8b', categoria: 'malattia', tipo: 'giornaliera', lavorativo: false, icona: 'sick' },
-    { nome: 'Legge 104', colore: '#795548', categoria: 'permesso', tipo: 'oraria', lavorativo: false, icona: 'accessible' },
-    { nome: 'Permesso', colore: '#ffc107', categoria: 'permesso', tipo: 'oraria', lavorativo: false, icona: 'hourglass_empty' },
+    { nome: 'Legge 104', colore: '#795548', categoria: 'permesso', tipo: 'oraria', lavorativo: false, icona: 'family_restroom' },
+    { nome: 'Permesso', colore: '#ffc107', categoria: 'permesso', tipo: 'oraria', lavorativo: false, icona: 'event_busy' },
 ];
 
 // --- IMPOSTAZIONI PREDEFINITE ---
@@ -61,7 +61,7 @@ export const seedInitialData = async () => {
         })).filter(t => t.id);
 
         // 4. Salvataggio delle impostazioni
-        await db.impostazioni.add({ id: 'default', tariffe: tariffeConId });
+        await db.impostazioni.add({ id: 'main', tariffe: tariffeConId });
         console.log('Tariffe aggiornate nelle impostazioni locali.');
     });
 
