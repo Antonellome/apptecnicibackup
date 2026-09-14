@@ -1,4 +1,4 @@
-import { EnrichedRapportino, MasterData, UserProfile, Rapportino, RiepilogoMese, Tariffa } from '@/models/definitions';
+import { EnrichedRapportino, MasterData, UserProfile, Rapportino, RiepilogoMese } from '@/models/definitions';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import jsPDF from "jspdf";
@@ -138,7 +138,7 @@ export const generateMonthlyReportPDF = async (rapportini: EnrichedRapportino[],
         let oreOrdinarie = 0, oreStraordinarie = 0;
         const altreOre: Record<string, number> = {};
         const tipoNome = report.tipoGiornata?.nome || 'N/A';
-        const oreGiorno = report.oreGiorno;
+        const oreGiorno = report.oreGiorno || 0;
 
         if (tipoNome.toLowerCase().includes('ordinaria')) {
             const availableOrdinary = 8 - dailyOrdinaryHours[dayKey];

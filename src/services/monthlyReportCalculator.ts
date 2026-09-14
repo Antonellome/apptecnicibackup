@@ -11,7 +11,7 @@ export const enrichRapportini = (
 ): EnrichedRapportino[] => {
     const tipiGiornataMap = new Map(masterData.tipiGiornata.map(t => [t.id, t]));
 
-    return rapportini.map(r => {
+    const mappedRapportini = rapportini.map(r => {
         const dataSicura = toDateSafe(r.data);
         if (!dataSicura) return null; // Scarta i rapportini con data non valida
 
@@ -38,8 +38,10 @@ export const enrichRapportini = (
             trasferta: tipiGiornataMap.get(trasfertaId), // Arricchisco l'oggetto trasferta
             tipoGiornataId: tipoGiornataDaUsareId,
             isEditable: r.tecnicoId === userProfile.tecnicoId,
-        };
-    }).filter((r): r is EnrichedRapportino => r !== null && !r.isDeleted && (r.oreGiorno > 0 || !!r.trasfertaId)); // <<< NUOVA MODIFICA: Aggiunto filtro !r.isDeleted
+        } as EnrichedRapportino;
+    });
+    
+    return mappedRapportini.filter((r): r is EnrichedRapportino => r !== null && !r.isDeleted && (r.oreGiorno !== undefined && r.oreGiorno > 0 || !!r.trasfertaId)); // <<< NUOVA MODIFICA: Aggiunto filtro !r.isDeleted
 };
 
 export const calculateSummary = (
@@ -81,11 +83,11 @@ export const calculateSummary = (
         
         reports.forEach(report => {
             if (report.tipoGiornataId === 't_ordinaria') {
-                oreDaSplittareDelGiorno += report.oreGiorno;
+                oreDaSplittareDelGiorno += report.oreGiorno || 0;
             } else {
                 const voceRiepilogo = riepilogo.dettaglio.get(report.tipoGiornataId);
                 if (voceRiepilogo) {
-                    voceRiepilogo.oreTotali += report.oreGiorno;
+                    voceRiepilogo.oreTotali += report.oreGiorno || 0;
                     voceRiepilogo.giorniSet?.add(dayKey);
                 }
             }
@@ -113,7 +115,7 @@ export const calculateSummary = (
         }
     }
 
-    riepilogo.oreTotali = enrichedRapportini.reduce((sum, r) => sum + r.oreGiorno, 0);
+    riepilogo.oreTotali = enrichedRapportini.reduce((sum, r) => sum + (r.oreGiorno || 0), 0);
 
     const giorniTrasfertaUnici = new Set<string>();
     enrichedRapportini.forEach(r => {

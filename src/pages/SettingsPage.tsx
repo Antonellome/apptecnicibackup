@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useReducer, useContext, useMemo } from 'react';
+import React, { useEffect, useState, useReducer, useContext } from 'react';
 import {
     Box, Typography, Paper, TextField, Button, List, ListItem, ListItemText, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
@@ -125,7 +125,7 @@ const SettingsPage: React.FC = () => {
     const { showSnackbar } = useSnackbar();
     const navigate = useNavigate();
     
-    const { masterData, updateImpostazioni, loading: masterDataLoading } = useContext(GlobalDataContext);
+    const { masterData, updateImpostazioni, loading: masterDataLoading } = useContext(GlobalDataContext) || {};
 
     const [state, dispatch] = useReducer(settingsReducer, initialState);
     const { tariffe, isSaving, isDirty } = state;

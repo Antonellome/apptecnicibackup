@@ -2,13 +2,23 @@
 import { Paper, Typography, Grid, Box, Tooltip } from '@mui/material';
 import { getDaysInMonth, startOfMonth, format, getDay } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { Rapportino, TipoGiornata, Giorno } from '@/models/definitions';
+import { Rapportino, TipoGiornata, Giorno, FirebaseTimestamp } from '@/models/definitions';
 
 interface Props {
     rapportino?: Rapportino;
     tipiGiornata: Map<string, TipoGiornata>;
     selectedDate: Date;
 }
+
+const toDate = (value: FirebaseTimestamp | string): Date => {
+    if (typeof value === 'string') {
+        return new Date(value);
+    }
+    if (value && typeof value.toDate === 'function') {
+        return value.toDate();
+    }
+    return new Date(value as any);
+};
 
 const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
     const daysInMonth = getDaysInMonth(selectedDate);
@@ -21,30 +31,28 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
         let giornoData: Giorno | undefined;
 
         if (rapportino && rapportino.data) {
-            const rapportinoDate = new Date(rapportino.data);
+            const rapportinoDate = toDate(rapportino.data);
             if (
                 rapportinoDate.getDate() === day &&
                 rapportinoDate.getMonth() === selectedDate.getMonth() &&
                 rapportinoDate.getFullYear() === selectedDate.getFullYear()
             ) {
-                const tipoGiornoDetails = tipiGiornata.get(rapportino.tipoGiornataId);
                 const totalHours = rapportino.dettaglioOreTecnici?.reduce((sum, d) => sum + d.ore, 0) || 0;
 
                 giornoData = {
-                    date: rapportinoDate.toISOString(),
-                    sigla: tipoGiornoDetails?.sigla ?? 'N/A',
-                    colore: tipoGiornoDetails?.colore ?? 'grey',
-                    isTrasferta: rapportino.includeTrasferta ?? false,
+                    data: rapportino.data,
+                    numero: day,
+                    nome: format(rapportinoDate, 'eeee', { locale: it }),
+                    eventi: [],
                     tipo: rapportino.tipoGiornataId,
                     ore: totalHours,
-                    tooltip: rapportino.lavoroEseguito ?? 'Nessuna descrizione',
-                    straordinari: 0, // Campo non presente in Rapportino, default a 0
-                    trasferta: rapportino.includeTrasferta ? 'Sì' : 'No', // Conversione da boolean a stringa
+                    straordinari: 0, 
+                    trasferta: !!rapportino.trasfertaId,
                 };
             }
         }
 
-        const tipoGiorno = giornoData ? tipiGiornata.get(giornoData.tipo) : null;
+        const tipoGiorno = giornoData ? tipiGiornata.get(giornoData.tipo || '') : null;
 
         const isToday = format(new Date(), 'd') === String(day) && format(new Date(), 'M') === format(selectedDate, 'M');
         const isSunday = (startingDayIndex + day - 1) % 7 === 6;
@@ -61,12 +69,12 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
         };
 
         if (giornoData) {
-            const content = (
+            const tooltipContent = (
                 <Box>
                     <Typography variant="body2"><strong>{tipoGiorno?.nome || 'Lavorato'}</strong></Typography>
                     <Typography variant="caption">Ore: {giornoData.ore}</Typography>
-                    {giornoData.straordinari > 0 && <Typography variant="caption"><br />Straordinari: {giornoData.straordinari}</Typography>}
-                    {giornoData.trasferta !== 'No' && <Typography variant="caption"><br />Trasferta: {giornoData.trasferta}</Typography>}
+                    {giornoData.straordinari && giornoData.straordinari > 0 && <Typography variant="caption"><br />Straordinari: {giornoData.straordinari}</Typography>}
+                    {giornoData.trasferta && <Typography variant="caption"><br />Trasferta</Typography>}
                 </Box>
             );
 
@@ -76,8 +84,9 @@ const Calendar = ({ rapportino, tipiGiornata, selectedDate }: Props) => {
                 border: `2px solid ${tipoGiorno?.colore || 'grey.400'}`,
                 cursor: 'pointer',
             };
+
             return (
-                <Tooltip title={content}>
+                <Tooltip title={tooltipContent}>
                     <Paper sx={sxProps}>
                         <Typography variant="body2" fontWeight={isToday ? 'bold' : 'normal'}>{day}</Typography>
                     </Paper>

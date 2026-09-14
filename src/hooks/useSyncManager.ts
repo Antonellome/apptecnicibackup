@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useLiveQuery } from 'dexie-react-hooks'; // RIPRISTINATO
 import { db } from '@/db/local-db';
-import { syncAllAnagrafiche, syncUserRapportini, processSyncQueue } from '@/services/offlineSync';
+import { syncAllAnagrafiche, syncUserRapportini, processSyncQueue } from '@/services/offlineSync'; // processSyncQueue RIPRISTINATO
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { useAuth } from './useAuth';
 import { useOnlineStatus } from './useOnlineStatus';
@@ -13,7 +13,6 @@ export const useSyncManager = () => {
     const isSyncing = useRef(false);
     const isOnline = useOnlineStatus();
 
-    // Usiamo un ref per l'ID del tecnico per stabilizzare le callback
     const tecnicoIdRef = useRef(userProfile?.tecnicoId);
     useEffect(() => {
         tecnicoIdRef.current = userProfile?.tecnicoId;
@@ -35,7 +34,7 @@ export const useSyncManager = () => {
         console.log(`Orchestratore (AVVIO): Sincronizzazione ${syncType} per utente ${tecnicoId}.`);
 
         try {
-            await processSyncQueue();
+            await processSyncQueue(); // --- RIPRISTINATO ---
             console.log("SYNC ACTION (Upload): Coda locale processata.");
             console.log("SYNC ACTION (Download): Avvio download Anagrafiche...");
             await syncAllAnagrafiche();
@@ -56,17 +55,16 @@ export const useSyncManager = () => {
         } finally {
             isSyncing.current = false;
         }
-    }, [showSnackbar, isOnline]); // Rimosso tecnicoId dalle dipendenze, usiamo il ref
+    }, [showSnackbar, isOnline]);
 
     useEffect(() => {
-        // Leggiamo il valore corrente dal ref all'interno dell'effetto
         const tecnicoId = tecnicoIdRef.current;
         if (isOnline && tecnicoId && !hasInitialSyncBeenTriggered()) {
             markInitialSyncAsTriggered();
             console.log("TRIGGER: Avvio sincronizzazione iniziale.");
             runFullSync('Iniziale');
         }
-    }, [isOnline, runFullSync]); // L'ID del tecnico non è più una dipendenza diretta
+    }, [isOnline, runFullSync]);
 
     const requestManualSync = useCallback(() => {
         if (!isOnline) {
@@ -76,6 +74,7 @@ export const useSyncManager = () => {
         runFullSync('Manuale');
     }, [isOnline, runFullSync]);
 
+    // --- RIPRISTINATO --- La query live originale che legge dalla syncQueue.
     const pendingSyncItems = useLiveQuery(() => db.syncQueue.where('syncStatus').equals('pending').count(), []);
 
     return { requestManualSync, isSyncing: isSyncing.current, pendingSyncItems, error: null };

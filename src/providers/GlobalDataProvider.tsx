@@ -1,15 +1,12 @@
 import React, { ReactNode, useMemo, useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
-import { useAuth } from '../hooks/useAuth';
-import { useSyncManager } from '../hooks/useSyncManager';
-import { GlobalDataContext, GlobalData } from '../contexts/GlobalDataContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useSyncManager } from '@/hooks/useSyncManager';
+import { GlobalDataContext } from '@/contexts/GlobalDataContext';
 import FullScreenLoader from '@/components/FullScreenLoader';
-import { Impostazioni, MasterData, TariffaLocale, TipoGiornata } from '@/models/definitions';
+import { Impostazioni, MasterData, TariffaLocale, GlobalData, Tecnico } from '@/models/definitions';
 
-// =====================================================================================
-// --- V8 - AGGIORNAMENTO FORZATO TRAMITE VERSIONING ---
-// =====================================================================================
 const IMPOSTAZIONI_VERSION = 8;
 
 const COSTI_DEFAULT_MAP: Record<string, { costo: number; unita: 'h' | 'g' }> = {
@@ -25,7 +22,7 @@ const COSTI_DEFAULT_MAP: Record<string, { costo: number; unita: 'h' | 'g' }> = {
     'Permesso': { costo: 10.00, unita: 'h' },
 };
 
-const getCostoDefault = (nomeTipo: string) => {
+const getCostoDefault = (nomeTipo: string): { costo: number; unita: 'h' | 'g' } => {
     const normalizedNome = nomeTipo.toLowerCase().replace(/\s/g, '');
     for (const key in COSTI_DEFAULT_MAP) {
         const normalizedKey = key.toLowerCase().replace(/\s/g, '');
@@ -41,7 +38,6 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const { isSyncing, error: syncError } = useSyncManager();
     
     const [isDbReady, setIsDbReady] = useState(false);
-    const [masterData, setMasterData] = useState<MasterData | null>(null);
 
     useEffect(() => {
         db.open().then(() => {
@@ -52,83 +48,80 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
         });
     }, []);
 
-    useEffect(() => {
-        const loadInitialData = async () => {
-            if (!isDbReady) return;
-            console.log("[GlobalDataProvider] Il database è pronto. Inizio caricamento dati.");
-
-            try {
-                const tipiGiornata = await db.tipiGiornata.toArray();
-                let finalImpostazioni: Impostazioni;
-                const dbImpostazioni = await db.impostazioni.get('main');
-
-                // CONTROLLO BRUTALE DELLA VERSIONE
-                if (!dbImpostazioni || dbImpostazioni.version !== IMPOSTAZIONI_VERSION) {
-                    console.warn(`[FORZATURA V${IMPOSTAZIONI_VERSION}] Impostazioni nel DB assenti o obsolete (versione: ${dbImpostazioni?.version}). Genero i default.`);
-                    
-                    const nuoveTariffeDefault = tipiGiornata.map((tipo): TariffaLocale => {
-                        const defaultCosto = getCostoDefault(tipo.nome);
-                        return {
-                            id: tipo.id,
-                            tipoGiornataId: tipo.id,
-                            nome: tipo.nome,
-                            costo: defaultCosto.costo,
-                            unita: defaultCosto.unita,
-                            tariffa: defaultCosto.costo,
-                        };
-                    });
-
-                    const nuoveImpostazioni: Impostazioni = {
-                        id: 'main',
-                        version: IMPOSTAZIONI_VERSION,
-                        tariffe: nuoveTariffeDefault
-                    };
-                    await db.impostazioni.put(nuoveImpostazioni);
-                    finalImpostazioni = nuoveImpostazioni;
-                } else {
-                    finalImpostazioni = dbImpostazioni;
-                }
-
-                const [tecnici, ditte, categorie, lavorazioni, navi, luoghi, veicoli, clienti] = await Promise.all([
-                    db.tecnici.toArray(),
-                    db.ditte.toArray(),
-                    db.categorie.toArray(),
-                    db.lavorazioni.toArray(),
-                    db.navi.toArray(),
-                    db.luoghi.toArray(),
-                    db.veicoli.toArray(),
-                    db.clienti.toArray(),
-                ]);
-
-                const loadedMasterData: MasterData = {
-                    tecnici, ditte, categorie, lavorazioni, navi, luoghi, veicoli, clienti,
-                    tipiGiornata,
-                    impostazioni: finalImpostazioni,
-                    qualifiche: [], 
-                    sistemi: [],
-                };
-
-                setMasterData(loadedMasterData);
-                console.log("[GlobalDataProvider] Dati anagrafici caricati nello stato globale.");
-
-            } catch (error) {
-                console.error("[GlobalDataProvider] Errore critico durante il caricamento dei master data:", error);
-            }
-        };
-
-        loadInitialData();
-    }, [isDbReady]);
-
+    const tecnici = useLiveQuery(() => isDbReady ? db.tecnici.toArray() : [], [isDbReady], []);
+    const ditte = useLiveQuery(() => isDbReady ? db.ditte.toArray() : [], [isDbReady], []);
+    const categorie = useLiveQuery(() => isDbReady ? db.categorie.toArray() : [], [isDbReady], []);
+    const lavorazioni = useLiveQuery(() => isDbReady ? db.lavorazioni.toArray() : [], [isDbReady], []);
+    const navi = useLiveQuery(() => isDbReady ? db.navi.toArray() : [], [isDbReady], []);
+    const luoghi = useLiveQuery(() => isDbReady ? db.luoghi.toArray() : [], [isDbReady], []);
+    const veicoli = useLiveQuery(() => isDbReady ? db.veicoli.toArray() : [], [isDbReady], []);
+    const clienti = useLiveQuery(() => isDbReady ? db.clienti.toArray() : [], [isDbReady], []);
+    const tipiGiornata = useLiveQuery(() => isDbReady ? db.tipiGiornata.toArray() : [], [isDbReady], []);
+    const sedi = useLiveQuery(() => isDbReady ? db.sedi.toArray() : [], [isDbReady], []);
+    const qualifiche = useLiveQuery(() => isDbReady ? db.qualifiche.toArray() : [], [isDbReady], []);
+    const sistemi = useLiveQuery(() => isDbReady ? db.sistemi.toArray() : [], [isDbReady], []);
+    const impostazioni = useLiveQuery(() => isDbReady ? db.impostazioni.get('main') : undefined, [isDbReady]);
     const rapportini = useLiveQuery(() => isDbReady ? db.rapportini.toArray() : [], [isDbReady], []);
     const checkins = useLiveQuery(() => isDbReady ? db.checkin_giornalieri.toArray() : [], [isDbReady], []);
-    const userProfile = useLiveQuery(() => isDbReady && user ? db.webAppUsers.get(user.uid) : undefined, [isDbReady, user]);
+    const userProfile = useLiveQuery(() => isDbReady && user ? db.tecnici.get(user.uid) : undefined, [isDbReady, user]) as Tecnico | undefined;
+
+    useEffect(() => {
+        if (!isDbReady || !tipiGiornata || tipiGiornata.length === 0) return;
+
+        const checkAndSetDefaults = async () => {
+            if (!impostazioni || impostazioni.version !== IMPOSTAZIONI_VERSION) {
+                console.warn(`[FORZATURA V${IMPOSTAZIONI_VERSION}] Impostazioni nel DB assenti o obsolete. Genero i default.`);
+                
+                const nuoveTariffeDefault = tipiGiornata.map((tipo): TariffaLocale => {
+                    const defaultCosto = getCostoDefault(tipo.nome);
+                    return {
+                        id: tipo.id,
+                        tipoGiornataId: tipo.id,
+                        nome: tipo.nome,
+                        costo: defaultCosto.costo,
+                        unita: defaultCosto.unita,
+                        tariffa: defaultCosto.costo,
+                    };
+                });
+
+                const nuoveImpostazioni: Impostazioni = {
+                    id: 'main',
+                    version: IMPOSTAZIONI_VERSION,
+                    tariffe: nuoveTariffeDefault
+                };
+                await db.impostazioni.put(nuoveImpostazioni);
+            }
+        };
+        
+        checkAndSetDefaults();
+    }, [isDbReady, tipiGiornata, impostazioni]);
+    
+    const masterData = useMemo((): MasterData | undefined => {
+        if (impostazioni === undefined) {
+            return undefined; // Dati non ancora pronti
+        }
+        
+        return {
+            tecnici: tecnici || [],
+            ditte: ditte || [],
+            categorie: categorie || [],
+            lavorazioni: lavorazioni || [],
+            navi: navi || [],
+            luoghi: luoghi || [],
+            veicoli: veicoli || [],
+            clienti: clienti || [],
+            tipiGiornata: tipiGiornata || [],
+            impostazioni: impostazioni || { id: 'main', version: IMPOSTAZIONI_VERSION, tariffe: [] },
+            sedi: sedi || [],
+            qualifiche: qualifiche || [], 
+            sistemi: sistemi || [],
+        };
+    }, [tecnici, ditte, categorie, lavorazioni, navi, luoghi, veicoli, clienti, tipiGiornata, impostazioni, sedi, qualifiche, sistemi]);
 
     const updateImpostazioni = useCallback(async (newImpostazioni: Impostazioni) => {
         try {
-            // Assicuriamoci che la versione sia sempre aggiornata quando salviamo
             const impostazioniConVersione: Impostazioni = { ...newImpostazioni, version: IMPOSTAZIONI_VERSION };
             await db.impostazioni.put(impostazioniConVersione);
-            setMasterData(prevData => prevData ? { ...prevData, impostazioni: impostazioniConVersione } : null);
             console.log("[GlobalDataProvider] Impostazioni aggiornate.");
         } catch (error) {
             console.error("[DB] Errore durante l'aggiornamento delle impostazioni:", error);
@@ -139,12 +132,12 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const loading = authLoading || !isDbReady || !masterData || isSyncing;
 
     const contextValue: GlobalData = useMemo(() => ({
-        masterData: masterData!,
+        masterData: masterData,
         rapportini: rapportini || [],
         checkins: checkins || [],
-        userProfile: userProfile || null,
+        userProfile: userProfile,
         loading,
-        error: syncError,
+        error: syncError || undefined,
         updateImpostazioni,
     }), [masterData, rapportini, checkins, userProfile, loading, syncError, updateImpostazioni]);
 

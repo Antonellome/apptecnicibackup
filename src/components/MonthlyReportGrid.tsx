@@ -28,12 +28,20 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
 
     // Mappa per accesso rapido ai tipi di giornata per ID
     const tipiGiornataMap = new Map<string, TipoGiornata>();
-    tipiGiornata.forEach(t => tipiGiornataMap.set(t.id, t));
+    tipiGiornata.forEach(t => {
+        if (t.id) {
+            tipiGiornataMap.set(t.id, t)
+        }
+    });
 
     // Mappa nidificata per i rapportini: [tecnicoId][giorno] -> rapportino
     const rapportiniMatrix = new Map<string, Map<number, EnrichedRapportino>>();
     
-    tecnici.forEach(t => rapportiniMatrix.set(t.id, new Map()));
+    tecnici.forEach(t => {
+        if (t.id) {
+            rapportiniMatrix.set(t.id, new Map());
+        }
+    });
 
     rapportini.forEach(r => {
         // Assicura che la data sia un oggetto Date valido
@@ -60,6 +68,8 @@ export const MonthlyReportGrid = ({ tecnici, rapportini, tipiGiornata, currentDa
     const renderDayCell = (tecnico: Tecnico, day: number) => {
         const date = new Date(year, month, day);
         const dayOfWeek = date.getDay();
+
+        if (!tecnico.id) return <TableCell key={day} />;
 
         const rapportino = rapportiniMatrix.get(tecnico.id)?.get(day);
 

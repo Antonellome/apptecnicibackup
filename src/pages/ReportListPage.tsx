@@ -14,12 +14,12 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
-  ListItemText,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import { WifiOff, CloudQueue, Gesture, Edit, Share, Delete, AccountCircle, ErrorOutline, Close } from '@mui/icons-material';
 import { format, startOfMonth, addMonths, isAfter, isSameMonth, isSameDay } from 'date-fns';
@@ -38,7 +38,6 @@ import { useSyncManager } from '@/hooks/useSyncManager';
 import { GlobalDataContext } from '@/contexts/GlobalDataContext'; 
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
-// Componente per l'anteprima del PDF
 const PdfPreviewDialog = ({ open, onClose, pdfUrl, onShare, isProcessing }: { open: boolean, onClose: () => void, pdfUrl: string | null, onShare: () => void, isProcessing: boolean }) => {
   if (!pdfUrl) return null;
 
@@ -77,59 +76,44 @@ const toDateSafe = (date: any): Date | null => {
   return isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
+const SYNC_STATUSES: SyncState[] = ['pending', 'syncing', 'synced', 'failed', 'error'];
+
 const ReportListPage: React.FC = () => {
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
   const authContext = useContext(AuthContext);
   const userProfile = authContext?.userProfile;
-  const { requestManualSync, pendingSyncCount } = useSyncManager();
+  const { requestManualSync, pendingSyncItems } = useSyncManager();
   const isOnline = useOnlineStatus();
   
   const globalDataContext = useContext(GlobalDataContext);
   const masterData = globalDataContext?.masterData;
   const collectionsLoading = globalDataContext?.loading;
 
-  const rapportiniGrezzi = useLiveQuery(
-    () => db.rapportini.filter(r => r.isDeleted !== true).toArray(),
-    []
-  );
-
-  const syncQueueItems = useLiveQuery(() => db.syncQueue.toArray(), []);
+  const rapportiniGrezzi = useLiveQuery(() => db.rapportini.filter(r => r.isDeleted !== true).toArray());
+  const syncQueueItems = useLiveQuery(() => db.syncQueue.toArray());
 
   const enrichedRapportini = useMemo(() => {
     if (!rapportiniGrezzi || !masterData || !userProfile || !syncQueueItems) return [];
 
     const syncStatusMap = new Map<string, SyncState>();
     syncQueueItems.forEach(item => {
-        if (item.entityId) {
-            syncStatusMap.set(item.entityId, item.syncStatus === 'error' ? 'error' : 'pending');
+        if (item.entityId && SYNC_STATUSES.includes(item.syncStatus as SyncState)) {
+            syncStatusMap.set(item.entityId, item.syncStatus as SyncState);
         }
     });
 
     const rapportini = rapportiniGrezzi.map(report => {
       const reportDate = toDateSafe(report.data);
-      if (!reportDate) {
-        console.error("Data non valida, rapportino scartato:", report.id, report.data);
-        return null;
-      }
+      if (!reportDate) return null;
 
-      const isNonWorkingDay = !report.dettaglioOreTecnici || report.dettaglioOreTecnici.length === 0;
-      let isUserInvolved = false;
-
-      if (isNonWorkingDay) {
-        isUserInvolved = report.tecnicoId === userProfile.tecnicoId;
-      } else {
-        isUserInvolved = report.dettaglioOreTecnici.some(d => d.tecnicoId === userProfile.tecnicoId);
-      }
-
-      if (!isUserInvolved) {
-        return null;
-      }
+      const isUserInvolved = (report.presenze || []).includes(userProfile.tecnicoId);
+      if (!isUserInvolved) return null;
 
       const tipoGiornata = masterData.tipiGiornata.find(t => t.id === report.tipoGiornataId);
       const nave = masterData.navi.find(n => n.id === report.naveId);
       const luogo = masterData.luoghi.find(l => l.id === report.luogoId);
-      const tecnicoScrivente = masterData.tecnici.find(t => t.id === report.tecnicoScriventeId);
+      const creatore = masterData.tecnici.find(t => t.id === report.createdBy);
 
       const dettagliTecnico = report.dettaglioOreTecnici?.filter(d => d.tecnicoId === userProfile.tecnicoId) || [];
       const oreLavorateTecnico = dettagliTecnico.reduce((acc, curr) => acc + (curr.ore || 0), 0);
@@ -143,27 +127,25 @@ const ReportListPage: React.FC = () => {
         return '';
       }).filter(Boolean).join(', ');
 
-      const syncState: SyncState = syncStatusMap.get(report.id) || 'synced';
-      const isEditable = syncState === 'synced';
-
+      const syncState: SyncState = syncStatusMap.get(report.id || '') || (report.isOffline ? 'pending' : 'synced');
+      
       return {
         ...report,
         data: reportDate,
-        tipoGiornata: tipoGiornata,
+        tipoGiornata,
         naveNome: nave?.nome,
         luogoNome: luogo?.nome,
-        creatore: tecnicoScrivente?.nome || 'N/D',
-        isEditable: isEditable,
+        creatore,
+        isEditable: syncState !== 'syncing', 
         isClickable: true,
         oreDisplay: oreLavorateTecnico > 0 ? `${oreLavorateTecnico.toFixed(2)} ore` : '',
         orariDisplay: orariTecnico,
         hasFirma: !!report.firmaVettoriale,
-        syncState: syncState,
+        syncState,
       } as EnrichedRapportino;
     }).filter((r): r is EnrichedRapportino => r !== null);
 
     rapportini.sort((a, b) => b.data.getTime() - a.data.getTime());
-
     return rapportini;
 
   }, [rapportiniGrezzi, masterData, userProfile, syncQueueItems]);
@@ -173,8 +155,6 @@ const ReportListPage: React.FC = () => {
   const [isConfirmDeleteDialogOpen, setConfirmDeleteDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
-
-  // State for PDF preview
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfToShare, setPdfToShare] = useState<{blob: Blob, filename: string} | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -185,13 +165,8 @@ const ReportListPage: React.FC = () => {
     }
   }, [enrichedRapportini, currentMonth]);
 
-  // Cleanup for the PDF URL
   useEffect(() => {
-    return () => {
-      if (pdfPreviewUrl) {
-        URL.revokeObjectURL(pdfPreviewUrl);
-      }
-    };
+    return () => { if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl); };
   }, [pdfPreviewUrl]);
 
   const displayedRapportini = useMemo(() => {
@@ -199,10 +174,7 @@ const ReportListPage: React.FC = () => {
     return enrichedRapportini.filter(r => isSameMonth(r.data, currentMonth));
   }, [enrichedRapportini, currentMonth]);
 
-  if (collectionsLoading || !rapportiniGrezzi || !currentMonth || !masterData) return <FullScreenLoader />;
-
   const handleRowClick = (event: React.MouseEvent<HTMLElement>, report: EnrichedRapportino) => {
-    event.preventDefault();
     setMenuState({ anchorEl: event.currentTarget, report });
   };
 
@@ -214,123 +186,111 @@ const ReportListPage: React.FC = () => {
     handleMenuClose();
   };
 
-  // Modified to show the preview
   const handleShare = async () => {
     if (!menuState || !masterData) {
-      showSnackbar("Dati non pronti per la condivisione.", "error");
-      return;
+        showSnackbar("Dati non pronti.", "error");
+        return;
     }
     const { report } = menuState;
     setIsProcessing(true);
     handleMenuClose();
     try {
-      const fullReport = await db.rapportini.get(report.id);
-      if (!fullReport) throw new Error("Rapportino non trovato nel database locale.");
-      
-      const pdfBlob = await generateRapportinoPDF({ ...fullReport, data: report.data }, masterData);
-      const url = URL.createObjectURL(pdfBlob);
-      
-      setPdfPreviewUrl(url);
-      setPdfToShare({ blob: pdfBlob, filename: `Rapportino_${format(report.data, 'dd-MM-yyyy')}.pdf` });
-      setIsPreviewOpen(true);
-
+        const fullReport = await db.rapportini.get(report.id || '');
+        if (!fullReport) throw new Error("Rapportino non trovato.");
+        
+        const pdfBlob = await generateRapportinoPDF({ ...fullReport, data: report.data }, masterData);
+        const url = URL.createObjectURL(pdfBlob);
+        
+        setPdfPreviewUrl(url);
+        setPdfToShare({ blob: pdfBlob, filename: `Rapportino_${format(report.data, 'dd-MM-yyyy')}.pdf` });
+        setIsPreviewOpen(true);
     } catch (error) {
-      console.error("Errore durante la generazione del PDF:", error);
-      showSnackbar(`Impossibile generare anteprima: ${(error as Error).message}`, "error");
+        showSnackbar(`Errore anteprima: ${(error as Error).message}`, "error");
     } finally {
-      setIsProcessing(false);
+        setIsProcessing(false);
     }
   };
 
-  const handlePreviewClose = () => {
-    setIsPreviewOpen(false);
-    // The URL is revoked by the cleanup useEffect
-  };
-
-  // Executes the actual sharing from the dialog
   const executeShare = async () => {
     if (!pdfToShare) return;
-
     setIsProcessing(true);
     try {
-      await shareOrDownload(pdfToShare.blob, pdfToShare.filename);
+        await shareOrDownload(pdfToShare.blob, pdfToShare.filename);
     } catch (error) {
-      console.error("Errore durante la condivisione:", error);
-      if ((error as DOMException).name !== 'AbortError') {
-        showSnackbar(`Impossibile condividere: ${(error as Error).message}`, "error");
-      }
+        if ((error as DOMException).name !== 'AbortError') {
+            showSnackbar(`Errore condivisione: ${(error as Error).message}`, "error");
+        }
     } finally {
-      setIsProcessing(false);
-      handlePreviewClose();
+        setIsProcessing(false);
+        setIsPreviewOpen(false);
     }
   };
 
-  const handleDelete = () => {
-    if (!menuState || !userProfile || !menuState.report.isEditable) return;
+  const handleDeleteRequest = () => {
+    if (!menuState) return;
     const { report } = menuState;
 
-    if (report.tecnicoId !== userProfile.tecnicoId && !report.isOwner) {
-        showSnackbar("Non puoi cancellare un report creato da un altro tecnico.", "warning");
-    } else if (!isSameMonth(report.data, new Date())) {
-        showSnackbar("Puoi cancellare solo i report del mese corrente.", "warning");
+    const isOwner = report.createdBy === userProfile?.tecnicoId;
+    const deadline = addMonths(startOfMonth(report.data), 1);
+
+    if (!isOwner) {
+        showSnackbar("Non puoi eliminare un report creato da altri.", "warning");
+    } else if (isAfter(new Date(), deadline)) {
+        showSnackbar("I report possono essere eliminati solo fino alla fine del mese di competenza.", "warning");
     } else {
-      setReportToDelete(report);
-      setConfirmDeleteDialogOpen(true);
+        setReportToDelete(report);
+        setConfirmDeleteDialogOpen(true);
     }
     handleMenuClose();
   };
 
   const confirmDelete = async () => {
-    if (!reportToDelete) return;
+    if (!reportToDelete || !reportToDelete.id) return;
     setIsProcessing(true);
     setConfirmDeleteDialogOpen(false);
     try {
-      await db.rapportini.update(reportToDelete.id, { isDeleted: true });
-      
-      await aggiungiAllaCoda({
-        type: 'rapportino',
-        action: 'update',
-        entityId: reportToDelete.id,
-        payload: { isDeleted: true }
-      });
-
-      showSnackbar("Rapportino contrassegnato come eliminato e messo in coda per la sinc.", "success");
-      requestManualSync();
-
+        await db.rapportini.update(reportToDelete.id, { isDeleted: true });
+        await aggiungiAllaCoda({ 
+            type: 'rapportino', 
+            action: 'update', 
+            entityId: reportToDelete.id, 
+            payload: { isDeleted: true } 
+        });
+        showSnackbar("Rapportino eliminato e sincronizzazione in corso.", "success");
+        requestManualSync();
     } catch (error) {
-      console.error("Errore durante la cancellazione (soft delete):", error);
-      showSnackbar(`Errore: ${(error as Error).message}`, "error");
+        showSnackbar(`Errore eliminazione: ${(error as Error).message}`, "error");
     } finally {
-      setIsProcessing(false);
-      setReportToDelete(null);
+        setIsProcessing(false);
+        setReportToDelete(null);
     }
   };
 
-  const handleMonthChange = (increment: number) => setCurrentMonth(prev => prev ? addMonths(prev, increment) : new Date());
-  const isNextMonthDisabled = () => !currentMonth || isAfter(startOfMonth(addMonths(currentMonth, 1)), new Date());
+  if (collectionsLoading || !currentMonth || !masterData) return <FullScreenLoader />;
 
-  const handleDialogClose = () => {
-      setConfirmDeleteDialogOpen(false);
-      setReportToDelete(null);
-  }
-
+  const handleMonthChange = (inc: number) => setCurrentMonth(prev => prev ? addMonths(prev, inc) : new Date());
+  const isNextMonthDisabled = !currentMonth || isAfter(startOfMonth(addMonths(currentMonth, 1)), new Date());
+  
   return (
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>I Miei Report</Typography>
         <Button variant="contained" color="primary" size="large" onClick={() => navigate('/nuovo-report')} disabled={isProcessing}>Nuovo</Button>
       </Box>
-      {!isOnline && <Alert severity="warning" icon={<WifiOff />} sx={{ mb: 2 }}>Sei offline...</Alert>}
-      {(pendingSyncCount ?? 0) > 0 && <Chip icon={<CloudQueue />} label={`${pendingSyncCount} modifiche in attesa di invio`} color="warning" sx={{ mb: 2, width: '100%' }} />}
+      
+      {!isOnline && <Alert severity="warning" icon={<WifiOff />} sx={{ mb: 2 }}>Sei offline. Le modifiche verranno sincronizzate alla riconnessione.</Alert>}
+      {(pendingSyncItems ?? 0) > 0 && <Chip icon={<CloudQueue />} label={`${pendingSyncItems} modifiche in attesa`} color="warning" sx={{ mb: 2, width: '100%' }} />}
+      
       <Paper sx={{ mb: 2, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button variant="outlined" onClick={() => handleMonthChange(-1)}>Mese Prec.</Button>
-        <Typography variant="h6">{currentMonth ? format(currentMonth, 'MMMM yyyy', { locale: it }) : '...'}</Typography>
-        <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextMonthDisabled()}>Mese Succ.</Button>
+        <Typography variant="h6">{format(currentMonth, 'MMMM yyyy', { locale: it })}</Typography>
+        <Button variant="outlined" onClick={() => handleMonthChange(1)} disabled={isNextMonthDisabled}>Mese Succ.</Button>
       </Paper>
+
       <Paper elevation={3} sx={{ mt: 2 }}>
         <List disablePadding>
           {displayedRapportini.length === 0 ? (
-            <Typography sx={{ textAlign: 'center', p: 4, fontStyle: 'italic', color: 'text.secondary' }}>Nessun report per questo mese.</Typography>
+            <Typography sx={{ textAlign: 'center', p: 4, color: 'text.secondary' }}>Nessun report per questo mese.</Typography>
           ) : (
             displayedRapportini.map((report, index) => {
               const prevReport = index > 0 ? displayedRapportini[index - 1] : null;
@@ -338,7 +298,6 @@ const ReportListPage: React.FC = () => {
               const isSelected = menuState?.report.id === report.id || reportToDelete?.id === report.id;
               const nextReport = displayedRapportini[index + 1];
               const isLastOfGroup = !nextReport || !isSameDay(report.data, nextReport.data);
-              
               const tipoGiornataNome = report.tipoGiornata?.nome || '[Tipo sconosciuto]';
 
               return (
@@ -354,17 +313,17 @@ const ReportListPage: React.FC = () => {
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography variant="body2" sx={{ fontWeight: '500', color: 'primary.main' }}>{tipoGiornataNome}</Typography>
                           {report.ordineLavoro && <Typography variant="caption" color="text.secondary">{report.ordineLavoro}</Typography>}
-                          {report.orariDisplay && <Typography variant="caption" color="text.secondary">{report.orariDisplay}</Typography>}
+                          {report.orariDisplay && <Typography variant="caption" color="text.secondary" display="block">{report.orariDisplay}</Typography>}
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-                           {report.tecnicoId !== userProfile?.tecnicoId && report.creatore && <Chip icon={<AccountCircle />} label={report.creatore} size="small" variant="outlined" color="info" sx={{ mb: 0.5 }} />}
+                           {report.createdBy !== userProfile?.tecnicoId && report.creatore && <Chip icon={<AccountCircle />} label={`${report.creatore.nome} ${report.creatore.cognome}`} size="small" variant="outlined" color="info" sx={{ mb: 0.5 }} />}
                           <Typography variant="body2" color="text.secondary" noWrap>{report.descrizioneBreve || ''}</Typography>
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                             <Box sx={{ height: '24px', display: 'flex', alignItems: 'center', gap: 1 }}>
-                                {report.syncState === 'pending' && <CloudQueue fontSize="small" color="warning" titleAccess="In attesa di sincronizzazione" />}
-                                {report.syncState === 'error' && <ErrorOutline fontSize="small" color="error" titleAccess="Errore di sincronizzazione" />}
-                                {report.hasFirma && <Gesture fontSize="small" color="action" titleAccess="Firmato" />}
+                                {report.syncState === 'pending' && <Tooltip title="In attesa di sync"><CloudQueue fontSize="small" color="warning" /></Tooltip>}
+                                {report.syncState === 'error' && <Tooltip title="Errore di sincronizzazione"><ErrorOutline fontSize="small" color="error" /></Tooltip>}
+                                {report.hasFirma && <Tooltip title="Firmato"><Gesture fontSize="small" color="action" /></Tooltip>}
                             </Box>
                             <Typography variant="caption" color="text.secondary" noWrap>{report.naveNome || ''}</Typography>
                             <Typography variant="caption" color="text.secondary" noWrap>{report.luogoNome || ''}</Typography>
@@ -378,14 +337,16 @@ const ReportListPage: React.FC = () => {
           )}
         </List>
       </Paper>
-      <Menu open={menuState !== null} onClose={handleMenuClose} anchorEl={menuState?.anchorEl} anchorOrigin={{ vertical: 'center', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
-          <MenuItem onClick={handleEdit} disabled={!menuState?.report.isEditable}><ListItemIcon><Edit fontSize="small" /></ListItemIcon><ListItemText>Modifica</ListItemText></MenuItem>
-          <MenuItem onClick={handleShare}><ListItemIcon><Share fontSize="small" /></ListItemIcon><ListItemText>Condividi</ListItemText></MenuItem>
-          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }} disabled={!menuState?.report.isEditable}><ListItemIcon><Delete fontSize="small" color="error" /></ListItemIcon><ListItemText>Cancella</ListItemText></MenuItem>
+
+      <Menu open={!!menuState} onClose={handleMenuClose} anchorEl={menuState?.anchorEl}>
+          <MenuItem onClick={handleEdit} disabled={!menuState?.report.isEditable}><ListItemIcon><Edit /></ListItemIcon>Modifica</MenuItem>
+          <MenuItem onClick={handleShare}><ListItemIcon><Share /></ListItemIcon>Condividi</MenuItem>
+          <MenuItem onClick={handleDeleteRequest} sx={{ color: 'error.main' }}><ListItemIcon><Delete color="error" /></ListItemIcon>Elimina</MenuItem>
       </Menu>
-      <ConfirmationDialog open={isConfirmDeleteDialogOpen} onClose={handleDialogClose} onConfirm={confirmDelete} title="Conferma Cancellazione" description={`Sei sicuro di voler cancellare questo rapportino? L'azione è irreversibile.`} />
+
+      <ConfirmationDialog open={isConfirmDeleteDialogOpen} onClose={() => setConfirmDeleteDialogOpen(false)} onConfirm={confirmDelete} title="Conferma Eliminazione" description={`Sei sicuro di voler eliminare il report del ${reportToDelete ? format(reportToDelete.data, 'dd/MM/yyyy') : ''}?`} />
       {isProcessing && !isPreviewOpen && <FullScreenLoader />}
-      <PdfPreviewDialog open={isPreviewOpen} onClose={handlePreviewClose} pdfUrl={pdfPreviewUrl} onShare={executeShare} isProcessing={isProcessing} />
+      <PdfPreviewDialog open={isPreviewOpen} onClose={() => setIsPreviewOpen(false)} pdfUrl={pdfPreviewUrl} onShare={executeShare} isProcessing={isProcessing} />
     </Box>
   );
 };

@@ -37,19 +37,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const tecnicoData = tecnicoDocSnap.data();
             const isAdmin = tecnicoData.isAdmin || false;
             const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
-            let categoriaObj: { id: string; nome: string; } | undefined = undefined;
-
-            if (id_categoria) {
-              try {
-                const catDocRef = doc(firestoreDb, 'categorie', id_categoria);
-                const catDoc = await getDoc(catDocRef);
-                if (catDoc.exists()) {
-                  categoriaObj = { id: id_categoria, nome: catDoc.data().nome || '' };
-                }
-              } catch (err) {
-                console.error("[Auth] Errore nel risolvere la categoria:", err);
-              }
-            }
 
             const nome = tecnicoData.nome || '';
             const cognome = tecnicoData.cognome || '';
@@ -57,37 +44,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const profile: UserProfile & { id: string } = {
               id: user.uid,
               uid: user.uid,
+              userId: user.uid,
+              dittaId: tecnicoData.dittaId || '',
               email: user.email || '',
               tecnicoId: tecnicoDocSnap.id,
               nome: nome,
               cognome: cognome,
               isAdmin: isAdmin,
-              categoria: categoriaObj,
+              categoriaId: id_categoria,
               displayName: `${nome} ${cognome}`.trim(),
               theme: 'light',
             };
             
             setUserProfile(profile);
-            await localDb.webAppUsers.put(profile);
-            console.log(`[Auth] Profilo per ${profile.displayName} salvato in localDb.webAppUsers.`);
+            await localDb.tecnici.put(profile);
+            console.log(`[Auth] Profilo per ${profile.displayName} salvato in localDb.tecnici.`);
 
           } else {
             console.warn(`[Auth] Profilo tecnico non trovato per UID: ${user.uid}.`);
             setUserProfile(null);
-            await localDb.webAppUsers.clear();
+            await localDb.tecnici.clear();
           }
         } catch (error) {
           console.error("[Auth] Errore critico nel caricamento del profilo utente:", error);
           setUserProfile(null);
-          await localDb.webAppUsers.clear();
+          await localDb.tecnici.clear();
         } finally {
           setLoading(false);
         }
       } else {
         // Utente non loggato
         setUserProfile(null);
-        await localDb.webAppUsers.clear();
-        console.log("[Auth] Utente non loggato, localDb.webAppUsers pulito.");
+        await localDb.tecnici.clear();
+        console.log("[Auth] Utente non loggato, localDb.tecnici pulito.");
       }
     };
 

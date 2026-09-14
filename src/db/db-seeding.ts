@@ -1,20 +1,21 @@
-
 import { db } from './local-db';
 import { TipoGiornata } from '@/models/definitions';
 
 // --- TIPI GIORNATA PREDEFINITI ---
+// Corretto per corrispondere all'interfaccia TipoGiornata. Rimossi campi obsoleti.
 export const TIPI_GIORNATA_PREDEFINITI: Omit<TipoGiornata, 'id'>[] = [
-    { nome: 'Ordinaria', colore: '#4caf50', categoria: 'normale', tipo: 'oraria', lavorativo: true, icona: 'work' },
-    { nome: 'Straordinario', colore: '#f44336', categoria: 'straordinario', tipo: 'oraria', lavorativo: true, icona: 'add_alarm' },
-    { nome: 'Trasferta Italia', colore: '#2196f3', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'flight' },
-    { nome: 'Trasferta Europa', colore: '#ff9800', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'public' },
-    { nome: 'Trasferta ExtraEuropea', colore: '#9c27b0', categoria: 'trasferta', tipo: 'giornaliera', lavorativo: true, icona: 'language' },
-    { nome: 'Festivo', colore: '#e91e63', categoria: 'festivo', tipo: 'giornaliera', lavorativo: false, icona: 'celebration' },
-    { nome: 'Ferie', colore: '#00bcd4', categoria: 'ferie', tipo: 'giornaliera', lavorativo: false, icona: 'beach_access' },
-    { nome: 'Malattia', colore: '#607d8b', categoria: 'malattia', tipo: 'giornaliera', lavorativo: false, icona: 'sick' },
-    { nome: 'Legge 104', colore: '#795548', categoria: 'permesso', tipo: 'oraria', lavorativo: false, icona: 'accessible' },
-    { nome: 'Permesso', colore: '#ffc107', categoria: 'permesso', tipo: 'oraria', lavorativo: false, icona: 'hourglass_empty' },
+    { nome: 'Ordinaria', colore: '#4caf50', tipo: 'oraria', sigla: 'O' },
+    { nome: 'Straordinario', colore: '#f44336', tipo: 'oraria', sigla: 'S' },
+    { nome: 'Trasferta Italia', colore: '#2196f3', tipo: 'giornaliera', sigla: 'TI' },
+    { nome: 'Trasferta Europa', colore: '#ff9800', tipo: 'giornaliera', sigla: 'TE' },
+    { nome: 'Trasferta ExtraEuropea', colore: '#9c27b0', tipo: 'giornaliera', sigla: 'TX' },
+    { nome: 'Festivo', colore: '#e91e63', tipo: 'giornaliera', sigla: 'F' },
+    { nome: 'Ferie', colore: '#00bcd4', tipo: 'giornaliera', sigla: 'FE' },
+    { nome: 'Malattia', colore: '#607d8b', tipo: 'giornaliera', sigla: 'M' },
+    { nome: 'Legge 104', colore: '#795548', tipo: 'oraria', sigla: 'L' },
+    { nome: 'Permesso', colore: '#ffc107', tipo: 'oraria', sigla: 'P' },
 ];
+
 
 // --- IMPOSTAZIONI PREDEFINITE ---
 const IMPOSTAZIONI_PREDEFINITE = {
@@ -61,7 +62,8 @@ export const seedInitialData = async () => {
         })).filter(t => t.id);
 
         // 4. Salvataggio delle impostazioni
-        await db.impostazioni.add({ id: 'default', tariffe: tariffeConId });
+        // Errore corretto: id deve essere 'main' come da interfaccia Impostazioni
+        await db.impostazioni.add({ id: 'main', tariffe: tariffeConId, version: 8 });
         console.log('Tariffe aggiornate nelle impostazioni locali.');
     });
 

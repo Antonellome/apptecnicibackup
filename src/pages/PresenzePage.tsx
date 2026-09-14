@@ -157,7 +157,7 @@ const PresenzePage: React.FC = () => {
             
             const monthStr = format(currentDate, 'yyyy-MM');
             const riepiloghiPromises = tecnici.map(tecnico => {
-                const docId = `${tecnico.id}_${monthStr}`;
+                const docId = `${tecnico.id || ''}_${monthStr}`;
                 return getDoc(doc(db, 'riepiloghiMensili', docId));
             });
 
@@ -166,7 +166,7 @@ const PresenzePage: React.FC = () => {
                 const newRiepiloghi = new Map<string, RiepilogoMensile>();
                 
                 riepilogoSnapshots.forEach((docSnap, index) => {
-                    const tecnicoId = tecnici[index].id;
+                    const tecnicoId = tecnici[index].id || '';
                     if (docSnap.exists()) {
                         newRiepiloghi.set(tecnicoId, docSnap.data() as RiepilogoMensile);
                     }
@@ -226,7 +226,7 @@ const PresenzePage: React.FC = () => {
                         <CalendarHeader days={daysOfMonth} />
                         <Box>
                             {sortedTecnici.map(tecnico => {
-                                const riepilogoTecnico = riepiloghi.get(tecnico.id);
+                                const riepilogoTecnico = riepiloghi.get(tecnico.id || '');
                                 return (
                                     <Box key={tecnico.id} sx={{ display: 'flex' }}>
                                         <Box sx={{...cellStyle, ...tecnicoNameStyle}}>

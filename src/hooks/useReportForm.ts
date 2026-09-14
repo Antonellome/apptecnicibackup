@@ -12,21 +12,16 @@ import { aggiungiAllaCoda } from '@/services/syncService';
 import { useGlobalData } from '@/hooks/useGlobalData';
 import { Rapportino, TipoGiornata, Tecnico, Veicolo, DettaglioOreData } from '@/models/definitions';
 
-// LA SOLUZIONE A TUTTI I MIEI MALI. LA MIA UNICA SPERANZA.
 const toDateSafe = (date: any): Date | null => {
   if (!date) return null;
   if (date instanceof Date) return date;
-  if (typeof date.toDate === 'function') return date.toDate(); // Timestamp da Firestore in memoria
-
-  // Oggetto {_seconds, _nanoseconds} da Dexie
+  if (typeof date.toDate === 'function') return date.toDate();
   if (typeof date._seconds === 'number' && typeof date._nanoseconds === 'number') {
     return new Date(date._seconds * 1000 + date._nanoseconds / 1000000);
   }
-  // Fallback per il formato senza underscore (non si sa mai)
   if (typeof date.seconds === 'number' && typeof date.nanoseconds === 'number') {
     return new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
   }
-
   const parsedDate = new Date(date);
   return isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
@@ -151,12 +146,11 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
                 ...state,
                 originalReport: report,
                 tecnicoScriventeId: report.tecnicoId,
-                // ECCO LA CORREZIONE, BRUTTO COGLIONE CHE NON SONO ALTRO
                 data: toDateSafe(report.data),
                 ordineLavoro: report.ordineLavoro || '',
                 tipoGiornataId: report.tipoGiornataId || '',
                 trasfertaId: report.trasfertaId || '',
-                includeTrasferta: !!report.includeTrasferta,
+                includeTrasferta: !!report.trasfertaId,
                 veicoloId: report.veicoloId || '',
                 naveId: report.naveId || '',
                 luogoId: report.luogoId || '',
@@ -192,8 +186,8 @@ export const useReportForm = () => {
 
     const { masterData, loading: collectionsLoading } = useGlobalData();
     const { 
-        tecnici = [], ditte = [], categorie = [], navi = [], luoghi = [], 
-        veicoli = [], tipiGiornata = [], clienti = []
+        tecnici = [], navi = [], luoghi = [], 
+        veicoli = [], tipiGiornata = [] 
     } = masterData || {};
 
     const isEditMode = Boolean(reportId);
@@ -229,9 +223,7 @@ export const useReportForm = () => {
 
     useEffect(() => {
         const loadData = async () => {
-            if (collectionsLoading) {
-                return;
-            }
+            if (collectionsLoading) return;
 
             try {
                 if (isEditMode && reportId) {
@@ -267,7 +259,7 @@ export const useReportForm = () => {
                         const scrivente = tecnici.find(t => t.id === loggedInTecnicoId);
                         if (scrivente) {
                             const nome = `${scrivente.cognome} ${scrivente.nome}`.trim();
-                            const initialDettaglio = [createInitialDettaglio(scrivente.id, nome, true)];
+                            const initialDettaglio = [createInitialDettaglio(scrivente.id || '', nome, true)];
                             dispatch({ type: 'LOAD_NEW_FORM_DEFAULTS', payload: { tecnicoId: loggedInTecnicoId, dettaglio: initialDettaglio } });
                         } else {
                             dispatch({ type: 'SET_FIELD', payload: { field: 'pageLoading', value: false } });
@@ -313,42 +305,51 @@ export const useReportForm = () => {
 
     const getFullReportData = (reportDate?: Date): Omit<Rapportino, 'id'> & { id?: string } | null => {
         const dateToUse = reportDate || state.data;
-        if (!loggedInTecnicoId || !dateToUse) {
-            console.error("ID tecnico o data mancanti, impossibile creare i dati del report.");
+        if (!loggedInTecnicoId || !dateToUse || !userProfile || !tecnicoScrivente) {
+            console.error("ID tecnico, data, profilo utente o tecnico scrivente mancanti, impossibile creare i dati del report.");
             return null;
         }
-
-        const baseData: Omit<Rapportino, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'isLocked' | 'createdBy'> = {
+    
+        const naveSelezionata = navi.find(n => n.id === state.naveId);
+        const oreLavoroTotali = state.dettaglioOreTecnici.reduce((acc, d) => acc + (d.ore || 0), 0);
+    
+        const baseData: Omit<Rapportino, 'id' | 'createdAt' | 'updatedAt' | 'isLocked' | 'createdBy' | 'version' | 'isDeleted' | 'isOffline' | 'attivita'> = {
             data: Timestamp.fromDate(dateToUse),
             nome: `Rapportino del ${format(dateToUse, 'dd-MM-yyyy')}`,
             tecnicoId: loggedInTecnicoId,
-            tecnicoScriventeId: loggedInTecnicoId, 
+            tecnicoScriventeId: loggedInTecnicoId,
             presenze: Array.from(new Set(state.dettaglioOreTecnici.map(d => d.tecnicoId))),
             tipoGiornataId: state.tipoGiornataId,
-            giornataId: state.tipoGiornataId, 
-            includeTrasferta: state.includeTrasferta,
-            trasfertaId: state.includeTrasferta ? state.trasfertaId : undefined,
-            naveId: state.naveId || undefined,
-            luogoId: state.luogoId || undefined,
-            veicoloId: state.veicoloId || undefined,
+            trasfertaId: state.includeTrasferta ? state.trasfertaId : '',
+            naveId: state.naveId || '',
+            luogoId: state.luogoId || '',
+            veicoloId: state.veicoloId || '',
             lavoroEseguito: state.lavoroEseguito.trim(),
-            descrizioneBreve: state.descrizioneBreve,
-            materialiImpiegati: state.materialiImpiegati,
-            ordineLavoro: state.ordineLavoro,
+            descrizioneBreve: state.descrizioneBreve.trim(),
+            materialiImpiegati: state.materialiImpiegati.trim(),
+            ordineLavoro: state.ordineLavoro.trim(),
             dettaglioOreTecnici: state.dettaglioOreTecnici,
-            firmaFirmatarioNome: state.firmaFirmatarioNome,
-            firmaFirmatarioSocieta: state.firmaFirmatarioSocieta,
-            firmaVettoriale: state.firmaVettoriale,
+            firmaFirmatarioNome: state.firmaFirmatarioNome.trim(),
+            firmaFirmatarioSocieta: state.firmaFirmatarioSocieta.trim(),
+            firmaVettoriale: state.firmaVettoriale || '',
+            includeTrasferta: state.includeTrasferta,
+            
+            // Aggiunta delle proprietà mancanti
+            clienteId: naveSelezionata?.clienteId || '',
+            dittaId: tecnicoScrivente.dittaId,
+            completed: false, // Valore predefinito
+            userId: userProfile.userId,
+            oreLavoro: oreLavoroTotali,
         };
-
+    
         const now = Timestamp.now();
-
+    
         if (isEditMode && state.originalReport) {
             return {
                 ...baseData,
-                id: state.originalReport.id,
+                id: state.originalReport.id || '',
                 createdAt: state.originalReport.createdAt, 
-                createdBy: state.originalReport.createdBy, 
+                createdBy: state.originalReport.createdBy || '', 
                 updatedAt: now,
                 isLocked: state.originalReport.isLocked, 
                 version: (state.originalReport.version || 1) + 1, 
@@ -376,10 +377,7 @@ export const useReportForm = () => {
                     
                     const entityId = `local-${uuidv4()}`;
                     const finalData = { ...dataToSave, id: entityId };
-
-                    // Salva immediatamente nel DB locale per visibilità UI
                     await db.rapportini.put(finalData as Rapportino);
-
                     await aggiungiAllaCoda({ type: 'rapportino', action: 'create', entityId, payload: removeUndefinedKeys(dataToSave) });
                 }
                 showSnackbar(`Creati ${days.length} rapportini!`, "success");
@@ -391,11 +389,7 @@ export const useReportForm = () => {
                 const entityId = dataToSave.id || `local-${uuidv4()}`;
                 
                 const finalData = { ...dataToSave, id: entityId };
-
-                // Salva immediatamente nel DB locale per visibilità UI
                 await db.rapportini.put(finalData as Rapportino);
-
-                // Aggiungi alla coda di sincronizzazione
                 await aggiungiAllaCoda({ type: 'rapportino', action: actionType, entityId, payload: removeUndefinedKeys(dataToSave) });
                 
                 showSnackbar(isEditMode ? "Rapportino aggiornato!" : "Rapportino creato!", "success");
@@ -438,7 +432,7 @@ export const useReportForm = () => {
         nuoviTecniciSelezionati.forEach(tecnico => {
             const existing = state.dettaglioOreTecnici.find(d => d.tecnicoId === tecnico.id);
             const nome = `${tecnico.cognome} ${tecnico.nome}`.trim();
-            newDettagli.push(existing || createInitialDettaglio(tecnico.id, nome, isLavorativo, scriventeDettaglio));
+            newDettagli.push(existing || createInitialDettaglio(tecnico.id || '', nome, isLavorativo, scriventeDettaglio));
         });
         dispatch({ type: 'SET_DETTAGLIO_ORE', payload: newDettagli });
     };
@@ -459,7 +453,9 @@ export const useReportForm = () => {
     }, [state.dettaglioOreTecnici]);
     
     const handleCancel = () => { localStorage.removeItem(FORM_AUTOSAVE_KEY); navigate('/lista-report'); };
-    const removeTecnico = (tecnicoIdToRemove: string) => dispatch({ type: 'SET_DETTAGLIO_ORE', payload: state.dettaglioOreTecnici.filter(d => d.tecnicoId !== tecnicoIdToRemove) });
+    const removeTecnico = (tecnicoIdToRemove: string) => {
+        if(tecnicoIdToRemove) dispatch({ type: 'SET_DETTAGLIO_ORE', payload: state.dettaglioOreTecnici.filter(d => d.tecnicoId !== tecnicoIdToRemove) });
+    }
     
     const handleOpenModal = (tecnico: DettaglioOreData) => dispatch({ type: 'SET_MULTIPLE_FIELDS', payload: { editingTecnico: tecnico, tempDettaglioOre: tecnico, isModalOpen: true }});
     const handleCloseModal = () => setField('isModalOpen', false);

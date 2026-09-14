@@ -61,7 +61,7 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
         const locationName = report.naveNome || report.luogoNome;
 
         const row: ProcessedReportRow = {
-            id: report.id,
+            id: report.id || '',
             isFirstOfDate: isFirst,
             date: report.data,
             activityDescription: `${report.tipoGiornata?.nome || 'N/D'} ${locationName ? `(${locationName})` : ''}`,
@@ -71,7 +71,7 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
         };
 
         const tipoNome = report.tipoGiornata?.nome || 'N/A';
-        const oreGiorno = report.oreGiorno;
+        const oreGiorno = report.oreGiorno || 0;
 
         if (tipoNome.toLowerCase().includes('ordinaria')) {
             const availableOrdinary = 8 - dailyOrdinaryHours[dayKey];

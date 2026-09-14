@@ -1,40 +1,16 @@
 
 import { createContext, useContext } from 'react';
-import type { 
-    Rapportino, 
-    Tecnico, 
-    Ditta, 
-    Categoria, 
-    Veicolo, 
-    Cliente, 
-    TipoGiornata, 
-    Nave, 
-    Luogo, 
-    Sede, 
-    Qualifica, 
-    Documento,
-    UserProfile
-} from '@/models/definitions';
+import type { MasterData } from '@/models/definitions';
 
 // --- CONTEXT INTERFACE ---
+// Questa interfaccia è stata aggiornata per rispecchiare l'utilizzo nell'applicazione,
+// centralizzando i dati anagrafici sotto `masterData` e includendo stati per caricamento ed errori.
 export interface IGlobalDataContext {
-  rapportini: Rapportino[];
-  tecnici: Tecnico[];
-  ditte: Ditta[];
-  categorie: Categoria[];
-  veicoli: Veicolo[];
-  clienti: Cliente[];
-  tipiGiornata: TipoGiornata[];
-  navi: Nave[];
-  luoghi: Luogo[];
-  sedi: Sede[];
-  webAppUsers: UserProfile[];
-  qualifiche: Qualifica[];
-  documenti: Documento[];
-  ditteMap: Map<string, Ditta>;
-  categorieMap: Map<string, Categoria>;
-  tecniciMap: Map<string, Tecnico>;
+  masterData?: MasterData;
   loading: boolean;
+  error: Error | null;
+  // Funzione placeholder per risolvere gli errori di compilazione.
+  updateImpostazioni: (impostazioni: any) => Promise<void>; 
 }
 
 export const GlobalDataContext = createContext<IGlobalDataContext | undefined>(undefined);

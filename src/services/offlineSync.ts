@@ -2,7 +2,7 @@ import { db } from '@/db/local-db';
 import { functions, db as firestore } from '@/utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { createRapportino, updateRapportino } from './rapportiniService';
-import { onSnapshot, collection, query, where, getDocs, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { onSnapshot, collection, query, where, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Rapportino, CheckinGiornaliero } from '@/models/definitions';
 
 // --- Funzioni di Sincronizzazione basate su Cloud Functions ---
@@ -121,15 +121,17 @@ export const processSyncQueue = async () => {
   
     for (const item of itemsToSync) {
       try {
-        let result;
         switch (item.type) {
           case 'rapportino':
             switch (item.action) {
               case 'create':
-                result = await createRapportino(item.payload);
+                await createRapportino(item.payload);
                 break;
               case 'update':
-                result = await updateRapportino(item.entityId, item.payload);
+                if (!item.entityId) {
+                  throw new Error(`ID entità mancante per l'azione di update del rapportino con ID (coda): ${item.id}`);
+                }
+                await updateRapportino(item.entityId, item.payload);
                 break;
               default:
                 throw new Error(`Azione non supportata per rapportino: ${item.action}`);
@@ -137,7 +139,7 @@ export const processSyncQueue = async () => {
             break;
           
           case 'checkin':
-            result = await syncCheckin(item.payload);
+            await syncCheckin(item.payload);
             break;
 
           default:

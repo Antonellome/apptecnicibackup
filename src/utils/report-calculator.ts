@@ -79,11 +79,11 @@ export function calculateMonthlyReportData(
         
         reports.forEach(report => {
             if (report.tipoGiornataId === 't_ordinaria') {
-                oreDaSplittareDelGiorno += report.oreGiorno;
+                oreDaSplittareDelGiorno += report.oreGiorno || 0;
             } else {
                 const voceRiepilogo = riepilogo.dettaglio.get(report.tipoGiornataId);
                 if (voceRiepilogo) {
-                    voceRiepilogo.oreTotali += report.oreGiorno;
+                    voceRiepilogo.oreTotali += report.oreGiorno || 0;
                     voceRiepilogo.giorniSet?.add(dayKey);
                 }
             }
@@ -112,7 +112,7 @@ export function calculateMonthlyReportData(
     }
 
     // 3. FASE FINALE: CALCOLO COSTI E TOTALI
-    riepilogo.oreTotali = enrichedRapportini.reduce((sum, r) => sum + r.oreGiorno, 0);
+    riepilogo.oreTotali = enrichedRapportini.reduce((sum, r) => sum + (r.oreGiorno || 0), 0);
 
     // Calcolo giorni trasferta in modo diretto e robusto
     const giorniTrasfertaUnici = new Set(

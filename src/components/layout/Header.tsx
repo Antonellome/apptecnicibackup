@@ -8,7 +8,7 @@ import { useSyncManager } from '@/hooks/useSyncManager';
 const Header: React.FC = () => {
   const { setMenuOpen } = useContext(AppContext)!;
   const isOnline = useOnlineStatus(); // Usa l'hook corretto
-  const { requestManualSync, pendingSyncCount } = useSyncManager();
+  const { requestManualSync, pendingSyncItems } = useSyncManager();
 
   return (
     <AppBar position="static">
@@ -20,10 +20,10 @@ const Header: React.FC = () => {
           Rapportini App
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {pendingSyncCount > 0 && (
+          {(pendingSyncItems ?? 0) > 0 && (
             <Chip 
               icon={<CloudSync />} 
-              label={`${pendingSyncCount} in coda`} 
+              label={`${pendingSyncItems} in coda`} 
               color="warning" 
               onClick={requestManualSync}
               aria-label="Avvia sincronizzazione manuale"

@@ -34,11 +34,15 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
 
   const { naviMap, luoghiMap } = useMemo(() => {
     const naviMap = (navi || []).reduce((acc: Record<string, string>, n) => {
-        acc[n.id] = n.nome;
+        if (n.id) {
+          acc[n.id] = n.nome;
+        }
         return acc;
     }, {});
     const luoghiMap = (luoghi || []).reduce((acc: Record<string, string>, l) => {
-        acc[l.id] = l.nome;
+        if (l.id) {
+          acc[l.id] = l.nome;
+        }
         return acc;
     }, {});
     return { naviMap, luoghiMap };
@@ -48,7 +52,7 @@ const GeneratedReportView: React.FC<GeneratedReportViewProps> = ({ rapportini, t
     return tecnici.map(tecnico => {
         const reportsForTecnico = rapportini
             .map(r => {
-                if (!r.presenze?.includes(tecnico.id)) return null;
+                if (!tecnico.id || !r.presenze?.includes(tecnico.id)) return null;
                 
                 const dettaglioTecnico = (r.dettaglioOreTecnici || []).find(d => d.tecnicoId === tecnico.id);
                 return dettaglioTecnico ? { ...r, dettaglioTecnico } : null;

@@ -3,127 +3,78 @@ import Dexie, { Table } from 'dexie';
 import {
     Rapportino,
     Cliente,
-    Cantiere,
     Nave,
-    TipoOra,
     TipoGiornata,
     Impostazioni,
     Veicolo,
-    SyncEvent,
     CheckinGiornaliero,
-    UserProfile,
+    Tecnico,
     Luogo,
     Categoria,
     Lavorazione,
     Ditta,
     Qualifica,
     Sistema,
-    Notifica
+    Sede, // Aggiunta
+    Notifica,
+    SyncEvent,
+    UserProfile,
 } from '@/models/definitions';
+
+export interface SyncState {
+    id: string;
+    timestamp: number;
+}
 
 export class MySubClassedDexie extends Dexie {
     rapportini!: Table<Rapportino>;
     clienti!: Table<Cliente>;
-    cantieri!: Table<Cantiere>;
     navi!: Table<Nave>;
-    tipiOra!: Table<TipoOra>;
     tipiGiornata!: Table<TipoGiornata>;
     impostazioni!: Table<Impostazioni>;
     veicoli!: Table<Veicolo>;
-    anagrafiche!: Table<{ id: string, data: any[], timestamp: Date }>;
-    localSyncInfo!: Table<{ id:string, timestamp: number }>;
-    syncQueue!: Table<SyncEvent>;
     checkin_giornalieri!: Table<CheckinGiornaliero>;
-    webAppUsers!: Table<UserProfile & { id: string }>;
-    tecnici!: Table<UserProfile & { id: string }>;
+    tecnici!: Table<Tecnico>;
     luoghi!: Table<Luogo>;
     categorie!: Table<Categoria>;
     lavorazioni!: Table<Lavorazione>;
     ditte!: Table<Ditta>;
-    qualifiche!: Table<Qualifica>;
-    sistemi!: Table<Sistema>;
+    qualifiche!: Table<Qualifica>; // Esisteva già
+    sistemi!: Table<Sistema>;       // Esisteva già
+    sedi!: Table<Sede>;             // Aggiunta
     notifiche!: Table<Notifica>;
-    syncState!: Table<{ id: string; value: any }>; 
-
+    syncQueue!: Table<SyncEvent>; 
+    syncState!: Table<SyncState>;
+    webAppUsers!: Table<UserProfile>;
 
     constructor() {
-        super('rapportini-db');
+        super('rapportini-db-v3'); 
 
-        // Versione 9: Aggiunge la tabella syncState
-        this.version(9).stores({
-            rapportini: '++id, data, tecnicoId, cantiereId, clienteId, isDeleted, tipoGiornataId',
+        // Incremento versione a 2 per applicare il nuovo schema che include TUTTE le tabelle
+        this.version(2).stores({
+            rapportini: '++id, data, tecnicoId, luogoId, clienteId',
             clienti: '++id, nome',
-            cantieri: '++id, clienteId',
             navi: '++id, clienteId, nome',
-            tipiOra: '++id, nome',
             tipiGiornata: '++id, nome',
-            impostazioni: '++id',
-            veicoli: '++id, targa',
-            anagrafiche: '&id',
-            localSyncInfo: '&id',
-            syncQueue: '++id, type, action, syncStatus',
-            checkin_giornalieri: '++id, tecnicoId, tipo, timestampImpostato',
-            webAppUsers: '&id, uid',
-            tecnici: '&id, uid, nome, cognome',
+            impostazioni: '&id',
+            veicoli: '++id, nome',
+            checkin_giornalieri: '++id, data, tecnicoId',
+            tecnici: '&id, userId', 
             luoghi: '++id, nome',
             categorie: '++id, nome',
             lavorazioni: '++id, nome',
             ditte: '++id, nome',
             qualifiche: '++id, nome',
             sistemi: '++id, nome',
+            sedi: '++id, nome', // Aggiunta la definizione della tabella
             notifiche: '++id, isRead',
-            syncState: '&id'
+            syncQueue: '++id, syncStatus',
+            syncState: '&id',
+            webAppUsers: '&id',
         });
-
-        // Versione 8: Aggiunge l'indice su 'isRead' per la tabella notifiche
-        this.version(8).stores({
-            rapportini: '++id, data, tecnicoId, cantiereId, clienteId, isDeleted, tipoGiornataId',
-            clienti: '++id, nome',
-            cantieri: '++id, clienteId',
-            navi: '++id, clienteId, nome',
-            tipiOra: '++id, nome',
-            tipiGiornata: '++id, nome',
-            impostazioni: '++id',
-            veicoli: '++id, targa',
-            anagrafiche: '&id',
-            localSyncInfo: '&id',
-            syncQueue: '++id, type, action, syncStatus',
-            checkin_giornalieri: '++id, tecnicoId, tipo, timestampImpostato',
-            webAppUsers: '&id, uid',
-            tecnici: '&id, uid, nome, cognome',
-            luoghi: '++id, nome',
-            categorie: '++id, nome',
-            lavorazioni: '++id, nome',
-            ditte: '++id, nome',
-            qualifiche: '++id, nome',
-            sistemi: '++id, nome',
-            notifiche: '++id, isRead' 
-        });
-
-        // Mantengo le versioni precedenti per garantire la migrazione
-        this.version(7).stores({
-            rapportini: '++id, data, tecnicoId, cantiereId, clienteId, isDeleted, tipoGiornataId',
-            clienti: '++id, nome',
-            cantieri: '++id, clienteId',
-            navi: '++id, clienteId, nome',
-            tipiOra: '++id, nome',
-            tipiGiornata: '++id, nome',
-            impostazioni: '++id',
-            veicoli: '++id, targa',
-            anagrafiche: '&id',
-            localSyncInfo: '&id',
-            syncQueue: '++id, type, action, syncStatus',
-            checkin_giornalieri: '++id, tecnicoId, tipo, timestampImpostato',
-            webAppUsers: '&id, uid',
-            tecnici: '&id, uid, nome, cognome',
-            luoghi: '++id, nome',
-            categorie: '++id, nome',
-            lavorazioni: '++id, nome',
-            ditte: '++id, nome',
-            qualifiche: '++id, nome',
-            sistemi: '++id, nome',
-            notifiche: '++id, letta' 
-        });
+        
+        // La vecchia versione viene lasciata per gestire la migrazione, ma vuota.
+        this.version(1).stores({});
     }
 }
 

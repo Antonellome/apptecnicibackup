@@ -1,5 +1,4 @@
 
-import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 // Layout
@@ -50,6 +49,5 @@ export const router = createBrowserRouter([
 ], {
     future: {
         v7_relativeSplatPath: true,
-        v7_startTransition: true,
     },
 });

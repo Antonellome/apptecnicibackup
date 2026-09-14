@@ -1,6 +1,6 @@
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db as firestoreDb } from '@/firebase';
-import { db as localDb, SyncState } from '@/db/local-db';
+import { db as localDb } from '@/db/local-db';
 import { rapportinoConverter } from '@/utils/converters';
 
 /**
@@ -12,8 +12,7 @@ export const syncAnagraficheAndRapportiniFromRemote = async (): Promise<void> =>
         console.log('SYNC_DOWNLOAD: Avvio sincronizzazione dati da Firestore.');
 
         const lastSyncEntry = await localDb.syncState.get('lastSync');
-        // CORREZIONE: Legge la proprietà 'value' invece di 'timestamp'.
-        const lastSyncTimestampValue = lastSyncEntry ? lastSyncEntry.value : 0;
+        const lastSyncTimestampValue = lastSyncEntry ? lastSyncEntry.timestamp : 0;
         const lastSyncTimestamp = new Date(lastSyncTimestampValue);
         console.log(`SYNC_DOWNLOAD: Ultima sincronizzazione avvenuta il: ${lastSyncTimestamp.toISOString()}`);
 
@@ -33,8 +32,7 @@ export const syncAnagraficheAndRapportiniFromRemote = async (): Promise<void> =>
             await localDb.rapportini.bulkPut(rapportiniRemoti);
             console.log('SYNC_DOWNLOAD: Rapportini salvati nel database locale.');
             
-            // CORREZIONE: Aggiorna il timestamp usando la proprietà 'value' e il metodo getTime().
-            await localDb.syncState.put({ id: 'lastSync', value: now.getTime() } as SyncState);
+            await localDb.syncState.put({ id: 'lastSync', timestamp: now.getTime() });
             console.log(`SYNC_DOWNLOAD: Timestamp di sincronizzazione aggiornato a: ${now.toISOString()}`);
         } else {
             console.log('SYNC_DOWNLOAD: Nessun nuovo rapportino da scaricare.');

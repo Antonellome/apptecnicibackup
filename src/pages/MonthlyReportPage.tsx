@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useContext } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -29,7 +29,7 @@ import MonthlyCalendarView from '@/components/Rapportini/MonthlyCalendarView';
 import PdfPreviewModal from '@/components/Rapportini/PdfPreviewModal';
 import MonthlyReportSkeleton from '@/components/Rapportini/MonthlyReportSkeleton';
 import { toDateSafe } from '@/utils/dateUtils';
-import { GlobalDataContext } from '@/contexts/GlobalDataContext'; // --- IMPORTA IL CONTESTO CORRETTO ---
+import { useGlobalData } from '@/hooks/useGlobalData'; 
 
 interface MonthlyReportContentProps {
     userProfile: UserProfile;
@@ -51,8 +51,6 @@ const MonthlyReportContent = ({
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [clickCount, setClickCount] = useState(0);
     const [showCost, setShowCost] = useState(false);
-
-    // Rimossa la diagnostica non più necessaria
 
     const rapportiniLocali = useLiveQuery(() => {
         if (!userProfile) return [];
@@ -228,12 +226,10 @@ const MonthlyReportContent = ({
 
 const MonthlyReportPage = () => {
     const { userProfile } = useAuth();
-    // --- USA IL CONTESTO GLOBALE, NON L'HOOK OBSOLETO ---
-    const { masterData, loading } = useContext(GlobalDataContext);
+    const { masterData, loading } = useGlobalData();
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     
-    // --- GESTIONE DELLO STATO DI CARICAMENTO --- 
     if (loading || !userProfile || !masterData) {
         return <FullScreenLoader />;
     }

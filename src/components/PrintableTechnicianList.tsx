@@ -30,15 +30,15 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
     const { masterData } = useMasterData();
 
     const ditteMap = useMemo(() => 
-        masterData?.ditte.reduce((acc, d) => {
-            acc.set(d.id, d);
+        masterData?.ditte.reduce((acc: Map<string, Ditta>, d: Ditta) => {
+            if (d.id) acc.set(d.id, d);
             return acc;
         }, new Map<string, Ditta>()) 
     , [masterData?.ditte]);
 
     const categorieMap = useMemo(() => 
-        masterData?.categorie.reduce((acc, c) => {
-            acc.set(c.id, c);
+        masterData?.categorie.reduce((acc: Map<string, Categoria>, c: Categoria) => {
+            if (c.id) acc.set(c.id, c);
             return acc;
         }, new Map<string, Categoria>()) 
     , [masterData?.categorie]);
@@ -75,8 +75,8 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
             }
         }
         
-        if (field.name === 'dittaId') return ditteMap?.get(value as string)?.nome || null;
-        if (field.name === 'categoriaId') return categorieMap?.get(value as string)?.nome || null;
+        if (field.name === 'dittaId' && typeof value === 'string') return ditteMap?.get(value)?.nome || '';
+        if (field.name === 'categoriaId' && typeof value === 'string') return categorieMap?.get(value)?.nome || '';
         
         if (field.type === 'select' && field.options && field.options.length > 0) {
             const foundOption = field.options.find(opt => opt.value === String(value));
@@ -88,8 +88,8 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
     };
 
     const nameFields = ['nome', 'cognome'];
-    const noteField = fields.find(f => f.name === 'noteInterne');
-    const otherFields = fields.filter(f => !nameFields.includes(f.name) && f.name !== 'noteInterne');
+    const noteField = fields.find(f => f.name === 'note');
+    const otherFields = fields.filter(f => f.name && !nameFields.includes(f.name) && f.name !== 'note');
 
     return (
         <Box>
@@ -101,8 +101,9 @@ const PrintableTechnicianList = ({ data, fields }: PrintableTechnicianListProps)
                 </Box>
             </Box>
             {data.map((tecnico, index) => {
-                const fullName = `${tecnico.cognome || ''}, ${tecnico.nome || ''}`.replace(/^,|,$/g, '').trim();
-                const noteValue = tecnico.noteInterne as string;
+                if (!tecnico.id) return null;
+                const fullName = `${tecnico.cognome || ''}, ${tecnico.nome || ''}`.trim().replace(/^,|,$/g, '');
+                const noteValue:any = tecnico.note;
 
                 return (
                     <Box key={tecnico.id} sx={{ pageBreakInside: 'avoid', pt: 1, pb: 1 }}>

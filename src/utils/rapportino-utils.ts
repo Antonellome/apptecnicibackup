@@ -7,7 +7,6 @@ export const getInitialRapportinoState = (tecnicoId: string, tecnicoNome: string
     data: new Date(),
     tecnicoId: tecnicoId,
     tipoGiornataId: '',
-    giornataId: '',
     dettaglioOreTecnici: [{
         tecnicoId: tecnicoId,
         nome: tecnicoNome,
@@ -25,10 +24,10 @@ export const getInitialRapportinoState = (tecnicoId: string, tecnicoNome: string
     lavoroEseguito: '',
     materialiImpiegati: '',
     includeTrasferta: false,
-    trasfertaId: undefined,
+    trasfertaId: '',
     firmaFirmatarioNome: '',
     firmaFirmatarioSocieta: '',
-    firmaVettoriale: null,
+    firmaVettoriale: '',
     createdAt: new Date(),
     updatedAt: new Date(),
     createdBy: tecnicoId,
@@ -36,6 +35,12 @@ export const getInitialRapportinoState = (tecnicoId: string, tecnicoNome: string
     isLocked: false,
     isMultiDay: false,
     tecnicoScriventeId: tecnicoId,
+    clienteId: '',
+    dittaId: '',
+    ordineLavoro: '',
+    completed: false,
+    userId: '',
+    oreLavoro: 0,
 });
 
 
