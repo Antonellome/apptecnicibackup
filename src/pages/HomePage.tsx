@@ -9,14 +9,18 @@ import ArticleIcon from '@mui/icons-material/Article';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import WhereToVoteIcon from '@mui/icons-material/WhereToVote';
-import CloudQueueIcon from '@mui/icons-material/CloudQueue'; // Importa l'icona
-import { useSyncManager } from '@/hooks/useSyncManager'; // Importa l'hook
+import CloudQueueIcon from '@mui/icons-material/CloudQueue';
+import { useSyncManager } from '@/hooks/useSyncManager';
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
-    const unreadCount = useUnreadNotificationsCount();
-    const { pendingSyncItems } = useSyncManager(); // Ottieni il conteggio
+    // Recuperiamo sia l'utente completo che il profilo specifico
+    const { user, userProfile } = useAuth();
+    
+    // Passiamo il PROFILO UTENTE all'hook, come richiesto dalla nuova versione
+    const unreadCount = useUnreadNotificationsCount(userProfile);
+    
+    const { pendingSyncItems } = useSyncManager();
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 

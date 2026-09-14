@@ -32,7 +32,7 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
       {children}
       <Snackbar 
         open={open} 
-        autoHideDuration={action ? null : 6000} 
+        autoHideDuration={action ? null : 2000} 
         onClose={handleClose}
         action={action}
       >

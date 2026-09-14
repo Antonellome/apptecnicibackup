@@ -16,6 +16,8 @@ const abbreviate = (name: string): string => {
     return name.substring(0, 4) + '.';
 }
 
+// RIMOZIONE: Funzione getTripAbbreviation non più necessaria
+
 interface ProcessedReportRow {
     id: string;
     isFirstOfDate: boolean;
@@ -24,25 +26,31 @@ interface ProcessedReportRow {
     oreOrdinarie: number;
     oreStraordinarie: number;
     altreOre: Record<string, number>;
+    trasferta: string | null; 
 }
 
 const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] }) => {
 
   const { processedRows, totals, otherHourTypes, grandTotal } = useMemo(() => {
     if (!rapportini || rapportini.length === 0) {
-      return { processedRows: [], totals: { oreOrdinarie: 0, oreStraordinarie: 0, altreOre: {} }, otherHourTypes: [], grandTotal: 0 };
+        // RIMOZIONE: `trips` e `tripTypes` rimossi dall'oggetto di ritorno
+        return { processedRows: [], totals: { oreOrdinarie: 0, oreStraordinarie: 0, altreOre: {} }, otherHourTypes: [], grandTotal: 0 };
     }
 
     const sortedRapportini = [...rapportini].sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
 
     const allOtherTypes = new Set<string>();
+    // RIMOZIONE: `allTripTypes` non è più necessario
+
     sortedRapportini.forEach(r => {
         const tipoNome = r.tipoGiornata?.nome || 'N/A';
         if (!tipoNome.toLowerCase().includes('ordinaria') && !tipoNome.toLowerCase().includes('straordinario')) {
             allOtherTypes.add(tipoNome);
         }
+        // RIMOZIONE: Logica di `allTripTypes` non più necessaria
     });
     const sortedOtherHourTypes = Array.from(allOtherTypes).sort();
+    // RIMOZIONE: `sortedTripTypes` non più necessario
 
     const finalRows: ProcessedReportRow[] = [];
     const dailyOrdinaryHours: Record<string, number> = {};
@@ -57,7 +65,6 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
         const isFirst = dayKey !== lastDate;
         lastDate = dayKey;
 
-        // CORREZIONE: Usa sia naveNome che luogoNome per la descrizione
         const locationName = report.naveNome || report.luogoNome;
 
         const row: ProcessedReportRow = {
@@ -68,6 +75,8 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
             oreOrdinarie: 0,
             oreStraordinarie: 0,
             altreOre: {},
+            // `trasferta` viene mantenuto per logica futura se necessario, ma non usato per le colonne
+            trasferta: report.trasferta?.nome ? report.trasferta.nome : null,
         };
 
         const tipoNome = report.tipoGiornata?.nome || 'N/A';
@@ -88,6 +97,9 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
         }
         finalRows.push(row);
     }
+    
+    // CORREZIONE: Aggiunto un tipo esplicito all'accumulatore per risolvere l'errore TS7053
+    const initialTotals: { oreOrdinarie: number; oreStraordinarie: number; altreOre: Record<string, number> } = { oreOrdinarie: 0, oreStraordinarie: 0, altreOre: {} };
 
     const finalTotals = finalRows.reduce((acc, row) => {
         acc.oreOrdinarie += row.oreOrdinarie;
@@ -96,10 +108,13 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
             acc.altreOre[key] = (acc.altreOre[key] || 0) + row.altreOre[key];
         }
         return acc;
-    }, { oreOrdinarie: 0, oreStraordinarie: 0, altreOre: {} as Record<string, number> });
+    }, initialTotals);
+
+    // RIMOZIONE: Tutta la logica di calcolo dei `tripTotals` è stata eliminata.
 
     const calculatedGrandTotal = finalTotals.oreOrdinarie + finalTotals.oreStraordinarie + Object.values(finalTotals.altreOre).reduce((a, b) => a + b, 0);
 
+    // RIMOZIONE: `tripTypes` rimosso dall'oggetto di ritorno
     return { processedRows: finalRows, totals: finalTotals, otherHourTypes: sortedOtherHourTypes, grandTotal: calculatedGrandTotal };
   }, [rapportini]);
 
@@ -115,6 +130,7 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
     return style;
   }
 
+  // RIMOZIONE: `tripTypes` rimosso dal calcolo di `totalColumns`
   const totalColumns = 2 + 2 + otherHourTypes.length;
 
   return (
@@ -129,6 +145,7 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
               <TableCell align="right">Ord.</TableCell>
               <TableCell align="right">Straord.</TableCell>
               {otherHourTypes.map(tipo => <TableCell key={tipo} align="right">{abbreviate(tipo)}</TableCell>)}
+              {/* RIMOZIONE: Colonne dei trip types non più renderizzate */}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -150,6 +167,7 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
                         <Typography variant="body2" sx={{ color: '#fff' }}>{(row.altreOre[tipo] && row.altreOre[tipo] > 0) ? (row.altreOre[tipo]).toFixed(2) : '-'}</Typography>
                     </TableCell>
                 ))}
+                 {/* RIMOZIONE: Colonne dei dati dei trip non più renderizzate */}
               </TableRow>
             ))}
           </TableBody>
@@ -159,6 +177,7 @@ const DailyBreakdownTable = ({ rapportini }: { rapportini: EnrichedRapportino[] 
                 <TableCell align="right"><Typography variant="subtitle2">{totals.oreOrdinarie.toFixed(2)}</Typography></TableCell>
                 <TableCell align="right"><Typography variant="subtitle2">{totals.oreStraordinarie.toFixed(2)}</Typography></TableCell>
                 {otherHourTypes.map(tipo => <TableCell key={tipo} align="right"><Typography variant="subtitle2">{(totals.altreOre[tipo] || 0).toFixed(2)}</Typography></TableCell>)}
+                {/* RIMOZIONE: Colonne dei totali dei trip non più renderizzate */}
             </TableRow>
             <TableRow sx={{ '& > *': { fontWeight: 'bold', backgroundColor: '#212121', color: '#fff' } }}>
                 <TableCell colSpan={totalColumns} align="center">

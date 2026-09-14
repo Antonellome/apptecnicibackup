@@ -201,7 +201,7 @@ const CheckinPage = () => {
                     <Box ref={scrollBoxRef} component='ul' sx={{ m: 0, pl: '20px', maxHeight: '110px', overflowY: 'auto', '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' } }}>
                         {recentEvents.map((e: any) => {
                             const nome = e.naveId ? navi?.find(n=>n.id === e.naveId)?.nome : luoghi?.find(l=>l.id === e.luogoId)?.nome;
-                            return (<li key={e.id}><b>{e.tipo.replace(/_/g, ' ')}</b> alle {new Date(e.timestampImpostato).toLocaleString()} {nome ? `- ${nome}` : ''}</li>);
+                            return (<li key={e.id}><b>{e.tipo.replace(/_/g, ' ')}</b>alle {new Date(e.timestampImpostato).toLocaleString()} {nome ? `- ${nome}` : ''}</li>);
                         })}
                     </Box>
                 </Alert>

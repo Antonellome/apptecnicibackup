@@ -18,7 +18,8 @@ export const markNotificheAsRead = async (notificaIds: string[]): Promise<void> 
 
     notificaIds.forEach(id => {
         const notificaRef = doc(notificheCollectionRef, id);
-        batch.update(notificaRef, { letta: true });
+        // CORREZIONE: Aggiorna il campo corretto `isRead` invece di `letta`.
+        batch.update(notificaRef, { isRead: true });
     });
 
     try {

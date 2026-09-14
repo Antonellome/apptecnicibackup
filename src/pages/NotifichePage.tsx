@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useMemo, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useContext, useCallback } from 'react';
 import {
     Container,
     Typography,
     CircularProgress,
     Alert,
     Button,
-    Grid,
     Box,
-    Chip
+    AlertTitle,
+    Stack
 } from '@mui/material';
-import { collection, query, where, onSnapshot, Query } from 'firebase/firestore';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db as firestore } from '@/utils/firebase';
 import { markNotificheAsRead } from '@/services/notificationService';
 import { NotificationItem } from '@/components/notifiche/NotificationItem';
@@ -17,205 +17,133 @@ import type { Notifica } from '@/models/definitions';
 import { AuthContext } from '@/contexts/AuthContextDefinition';
 
 const DISMISSED_STORAGE_KEY = 'dismissed_notifications';
+const DELETED_STORAGE_KEY = 'deleted_notifications';
 
-const getDismissedNotifiche = (): string[] => {
+const getStoredIds = (key: string): string[] => {
     try {
-        const stored = localStorage.getItem(DISMISSED_STORAGE_KEY);
+        const stored = localStorage.getItem(key);
         return stored ? JSON.parse(stored) : [];
     } catch (error) {
-        console.error("Errore nel leggere le notifiche nascoste:", error);
+        console.error(`Errore lettura da localStorage (${key}):`, error);
         return [];
     }
 };
 
 const NotifichePage: React.FC = () => {
+    // CORREZIONE: Gestione sicura del contesto che potrebbe essere undefined
     const authContext = useContext(AuthContext);
     const userProfile = authContext?.userProfile;
 
     const [notifiche, setNotifiche] = useState<Notifica[]>([]);
-    const [dismissedIds, setDismissedIds] = useState<string[]>(getDismissedNotifiche);
+    const [dismissedIds, setDismissedIds] = useState<string[]>(() => getStoredIds(DISMISSED_STORAGE_KEY));
+    const [deletedIds, setDeletedIds] = useState<string[]>(() => getStoredIds(DELETED_STORAGE_KEY));
     
-    // Stati per la gestione della connessione e del caricamento
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    // Gestione dello stato online/offline
-    useEffect(() => {
-        const handleOnline = () => {
-            setIsOnline(true);
-            setError(null); // Pulisce gli errori di rete precedenti
-        };
-        const handleOffline = () => setIsOnline(false);
-
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-        };
-    }, []);
 
     useEffect(() => {
         if (!userProfile?.tecnicoId) {
             setLoading(false);
-            setError("Profilo utente non caricato o incompleto. Impossibile caricare le notifiche.");
-            return () => {}; // Ritorna una funzione vuota per coerenza
-        }
-
-        // Se siamo offline, non tentare di caricare le notifiche
-        if (!isOnline) {
-            setError("Nessuna connessione di rete. Le notifiche verranno mostrate quando tornerai online.");
-            setLoading(false);
-            return () => {};
+            setError("Profilo utente non disponibile.");
+            return;
         }
 
         setLoading(true);
-        setError(null); // Resetta l'errore all'inizio del caricamento
+        const q = query(collection(firestore, "notifiche"));
 
-        const notificheCollection = collection(firestore, 'notifiche');
-        const allNotifiche: { [id: string]: Notifica } = {};
-        const queries: Query[] = [];
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const serverNotifiche = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notifica));
+            
+            const userNotifiche = serverNotifiche.filter(n => 
+                n.target === 'all' || 
+                n.tecnicoId === userProfile.tecnicoId ||
+                (n.categoriaId && n.categoriaId === userProfile.categoriaId)
+            ).sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
 
-        queries.push(query(notificheCollection, where('tecnicoId', '==', userProfile.tecnicoId)));
-        if (userProfile.categoriaId) {
-            queries.push(query(notificheCollection, where('categoriaId', '==', userProfile.categoriaId)));
-        }
-        queries.push(query(notificheCollection, where('target', '==', 'all')));
-
-        const processSnapshot = (snapshot: any) => {
-            snapshot.docs.forEach((doc: any) => {
-                if (doc.data().createdAt) {
-                    allNotifiche[doc.id] = { id: doc.id, ...doc.data() } as Notifica;
-                }
-            });
-
-            const mergedList = Object.values(allNotifiche).sort((a, b) => {
-                const timeA = a.createdAt?.toMillis() || 0;
-                const timeB = b.createdAt?.toMillis() || 0;
-                return timeB - timeA;
-            });
-
-            setNotifiche(mergedList);
+            setNotifiche(userNotifiche);
             setLoading(false);
-        };
-        
-        const handleError = (err: Error) => {
-            console.error("Errore durante l'ascolto delle notifiche:", err);
-            if (!isOnline) {
-                 setError("Nessuna connessione di rete. Riconnessione automatica in corso...");
-            } else {
-                 setError("Impossibile caricare le notifiche. Il servizio potrebbe essere non disponibile.");
-            }
+        }, (err) => {
+            console.error("Errore ricezione notifiche:", err);
+            setError("Impossibile caricare le notifiche.");
             setLoading(false);
-        };
+        });
 
-        const unsubscribers = queries.map(q => onSnapshot(q, processSnapshot, handleError));
-
-        return () => {
-            unsubscribers.forEach(unsub => unsub());
-        };
-
-    }, [userProfile, isOnline]); // Aggiunto isOnline alle dipendenze
+        return () => unsubscribe();
+    }, [userProfile]);
 
     useEffect(() => {
         localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(dismissedIds));
     }, [dismissedIds]);
 
-    const handleMarkAsRead = async (id: string) => {
-        const originalNotifiche = [...notifiche];
-        setNotifiche(prev => prev.map(n => n.id === id ? { ...n, letta: true } : n));
+    useEffect(() => {
+        localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify(deletedIds));
+    }, [deletedIds]);
+
+    const handleMarkAsRead = useCallback(async (id: string) => {
+        // Aggiornamento ottimistico: UI aggiornata subito
+        setNotifiche(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
         try {
             await markNotificheAsRead([id]);
         } catch (error) {
-            console.error("Errore server su markAsRead:", error);
-            setNotifiche(originalNotifiche);
-            setError("Impossibile segnare la notifica come letta.");
+            console.error("DB Error - Mark as read failed:", error);
+            // Rollback in caso di fallimento
+            setNotifiche(prev => prev.map(n => n.id === id ? { ...n, isRead: false } : n));
         }
-    };
+    }, []);
 
-    const handleMarkAllAsRead = async () => {
-        const unreadIds = notifiche.filter(n => !n.letta).map(n => n.id);
-        if (unreadIds.length === 0) return;
-        
-        const originalNotifiche = [...notifiche];
-        setNotifiche(prev => prev.map(n => ({ ...n, letta: true })));
+    const handleDismiss = useCallback((id: string) => {
+        setDismissedIds(prev => [...new Set([...prev, id])]);
+    }, []);
 
-        try {
-            await markNotificheAsRead(unreadIds);
-        } catch (error) {
-            console.error("Errore server su markAllAsRead:", error);
-            setNotifiche(originalNotifiche);
-            setError("Impossibile segnare tutte le notifiche come lette.");
-        }
-    };
-
-    const handleDismiss = (id: string) => {
-        setDismissedIds(prev => [...prev, id]);
-    };
-
-    const handleRestoreDismissed = () => {
+    const handleRestoreDismissed = useCallback(() => {
         setDismissedIds([]);
-    };
+    }, []);
+    
+    const handleClearDismissed = useCallback(() => {
+        // Sposta gli ID da "nascosti" a "cancellati"
+        setDeletedIds(prev => [...new Set([...prev, ...dismissedIds])]);
+        // Svuota la lista dei nascosti
+        setDismissedIds([]);
+    }, [dismissedIds]);
 
     const visibleNotifiche = useMemo(() => {
-        return notifiche.filter(n => !dismissedIds.includes(n.id));
-    }, [notifiche, dismissedIds]);
-
-    const unreadCount = useMemo(() => {
-        return visibleNotifiche.filter(n => !n.letta).length;
-    }, [visibleNotifiche]);
+        // Mostra solo le notifiche che NON sono né nascoste né cancellate
+        return notifiche.filter(n => !dismissedIds.includes(n.id) && !deletedIds.includes(n.id));
+    }, [notifiche, dismissedIds, deletedIds]);
 
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
-                Centro Notifiche
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                {userProfile ? `Ciao ${userProfile.nome}, qui trovi le tue comunicazioni.` : 'Qui trovi le tue comunicazioni.'}
-            </Typography>
+            <Typography variant="h4" gutterBottom>Centro Notifiche</Typography>
+            
+            {dismissedIds.length > 0 && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    <AlertTitle>Hai {dismissedIds.length} notifiche nascoste.</AlertTitle>
+                    <Stack direction="row" spacing={1}>
+                        <Button onClick={handleRestoreDismissed} color="inherit" size="small">Ripristina</Button>
+                        <Button onClick={handleClearDismissed} color="inherit" size="small">Cancella</Button>
+                    </Stack>
+                </Alert>
+            )}
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2 }}>
-                <Box>
-                    {dismissedIds.length > 0 && (
-                        <Chip 
-                            label={`Hai ${dismissedIds.length} notifiche nascoste`}
-                            onDelete={handleRestoreDismissed} 
-                            color="primary"
-                            variant="outlined"
-                        />
-                    )}
-                </Box>
-                <Box>
-                    <Button onClick={handleMarkAllAsRead} disabled={loading || unreadCount === 0} variant="text">
-                        Segna tutte come lette
-                    </Button>
-                </Box>
-            </Box>
-
-            {error && <Alert severity={isOnline ? "error" : "warning"} sx={{ mb: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error">{error}</Alert>}
 
             {loading ? (
-                <Grid container justifyContent="center" sx={{ height: '50vh' }}> <CircularProgress /> </Grid>
-            ) : !loading && !error && visibleNotifiche.length === 0 ? (
-                <Grid container direction="column" alignItems="center" justifyContent="center" sx={{ py: 8, textAlign: 'center' }}>
+                <Box display="flex" justifyContent="center" py={5}><CircularProgress /></Box>
+            ) : visibleNotifiche.length === 0 ? (
+                <Box textAlign="center" py={5}>
                     <Typography variant="h6" color="text.secondary">Non ci sono nuove notifiche.</Typography>
-                    <Typography color="text.secondary">Se hai nascosto delle notifiche, puoi ripristinarle.</Typography>
-                </Grid>
+                </Box>
             ) : (
-                <Grid container spacing={2} sx={{ width: '100%' }}>
+                <Stack spacing={1.5}>
                     {visibleNotifiche.map((notification) => (
-                        <Grid key={notification.id} size={12}>
-                            <NotificationItem
-                                notification={notification}
-                                onMarkAsRead={handleMarkAsRead}
-                                onDismiss={handleDismiss}
-                            />
-                        </Grid>
-                    ))
-                }
-                </Grid>
+                        <NotificationItem
+                            key={notification.id}
+                            notification={notification}
+                            onMarkAsRead={handleMarkAsRead}
+                            onDismiss={handleDismiss}
+                        />
+                    ))}
+                </Stack>
             )}
         </Container>
     );
