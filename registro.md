@@ -38,33 +38,40 @@ Questo documento traccia l'evoluzione dell'applicazione, evidenziando le decisio
 ### Problema 2: Notifiche Incomplete
 
 - **Sintomo:** I tecnici ricevono solo le notifiche dirette, ma non quelle inviate al loro gruppo di appartenenza (categoria) o a tutti.
-- **Causa Radice:** La query di recupero notifiche è errata e filtra solo per `tecnicoId`. Inoltre, l'app non scarica le informazioni sulla categoria di appartenenza del tecnico.
-
-### Investigazione e Soluzione
-
-- **Analisi Modello Dati:** L'analisi del file `src/models/definitions.ts` ha rivelato che l'identificativo della categoria di un tecnico (`categoriaId`) è memorizzato direttamente nel suo profilo (`Tecnico`).
-- **Conclusione:** Non sono necessarie tabelle di collegamento intermedie come `tecniciQualifiche`. La soluzione risiede nel sincronizzare le anagrafiche corrette.
+- **Causa Radice:** La query di recupero notifiche è errata e filtra solo per `tecnicoId`.
 
 ### Piano d'Azione Definitivo (Client-Side)
 
-1.  **Identificare il Responsabile:** Individuato il service `offlineSync.ts` come gestore della sincronizzazione.
-2.  **Definire le Anagrafiche Obbligatorie:** La lista completa e definitiva delle collezioni da sincronizzare è:
-    - `navi`
-    - `luoghi`
-    - `categorie`
-    - `tipiGiornata`
-    - `veicoli`
-    - `tecnici`
-3.  **Estendere la Sincronizzazione:** Modificato la funzione `syncAllAnagrafiche` in `offlineSync.ts` per scaricare **tutte e sei** le collezioni elencate.
-4.  **Correggere la Logica Notifiche:** Modificato la query in `NotifichePage.tsx` per includere le notifiche per categoria e quelle globali, utilizzando il `categoriaId` ottenuto dal profilo del tecnico.
-5.  **Risoluzione Errori di Refactoring:** Corretti molteplici errori di importazione causati da ipotesi errate sui nomi e percorsi dei file. Questo ha portato all'aggiunta della Regola Fondamentale n.4.
+1.  **Estendere la Sincronizzazione:** Modificato la funzione `syncAllAnagrafiche` in `offlineSync.ts` per scaricare tutte le anagrafiche necessarie.
+2.  **Correggere la Logica Notifiche:** Modificato la query in `NotifichePage.tsx` per includere le notifiche per categoria e quelle globali.
 
 ---
 
 ## Fase 4: Completamento Sincronizzazione e Notifiche
 
 - **Stato:** Completata.
-- **Intervento:** Sono state implementate le soluzioni definite nella Fase 3.
-- **Risultato 1 (Sincronizzazione):** La funzione `syncAllAnagrafiche` in `src/services/offlineSync.ts` è stata aggiornata per scaricare tutte e sei le collezioni anagrafiche necessarie. Il bug delle etichette `[Tipo sconosciuto]` è stato risolto.
-- **Risultato 2 (Notifiche):** La pagina `src/pages/NotifichePage.tsx` è stata modificata per eseguire una query composita che recupera le notifiche personali, di categoria e globali. Il bug delle notifiche incomplete è stato risolto.
-- **Conclusione:** L'applicazione ora sincronizza correttamente i dati essenziali e presenta le notifiche in modo completo e affidabile.
+- **Risultato:** L'applicazione ora sincronizza correttamente i dati essenziali e presenta le notifiche in modo completo e affidabile.
+
+---
+
+## Fase 5: Refactoring del Sistema di Sincronizzazione e Offline
+
+- **Stato:** In corso.
+
+### Problema 1: Sincronizzazione Inefficiente
+
+- **Sintomo:** Dopo ogni check-in, l'intera app ricarica tutti i dati (anagrafiche, rapportini), causando lentezza e consumo eccessivo di dati.
+- **Causa Radice:** L'integrazione della nuova `CheckinPage` è stata fatta usando l'unica funzione di sync disponibile (`requestManualSync`), che esegue una sincronizzazione *totale* invece che *incrementale*. Il sistema mancava di una funzione leggera per processare solo la coda delle operazioni offline.
+
+### Problema 2: Gestione Offline Fragile
+
+- **Sintomo 1 (Perdita Dati):** Un'interruzione di rete durante la sincronizzazione potrebbe portare alla perdita di dati locali, poiché il processo attuale svuota le tabelle (`table.clear()`) prima di riempirle.
+- **Sintomo 2 (Mancato Auto-Sync):** Se l'utente va offline, accumula modifiche e poi torna online, la sincronizzazione non parte automaticamente. Deve essere avviata manualmente.
+- **Causa Radice:** La logica di sincronizzazione è "distruttiva" e il meccanismo di trigger automatico è progettato solo per la primissima sincronizzazione all'avvio dell'app.
+
+### Piano d'Azione Definitivo (Client-Side)
+
+1.  **Rendere la Sincronizzazione Non-Distruttiva:** In `offlineSync.ts`, sostituire l'approccio `clear() + bulkAdd()` con `bulkPut()` per garantire che i dati locali non vengano eliminati durante l'aggiornamento.
+2.  **Introdurre la Sincronizzazione Incrementale:** Creare una nuova funzione `triggerQueueSync` in `useSyncManager.ts` che esegua solo il `processSyncQueue`, per una sincronizzazione rapida e leggera.
+3.  **Implementare l'Auto-Sincronizzazione al Rientro Online:** Modificare `useSyncManager.ts` per rilevare il passaggio da offline a online e richiamare automaticamente la nuova `triggerQueueSync`.
+4.  **Integrare Correttamente la CheckinPage:** Sostituire la chiamata inefficiente `requestManualSync` con la nuova e corretta `triggerQueueSync` nella pagina di check-in.
