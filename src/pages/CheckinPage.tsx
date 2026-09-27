@@ -1,247 +1,325 @@
-import { useState, useMemo, useCallback, useContext, useRef, useEffect } from 'react';
+
+import { useState, useMemo, useContext, useRef, useEffect } from 'react';
 import { Box, Typography, Button, Paper, Grid, TextField, Select, MenuItem, FormControl, InputLabel, CircularProgress, Alert, ListSubheader } from '@mui/material';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/db/local-db';
+import { db as dexieDb } from '@/db/local-db';
 import { AuthContext } from '@/contexts/AuthContextDefinition';
 import { useMasterData } from '@/hooks/useMasterData';
-import FullScreenLoader from '@/components/FullScreenLoader';
-import { db as dexieDb } from '@/db/local-db';
-import { aggiungiAllaCoda } from '@/services/syncService';
+import { aggiungiAllaCoda } from '@/services/offlineSync';
 import { useSyncManager } from '@/hooks/useSyncManager';
 
-const getLocalDateTime = () => {
-    const date = new Date();
-    const timezoneOffset = date.getTimezoneOffset() * 60000;
-    const localDate = new Date(date.getTime() - timezoneOffset);
-    return localDate.toISOString().slice(0, 16);
+const FullScreenLoader = () => (
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+    </Box>
+);
+
+type MachineState = 'GIORNATA_NON_INIZIATA' | 'DENTRO_LUOGO' | 'FUORI_LUOGO';
+type ActionType = 'INIZIO_GIORNATA' | 'FINE_GIORNATA' | 'ENTRATA' | 'USCITA';
+type CheckinEvent = { id?: string; tecnicoId: string; tipo: string; timestampImpostato: string; timestampReale: string; naveId?: string; luogoId?: string; };
+
+const calculateCurrentState = (events: CheckinEvent[] | undefined): { state: MachineState, place: string | null } => {
+    if (!events || events.length === 0) {
+        return { state: 'GIORNATA_NON_INIZIATA', place: null };
+    }
+
+    const lastEvent = [...events].reverse().find(e => 
+        e.tipo === 'fine_giornata' || 
+        e.tipo === 'check_in_luogo' || 
+        e.tipo === 'check_out_luogo' ||
+        e.tipo === 'inizio_giornata' 
+    );
+
+    if (!lastEvent || lastEvent.tipo === 'fine_giornata') {
+        return { state: 'GIORNATA_NON_INIZIATA', place: null };
+    }
+    
+    if (lastEvent.tipo === 'check_in_luogo') {
+        const place = lastEvent.naveId ? `navi_${lastEvent.naveId}` : `luoghi_${lastEvent.luogoId}`;
+        return { state: 'DENTRO_LUOGO', place };
+    }
+    
+    if (lastEvent.tipo === 'check_out_luogo' || lastEvent.tipo === 'inizio_giornata') {
+        return { state: 'FUORI_LUOGO', place: null };
+    }
+
+    return { state: 'GIORNATA_NON_INIZIATA', place: null };
 };
 
+const getLocalDateTime = () => {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    const localDate = new Date(now.getTime() - tzOffset);
+    return localDate.toISOString().slice(0, 19);
+};
+
+
 const CheckinPage = () => {
-  const authContext = useContext(AuthContext);
-  const { masterData, loading: loadingAnagrafiche } = useMasterData();
-  const { requestManualSync } = useSyncManager();
-  const navi = masterData?.navi;
-  const luoghi = masterData?.luoghi;
-  const scrollBoxRef = useRef<HTMLDivElement>(null);
+    const authContext = useContext(AuthContext);
+    const { masterData, loading: loadingAnagrafiche } = useMasterData();
+    const { triggerQueueSync } = useSyncManager();
+    const scrollBoxRef = useRef<HTMLDivElement>(null);
 
-  const [selectedLuogo, setSelectedLuogo] = useState('');
-  const [startLocation, setStartLocation] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<string | null>(null);
+    const [selectedLuogo, setSelectedLuogo] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const [timeValues, setTimeValues] = useState({
+        INIZIO_GIORNATA: getLocalDateTime(),
+        FINE_GIORNATA: getLocalDateTime(),
+        ENTRATA: getLocalDateTime(),
+        USCITA: getLocalDateTime(),
+    });
+      
+    const user = authContext?.user;
 
-  const [timeValues, setTimeValues] = useState({
-    inizio_giornata: getLocalDateTime(),
-    fine_giornata: getLocalDateTime(),
-    check_in_luogo: getLocalDateTime(),
-    check_out_luogo: getLocalDateTime(),
-  });
-  
-  const user = authContext?.user;
+    const allUserEvents = useLiveQuery(() => {
+        if (!user?.uid) return [];
+        return dexieDb.checkin_giornalieri.where('tecnicoId').equals(user.uid).sortBy('timestampImpostato');
+    }, [user?.uid]);
 
-  const allUserEvents = useLiveQuery(() => {
-      if (!user?.uid) return [];
-      return db.checkin_giornalieri
-          .where('tecnicoId')
-          .equals(user.uid)
-          .sortBy('timestampImpostato');
-  }, [user?.uid], []);
+    const { state: uiState, place: currentPlace } = useMemo(() => calculateCurrentState(allUserEvents), [allUserEvents]);
 
-  useEffect(() => {
-    if (scrollBoxRef.current) {
-        scrollBoxRef.current.scrollTop = scrollBoxRef.current.scrollHeight;
-    }
-  }, [allUserEvents?.length]);
-
-  const recentEvents = useMemo(() => {
-    if (!allUserEvents) return [];
-    const twentyFourHoursAgo = new Date().getTime() - (24 * 60 * 60 * 1000);
-    return allUserEvents.filter(e => new Date(e.timestampImpostato).getTime() >= twentyFourHoursAgo);
-  }, [allUserEvents]);
-
-  const { giornataIniziata, inLuogo } = useMemo(() => {
-    if (!allUserEvents || allUserEvents.length === 0) {
-        return { giornataIniziata: false, inLuogo: null };
-    }
-
-    const ultimoEventoTimestamp = allUserEvents[allUserEvents.length - 1].timestampImpostato;
-    const oggi = new Date(ultimoEventoTimestamp);
-    oggi.setHours(0, 0, 0, 0); 
-
-    let lastInizioGiornataIndex = -1;
-    for (let i = allUserEvents.length - 1; i >= 0; i--) {
-        const eventoDate = new Date(allUserEvents[i].timestampImpostato);
-        if (allUserEvents[i].tipo === 'inizio_giornata' && eventoDate >= oggi) {
-            lastInizioGiornataIndex = i;
-            break;
+    useEffect(() => {
+        if (scrollBoxRef.current) {
+            scrollBoxRef.current.scrollTop = scrollBoxRef.current.scrollHeight;
         }
-        if (eventoDate < oggi) break; 
-    }
+    }, [allUserEvents?.length]);
 
-    if (lastInizioGiornataIndex === -1) {
-        return { giornataIniziata: false, inLuogo: null };
-    }
-
-    const eventiPotenziali = allUserEvents.slice(lastInizioGiornataIndex);
-    const fineGiornataEsiste = eventiPotenziali.some(e => e.tipo === 'fine_giornata');
-
-    const isGiornataIniziata = !fineGiornataEsiste;
-
-    const ultimoEventoLuogo = isGiornataIniziata ? [...eventiPotenziali].reverse().find(e => e.tipo === 'check_in_luogo' || e.tipo === 'check_out_luogo') : undefined;
-    const isInLuogo = ultimoEventoLuogo?.tipo === 'check_in_luogo' 
-        ? (ultimoEventoLuogo.naveId ? `navi_${ultimoEventoLuogo.naveId}` : `luoghi_${ultimoEventoLuogo.luogoId}`) 
-        : null;
-
-    return { 
-        giornataIniziata: isGiornataIniziata, 
-        inLuogo: isInLuogo,
+    const handleTimeChange = (type: ActionType, value: string) => {
+        setError(null);
+        setTimeValues(prev => ({ ...prev, [type]: value }));
     };
-  }, [allUserEvents]);
 
-  const handleTimeChange = (type: string, value: string) => {
-    setError(null);
-    setTimeValues(prev => ({ ...prev, [type]: value }));
-  };
+    const handleAction = async (action: ActionType) => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        setError(null);
 
-  const handleGenericSubmit = useCallback(async (type: 'inizio_giornata' | 'fine_giornata' | 'check_in_luogo' | 'check_out_luogo') => {
-    setError(null);
-    const currentUser = authContext?.user;
-    const currentUserProfile = authContext?.userProfile;
+        if (!user?.uid || !authContext?.userProfile) {
+            setError("Utente non trovato.");
+            setIsSubmitting(false);
+            return;
+        }
 
-    if (!currentUser || !currentUserProfile) {
-      setError("Utente non autenticato. Impossibile procedere.");
-      return;
-    }
+        try {
+            await dexieDb.transaction('rw', dexieDb.checkin_giornalieri, dexieDb.syncQueue, async () => {
+                
+                const freshEvents = await dexieDb.checkin_giornalieri.where('tecnicoId').equals(user.uid).sortBy('timestampImpostato');
+                const { state: realTimeState, place: realTimePlace } = calculateCurrentState(freshEvents);
+                
+                const lastEventTimestamp = freshEvents.length > 0 ? new Date(freshEvents[freshEvents.length - 1].timestampImpostato) : null;
+                const impostatoTimestamp = new Date(timeValues[action]);
 
-    if (type === 'inizio_giornata' && !startLocation) {
-        setError("Per iniziare la giornata, è obbligatorio selezionare un luogo iniziale.");
-        return;
-    }
+                if (lastEventTimestamp && impostatoTimestamp <= lastEventTimestamp) {
+                    throw new Error("L'orario impostato deve essere successivo all'ultimo evento registrato.");
+                }
 
-    if (type === 'check_in_luogo' && !selectedLuogo) {
-        setError("Per entrare, devi prima selezionare una Nave o un Luogo dal menu.");
-        return;
-    }
-
-    setLoading(type);
-
-    try {
-        await dexieDb.transaction('rw', dexieDb.checkin_giornalieri, dexieDb.syncQueue, async () => {
-            const tecnicoName = currentUserProfile.displayName || currentUser.email || 'N/D';
-
-            const addEventToDbAndQueue = async (eventPayload: any, idSuffix: string) => {
-                const localId = `local_${Date.now()}_${idSuffix}`.replace(/\./g, '');
-                const optimisticEvent = { ...eventPayload, id: localId, timestampReale: new Date() };
-                await dexieDb.checkin_giornalieri.add(optimisticEvent);
-                await aggiungiAllaCoda({ type: 'checkin', action: 'create', entityId: localId, payload: optimisticEvent });
-            };
-
-            if (type === 'fine_giornata' && inLuogo) {
-                const timestampUscita = new Date(new Date(timeValues.fine_giornata).getTime() - 1000).toISOString();
-                const [source, id] = inLuogo.split('_');
-                const checkoutEvent = {
-                    tecnicoId: currentUser.uid, tecnicoName, tipo: 'check_out_luogo' as const, timestampImpostato: timestampUscita,
-                    ...(source === 'navi' && { naveId: id }),
-                    ...(source === 'luoghi' && { luogoId: id }),
+                const addEventToDbAndQueue = async (eventPayload: Omit<CheckinEvent, 'id' | 'timestampReale'> & { tecnicoName: string }) => {
+                    const localId = `local_${Date.now()}_${Math.random()}`;
+                    const finalPayload = { ...eventPayload, id: localId, timestampReale: new Date().toISOString() };
+                    await dexieDb.checkin_giornalieri.add(finalPayload as any);
+                    await aggiungiAllaCoda({ type: 'checkin', action: 'create', entityId: localId, payload: finalPayload });
                 };
-                await addEventToDbAndQueue(checkoutEvent, 'autocheckout');
-            }
+
+                const tecnicoName = authContext.userProfile.displayName || user.email || 'N/D';
+                const impostatoISO = impostatoTimestamp.toISOString();
+
+                switch (action) {
+                    case 'INIZIO_GIORNATA':
+                        if (realTimeState !== 'GIORNATA_NON_INIZIATA') throw new Error("La giornata è già iniziata.");
+                        if (!selectedLuogo) throw new Error("Seleziona un luogo o una nave per iniziare.");
+                        
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'inizio_giornata', timestampImpostato: impostatoISO });
+                        
+                        const [source, id] = selectedLuogo.split('_');
+                        const timestampCheckin = new Date(impostatoTimestamp.getTime() + 1000).toISOString();
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_in_luogo', timestampImpostato: timestampCheckin, ...(source === 'navi' ? { naveId: id } : { luogoId: id }) });
+                        break;
+
+                    case 'FINE_GIORNATA':
+                        if (realTimeState === 'GIORNATA_NON_INIZIATA') throw new Error("Nessuna giornata da terminare.");
+                        
+                        if (realTimeState === 'DENTRO_LUOGO') {
+                            if (!realTimePlace) throw new Error("Stato inconsistente: sei dentro un luogo non identificato.");
+                            const [sourceCheckout, idCheckout] = realTimePlace.split('_');
+                            const timestampUscita = new Date(impostatoTimestamp.getTime() - 1000).toISOString();
+                            await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_out_luogo', timestampImpostato: timestampUscita, ...(sourceCheckout === 'navi' ? { naveId: idCheckout } : { luogoId: idCheckout }) });
+                        }
+                        
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'fine_giornata', timestampImpostato: impostatoISO });
+                        break;
+
+                    case 'ENTRATA':
+                        if (realTimeState !== 'FUORI_LUOGO') throw new Error("Azione non permessa. Devi essere fuori da un luogo per poter entrare.");
+                        if (!selectedLuogo) throw new Error("Seleziona un luogo o nave in cui entrare.");
+                        
+                        const [entrataSource, entrataId] = selectedLuogo.split('_');
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_in_luogo', timestampImpostato: impostatoISO, ...(entrataSource === 'navi' ? { naveId: entrataId } : { luogoId: entrataId }) });
+                        break;
+
+                    case 'USCITA':
+                        if (realTimeState !== 'DENTRO_LUOGO') throw new Error("Azione non permessa. Non risulti essere dentro un luogo.");
+                        if (!realTimePlace) throw new Error("Stato inconsistente: non è possibile determinare da dove uscire.");
+                        
+                        const [uscitaSource, uscitaId] = realTimePlace.split('_');
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_out_luogo', timestampImpostato: impostatoISO, ...(uscitaSource === 'navi' ? { naveId: uscitaId } : { luogoId: uscitaId }) });
+                        break;
+                }
+            });
+            triggerQueueSync();
+        } catch (e: any) {
+            console.error(`Errore durante l'azione '${action}':`, e);
+            setError(`ERRORE: ${e.message || 'Operazione fallita.'}`);
+        } finally {
+            setIsSubmitting(false);
+            setSelectedLuogo('');
             
-            const timestampImpostato = new Date(timeValues[type]).toISOString();
-            const eventPayload: any = { tecnicoId: currentUser.uid, tecnicoName, tipo: type, timestampImpostato };
+            const nextTime = getLocalDateTime();
+            setTimeValues({
+                INIZIO_GIORNATA: nextTime,
+                FINE_GIORNATA: nextTime,
+                ENTRATA: nextTime,
+                USCITA: nextTime,
+            });
+        }
+    };
 
-            if (type === 'check_in_luogo' || (type === 'check_out_luogo' && !inLuogo)) {
-                 if (!selectedLuogo) {
-                     throw new Error("Luogo non selezionato per l'operazione.");
-                 }
-                 const [source, id] = selectedLuogo.split('_');
-                 if (source === 'navi') eventPayload.naveId = id; else eventPayload.luogoId = id;
-            } else if (type === 'check_out_luogo' && inLuogo) {
-                 const [source, id] = inLuogo.split('_');
-                 if (source === 'navi') eventPayload.naveId = id; else eventPayload.luogoId = id;
-            }
-            await addEventToDbAndQueue(eventPayload, type);
+    if (!authContext || !user || authContext.loading) return <FullScreenLoader />;
 
-            if (type === 'inizio_giornata' && startLocation) {
-                const timestampCheckin = new Date(new Date(timeValues.inizio_giornata).getTime() + 1000).toISOString();
-                const [source, id] = startLocation.split('_');
-                const checkinEvent = {
-                    tecnicoId: currentUser.uid, tecnicoName, tipo: 'check_in_luogo' as const, timestampImpostato: timestampCheckin,
-                    ...(source === 'navi' && { naveId: id }),
-                    ...(source === 'luoghi' && { luogoId: id }),
-                };
-                await addEventToDbAndQueue(checkinEvent, 'contextual_checkin');
-            }
-        });
+    const allLocations = useMemo(() => 
+      [
+          ...(masterData?.navi || []).map(n => ({ id: `navi_${n.id}`, nome: n.nome })).filter(n => n.id && n.nome),
+          ...(masterData?.luoghi || []).map(l => ({ id: `luoghi_${l.id}`, nome: l.nome })).filter(l => l.id && l.nome)
+      ].sort((a, b) => a.nome.localeCompare(b.nome))
+    , [masterData]);
+    
+    const canStartDay = uiState === 'GIORNATA_NON_INIZIATA';
+    const canEndDay = uiState === 'DENTRO_LUOGO' || uiState === 'FUORI_LUOGO';
+    const canEnter = uiState === 'FUORI_LUOGO';
+    const canExit = uiState === 'DENTRO_LUOGO';
 
-        requestManualSync();
+    const getSectionStyle = (isActive: boolean) => ({
+        p: 2,
+        border: '2px solid',
+        borderColor: isActive ? 'primary.main' : 'transparent',
+        opacity: isActive ? 1 : 0.5,
+        pointerEvents: isActive ? 'auto' : 'none',
+        transition: 'all 0.3s ease-in-out',
+    });
 
-    } catch (e: any) {
-        console.error("Errore durante l'operazione di check-in:", e);
-        setError(`Errore durante l'operazione: ${e.message}`);
-    } finally {
-        setLoading(null);
-    }
-  }, [authContext, timeValues, selectedLuogo, inLuogo, startLocation, requestManualSync]);
+    return (
+        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+            <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, maxWidth: 800, margin: 'auto' }}>
+              <Typography variant='h5' component='h2' gutterBottom>Presenze</Typography>
+              
+              {error && <Alert severity='error' sx={{ my: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+              
+              {allUserEvents && allUserEvents.length > 0 && (
+                  <Alert severity='info' sx={{ my: 2 }}>
+                      <Typography variant='body2'>Ultimi 3 eventi:</Typography>
+                      <Box 
+                        ref={scrollBoxRef} 
+                        component='ul' 
+                        sx={{ 
+                            m: 0, pl: '20px', maxHeight: '6.5em', overflowY: 'auto',
+                            scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' }
+                        }}
+                      >
+                          {allUserEvents.slice(-3).map((e) => {
+                              const nome = e.naveId ? masterData?.navi?.find(n => n.id === e.naveId)?.nome : masterData?.luoghi?.find(l => l.id === e.luogoId)?.nome;
+                              const orario = new Date(e.timestampImpostato).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                              const tipoEvento = e.tipo.replace(/_/g, ' ');
+                              return (<li key={e.id}><b>{tipoEvento.charAt(0).toUpperCase() + tipoEvento.slice(1)}</b> alle {orario} {nome ? `- ${nome}` : ''}</li>);
+                          })}
+                      </Box>
+                  </Alert>
+              )}
 
-  if (!authContext || !user || authContext.loading) return <FullScreenLoader />;
+              {isSubmitting && <Box sx={{display: 'flex', justifyContent: 'center', my: 2}}><CircularProgress /></Box>}
 
-  const naviOptions = useMemo(() => (navi || []).map(n => ({ id: `navi_${n.id}`, nome: n.nome })).sort((a, b) => a.nome.localeCompare(b.nome)), [navi]);
-  const luoghiOptions = useMemo(() => (luoghi || []).map(l => ({ id: `luoghi_${l.id}`, nome: l.nome })).sort((a, b) => a.nome.localeCompare(b.nome)), [luoghi]);
-
-  return (
-      <Box sx={{ p: { xs: 2, sm: 3 }, height: 'calc(100vh - 64px)', overflowY: 'auto', '&::-webkit-scrollbar': { display: 'none' } }}>
-          <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, maxWidth: 800, margin: 'auto' }}>
-            <Typography variant='h5' component='h2' gutterBottom>Presenze giornaliere</Typography>
-            
-            {error && <Alert severity='error' sx={{ mt: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-            
-            {recentEvents && recentEvents.length > 0 && (
-                <Alert severity='info' sx={{ my: 2 }}>
-                    <Typography variant='body2'>Eventi delle ultime 24 ore:</Typography>
-                    <Box ref={scrollBoxRef} component='ul' sx={{ m: 0, pl: '20px', maxHeight: '110px', overflowY: 'auto', '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' } }}>
-                        {recentEvents.map((e: any) => {
-                            const nome = e.naveId ? navi?.find(n=>n.id === e.naveId)?.nome : luoghi?.find(l=>l.id === e.luogoId)?.nome;
-                            return (<li key={e.id}><b>{e.tipo.replace(/_/g, ' ')}</b>alle {new Date(e.timestampImpostato).toLocaleString()} {nome ? `- ${nome}` : ''}</li>);
-                        })}
-                    </Box>
-                </Alert>
-            )}
-
-            <Box mb={4}>
-              <Typography variant='h6' component='h2' sx={{ mb: 2 }}>Orario di Lavoro</Typography>
-              <Grid container spacing={2} alignItems='flex-end'>
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Inizio Giornata' type='datetime-local' value={timeValues.inizio_giornata} onChange={(e) => handleTimeChange('inizio_giornata', e.target.value)} disabled={giornataIniziata} InputLabelProps={{ shrink: true }} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth disabled={giornataIniziata}><InputLabel>Luogo Iniziale</InputLabel><Select value={startLocation} onChange={(e) => setStartLocation(e.target.value)} label='Luogo Iniziale'>{[...naviOptions, ...luoghiOptions].sort((a,b)=>a.nome.localeCompare(b.nome)).map(o => <MenuItem key={o.id} value={o.id}>{o.nome}</MenuItem>)}</Select></FormControl></Grid>
-                <Grid size={12}><Button fullWidth variant='contained' color='primary' onClick={() => handleGenericSubmit('inizio_giornata')} disabled={giornataIniziata || !startLocation || !!loading}>{loading === 'inizio_giornata' ? <CircularProgress size={24} /> : 'Inizia Giornata'}</Button></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Fine Giornata' type='datetime-local' value={timeValues.fine_giornata} onChange={(e) => handleTimeChange('fine_giornata', e.target.value)} disabled={!giornataIniziata} InputLabelProps={{ shrink: true }} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><Button fullWidth variant='contained' color='secondary' onClick={() => handleGenericSubmit('fine_giornata')} disabled={!giornataIniziata || !!loading}>{loading === 'fine_giornata' ? <CircularProgress size={24} /> : 'Termina Giornata'}</Button></Grid>
-              </Grid>
-            </Box>
-
-            <Box sx={{ opacity: giornataIniziata ? 1 : 0.5, pointerEvents: giornataIniziata ? 'auto' : 'none' }}>
-                <Typography variant='h6'>Interventi sul Luogo</Typography>
-                <FormControl fullWidth sx={{ my: 2 }} disabled={!giornataIniziata || !!inLuogo || loadingAnagrafiche}>
-                    <InputLabel>Seleziona Luogo o Nave</InputLabel>
-                    <Select value={loadingAnagrafiche ? '' : (inLuogo || selectedLuogo)} onChange={(e) => { setError(null); setSelectedLuogo(e.target.value); }} label='Seleziona Luogo o Nave'>
-                        {loadingAnagrafiche ? <MenuItem disabled>Caricamento...</MenuItem> : [
-                            (naviOptions.length > 0 && <ListSubheader key='navi-header'>Navi</ListSubheader>),
-                            ...naviOptions.map(n => <MenuItem key={n.id} value={n.id}>{n.nome}</MenuItem>),
-                            (luoghiOptions.length > 0 && <ListSubheader key='luoghi-header'>Luoghi</ListSubheader>),
-                            ...luoghiOptions.map(l => <MenuItem key={l.id} value={l.id}>{l.nome}</MenuItem>)
-                        ]}
-                    </Select>
-                </FormControl>
-                <Grid container spacing={2} alignItems='flex-end'>
-                    <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Entrata' type='datetime-local' value={timeValues.check_in_luogo} onChange={(e) => handleTimeChange('check_in_luogo', e.target.value)} disabled={!giornataIniziata || !!inLuogo} InputLabelProps={{ shrink: true }} /></Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}><Button fullWidth variant='contained' onClick={() => handleGenericSubmit('check_in_luogo')} disabled={!giornataIniziata || !!inLuogo || !!loading || !selectedLuogo}>{loading === 'check_in_luogo' ? <CircularProgress size={24} /> : 'Entrata'}</Button></Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label='Uscita' type='datetime-local' value={timeValues.check_out_luogo} onChange={(e) => handleTimeChange('check_out_luogo', e.target.value)} disabled={!giornataIniziata || !inLuogo} InputLabelProps={{ shrink: true }} /></Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}><Button fullWidth variant='contained' onClick={() => handleGenericSubmit('check_out_luogo')} disabled={!giornataIniziata || !inLuogo || !!loading}>{loading === 'check_out_luogo' ? <CircularProgress size={24} /> : 'Uscita'}</Button></Grid>
+              <Grid container spacing={3}>
+                {/* SEZIONE 1: INIZIO GIORNATA */}
+                <Grid size={12}>
+                    <Paper sx={getSectionStyle(canStartDay)} elevation={2}>
+                        <Typography variant="h6" gutterBottom>1. Inizio Giornata</Typography>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><TextField fullWidth label='Orario Inizio' type='datetime-local' value={timeValues.INIZIO_GIORNATA} onChange={(e) => handleTimeChange('INIZIO_GIORNATA', e.target.value)} disabled={isSubmitting} InputLabelProps={{ shrink: true }} /></Grid>
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><FormControl fullWidth focused={!isSubmitting}><InputLabel>Luogo Iniziale</InputLabel><Select value={selectedLuogo} onChange={(e) => setSelectedLuogo(e.target.value)} label='Luogo Iniziale'>{allLocations.map(o => <MenuItem key={o.id} value={o.id}>{o.nome}</MenuItem>)}</Select></FormControl></Grid>
+                            <Grid size={12}><Button fullWidth variant='contained' color='primary' onClick={() => handleAction('INIZIO_GIORNATA')} disabled={!selectedLuogo || isSubmitting}>Inizia Giornata</Button></Grid>
+                        </Grid>
+                    </Paper>
                 </Grid>
-            </Box>
 
-          </Paper>
-      </Box>
-  );
+                {/* SEZIONE 2: ENTRATA */}
+                <Grid size={12}>
+                     <Paper sx={getSectionStyle(canEnter)} elevation={2}>
+                        <Typography variant="h6" gutterBottom>2. Entrata</Typography>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><TextField fullWidth label='Orario Entrata' type='datetime-local' value={timeValues.ENTRATA} onChange={(e) => handleTimeChange('ENTRATA', e.target.value)} disabled={isSubmitting} InputLabelProps={{ shrink: true }} /></Grid>
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><FormControl fullWidth focused={!isSubmitting}><InputLabel>Seleziona Luogo o Nave</InputLabel><Select value={selectedLuogo} onChange={(e) => setSelectedLuogo(e.target.value)} label='Seleziona Luogo o Nave'>{allLocations.map(o => <MenuItem key={o.id} value={o.id}>{o.nome}</MenuItem>)}</Select></FormControl></Grid>
+                            <Grid size={12}><Button fullWidth variant='contained' onClick={() => handleAction('ENTRATA')} disabled={!selectedLuogo || isSubmitting}>Entrata</Button></Grid>
+                        </Grid>
+                    </Paper>
+                </Grid>
+
+                {/* SEZIONE 3: USCITA */}
+                <Grid size={12}>
+                    <Paper sx={getSectionStyle(canExit)} elevation={2}>
+                        <Typography variant="h6" gutterBottom>3. Uscita</Typography>
+                         <Grid container spacing={2} alignItems="center">
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><TextField fullWidth label='Orario Uscita' type='datetime-local' value={timeValues.USCITA} onChange={(e) => handleTimeChange('USCITA', e.target.value)} disabled={isSubmitting} InputLabelProps={{ shrink: true }} /></Grid>
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><Button fullWidth variant='contained' onClick={() => handleAction('USCITA')} disabled={isSubmitting}>Uscita</Button></Grid>
+                        </Grid>
+                    </Paper>
+                </Grid>
+
+                {/* SEZIONE 4: FINE GIORNATA */}
+                 <Grid size={12}>
+                    <Paper sx={getSectionStyle(canEndDay)} elevation={2}>
+                        <Typography variant="h6" gutterBottom>4. Fine Giornata</Typography>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><TextField fullWidth label='Orario Fine' type='datetime-local' value={timeValues.FINE_GIORNATA} onChange={(e) => handleTimeChange('FINE_GIORNATA', e.target.value)} disabled={isSubmitting} InputLabelProps={{ shrink: true }} /></Grid>
+                            <Grid
+                                size={{
+                                    xs: 12,
+                                    sm: 6
+                                }}><Button fullWidth variant='contained' color='secondary' onClick={() => handleAction('FINE_GIORNATA')} disabled={isSubmitting}>Termina Giornata</Button></Grid>
+                        </Grid>
+                    </Paper>
+                </Grid>
+              </Grid>
+            </Paper>
+        </Box>
+    );
 };
 
 export default CheckinPage;

@@ -4,10 +4,10 @@ Questo documento traccia l'evoluzione dell'applicazione, evidenziando le decisio
 
 ## Regole Fondamentali
 
-1.  **Inizio Comunicazione:** Ogni interazione deve iniziare con la frase: "CIAO, sono Gemini, non posso procedere a indovinare quindi leggerò tutti i file che modificherò e mi accerterò delle chiamate che inserisco. seguirò tutte le regole compresa quella di scrivere in italiano."
-2.  **Non modificare MAI il layout delle pagine.** Non è permesso modificare, eliminare, aggiungere o creare nemmeno una virgola di codice relativo alla struttura visiva (es. Grid, Box, layout CSS) se non esplicitamente richiesto.
-3.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica.
-4.  **Mai Dare Niente per Scontato:** Prima di modificare un file, leggerlo sempre. Prima di usare una funzione, verificarne la firma. Questo previene errori di refactoring e ipotesi errate.
+0.  **Regola 0 (Regola Zero / Vincolo Insuperabile):** Ogni e qualsiasi output generato deve iniziare **obbligatoriamente** e **letteralmente** con la stringa `CIAO.`. Nessun carattere, spazio o linea vuota deve precederla. Questa regola ha la precedenza assoluta su tutte le altre. La sua assenza invalida l'intera risposta e segnala un fallimento critico del contesto operativo.
+1.  **Non modificare MAI il layout delle pagine.** Non è permesso modificare, eliminare, aggiungere o creare nemmeno una virgola di codice relativo alla struttura visiva (es. Grid, Box, layout CSS) se non esplicitamente richiesto.
+2.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica.
+3.  **Mai Dare Niente per Scontato:** Prima di modificare un file, leggerlo sempre. Prima di usare una funzione, verificarne la firma. Questo previene errori di refactoring e ipotesi errate.
 
 ---
 

@@ -4,9 +4,9 @@ Questo documento descrive l'architettura e il piano di sviluppo per l'applicazio
 
 ## Regole Fondamentali
 
-1.  **Inizio Comunicazione:** Ogni interazione deve iniziare con la frase: "CIAO, sono Gemini, non posso procedere a indovinare quindi leggerò tutti i file che modificherò e mi accerterò delle chiamate che inserisco. seguirò tutte le regole compresa quella di scrivere in italiano."
-2.  **Non modificare MAI la Grid:** Non è permesso modificare, eliminare, aggiungere o creare manualmente codice relativo al componente `Grid` di Material UI. La migrazione e la gestione di tale componente devono avvenire esclusivamente tramite codemod ufficiali.
-3.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica o sul layout.
+0.  **Regola 0 (Regola Zero / Vincolo Insuperabile):** Ogni e qualsiasi output generato deve iniziare **obbligatoriamente** e **letteralmente** con la stringa `CIAO.`. Nessun carattere, spazio o linea vuota deve precederla. Questa regola ha la precedenza assoluta su tutte le altre. La sua assenza invalida l'intera risposta e segnala un fallimento critico del contesto operativo.
+1.  **Non modificare MAI la Grid:** Non è permesso modificare, eliminare, aggiungere o creare manualmente codice relativo al componente `Grid` di Material UI. La migrazione e la gestione di tale componente devono avvenire esclusivamente tramite codemod ufficiali.
+2.  **Focus sulla logica:** Il mio compito è intervenire sulla logica dei dati, sui flussi di lavoro e sulla correzione di bug funzionali, non sull'estetica o sul layout.
 
 ---
 
@@ -46,13 +46,14 @@ Le tariffe sono un'impostazione puramente **locale**.
 1.  **FASE 1 - 4: Lavori Precedenti**
     *   [x] Correzioni iniziali, estensione anagrafiche, stabilizzazione `syncCheckin`.
 
-2.  **FASE 5: Refactoring Sincronizzazione e Offline (In Corso)**
-    *   [ ] **Azione 5.1:** Rendere la sincronizzazione non-distruttiva (`bulkPut`).
-    *   [ ] **Azione 5.2:** Creare la sincronizzazione incrementale (`triggerQueueSync`).
-    *   [ ] **Azione 5.3:** Implementare l'auto-sync al rientro online.
-    *   [ ] **Azione 5.4:** Integrare `CheckinPage` con `triggerQueueSync`.
+2.  **FASE 5: Refactoring Sincronizzazione e Offline (Completata)**
+    *   [x] **Azione 5.1:** Rendere la sincronizzazione non-distruttiva (`bulkPut`).
+    *   [x] **Azione 5.2:** Creare la sincronizzazione incrementale (`triggerQueueSync`).
+    *   [x] **Azione 5.3:** Implementare l'auto-sync al rientro online.
+    *   [x] **Azione 5.4:** Integrare `CheckinPage` con `triggerQueueSync`.
     *   [x] **Documentazione:** `registro.md` e `blueprint.md` aggiornati con il piano.
 
-3.  **FASE 6: Migrazione Componente Grid**
-    *   [ ] **Azione:** Eseguire il codemod per la migrazione.
-    *   [ ] **Comando:** `npx @mui/codemod@next v7.0.0/grid-props src`
+3.  **FASE 6: Migrazione Componente Grid (Completata)**
+    *   [x] **Azione:** Eseguito il codemod per la migrazione.
+    *   [x] **Comando:** `npx @mui/codemod@next v7.0.0/grid-props src`
+    *   [x] **Risultato:** Nessun file modificato, confermando che il codebase è già allineato.

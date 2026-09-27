@@ -3,16 +3,33 @@ import { functions, db as firestore } from '@/utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { createRapportino, updateRapportino } from './rapportiniService';
 import { onSnapshot, collection, query, where, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Rapportino, CheckinGiornaliero } from '@/models/definitions';
-
-// --- Funzioni di Sincronizzazione basate su Cloud Functions ---
+import { Rapportino, CheckinGiornaliero, SyncQueueItem } from '@/models/definitions';
 
 const syncAllAnagraficheCallable = httpsCallable(functions, 'syncAllAnagrafiche');
 const getAllRapportiniForSyncCallable = httpsCallable(functions, 'getAllRapportiniForSync');
 
-/**
- * Esegue la sincronizzazione delle anagrafiche, ESCLUDENDO le impostazioni locali.
- */
+export const aggiungiAllaCoda = async (item: Omit<SyncQueueItem, 'id' | 'timestamp' | 'syncStatus'>) => {
+  console.log("Aggiungo alla coda di sincronizzazione", item);
+  
+  // Logica di consolidamento per gli aggiornamenti offline
+  if (item.type === 'rapportino' && item.action === 'update' && item.entityId && item.entityId.startsWith('local-')) {
+    const createOp = await db.syncQueue.where({ entityId: item.entityId, action: 'create' }).first();
+    if (createOp) {
+      console.log(`Consolido l'update per ${item.entityId} nel task di creazione esistente.`);
+      const mergedPayload = { ...createOp.payload, ...item.payload };
+      await db.syncQueue.update(createOp.id!, { payload: mergedPayload });
+      // L'update è stato consolidato, non serve aggiungerlo come task separato.
+      return; 
+    }
+  }
+
+  await db.syncQueue.add({
+    ...item,
+    timestamp: new Date(),
+    syncStatus: 'pending'
+  } as SyncQueueItem);
+};
+
 export const syncAllAnagrafiche = async () => {
   console.log("Avvio procedura di sincronizzazione ANAGRAFICHE...");
   try {
@@ -38,9 +55,8 @@ export const syncAllAnagrafiche = async () => {
         const items = allData[collectionName];
         if (items && Array.isArray(items)) {
             const table = (db as any)[collectionName];
-            await table.clear();
-            await table.bulkAdd(items);
-            console.log(`Sync anagrafiche completata per ${collectionName}: ${items.length} record.`);
+            await table.bulkPut(items);
+            console.log(`Sync anagrafiche (non-distruttiva) completata per ${collectionName}: ${items.length} record.`);
         }
       }
     });
@@ -50,9 +66,6 @@ export const syncAllAnagrafiche = async () => {
   }
 }
 
-/**
- * Esegue la sincronizzazione dei soli rapportini utente con una chiamata al backend.
- */
 export const syncUserRapportini = async (tecnicoId: string) => {
   console.log(`Avvio procedura di sincronizzazione RAPPORTINI per tecnico: ${tecnicoId}...`);
   if (!tecnicoId) {
@@ -64,77 +77,82 @@ export const syncUserRapportini = async (tecnicoId: string) => {
     const result = await getAllRapportiniForSyncCallable({ tecnicoId });
     const rapportini = result.data as Rapportino[];
 
-    if (!rapportini || rapportini.length === 0) {
-      console.warn("Nessun rapportino restituito dalla funzione di sync. La tabella locale sarà svuotata.");
-      await db.rapportini.clear();
+    if (!rapportini) {
+      console.warn("Nessun rapportino restituito dalla funzione di sync. La tabella locale non verrà modificata.");
       return;
     }
 
-    await db.transaction('rw', db.rapportini, async () => {
-        await db.rapportini.clear();
-        await db.rapportini.bulkPut(rapportini);
-    });
+    await db.rapportini.bulkPut(rapportini);
 
-    console.log(`Sync completata per i rapportini: ${rapportini.length} record.`);
+    console.log(`Sync (non-distruttiva) completata per i rapportini: ${rapportini.length} record.`);
 
   } catch (error) {
-    console.error("ERRORE CRITICO durante la sincronizzazione dei rapportini:", error);
+    console.error("ERRORE CRITICO during la sincronizzazione dei rapportini:", error);
     throw new Error("La procedura di sync rapportini è fallita.");
   }
 }
 
-/**
- * Sincronizza un singolo record di check-in/check-out con Firestore.
- * Questa funzione è ora ROBUSTA: gestisce sia i nuovi eventi (con ID) che i vecchi eventi corrotti (senza ID).
- */
 const syncCheckin = async (payload: CheckinGiornaliero) => {
-    // Rimuovo 'isSync' perché è un campo puramente locale e non va su Firestore.
     const { isSync, ...dataToSync } = payload;
 
-    if (payload.id) {
-        // CASO NORMALE (nuovi eventi): l'ID esiste, quindi uso setDoc per creare/aggiornare.
+    if (payload.id && payload.id.startsWith('local_')) {
+        const collectionRef = collection(firestore, 'checkin_giornalieri');
+        const docRef = await addDoc(collectionRef, { ...dataToSync, timestampSync: serverTimestamp() });
+        
+        await db.checkin_giornalieri.update(payload.id, { id: docRef.id, isSync: true });
+        console.log(`Check-in locale ${payload.id} sincronizzato e aggiornato a ${docRef.id}.`);
+
+        return { id: docRef.id };
+
+    } else if (payload.id) {
         const checkinRef = doc(firestore, 'checkin_giornalieri', payload.id);
         await setDoc(checkinRef, dataToSync, { merge: true });
-        console.log(`Check-in ${payload.id} sincronizzato con successo (metodo: setDoc).`);
+        console.log(`Check-in ${payload.id} aggiornato.`);
         return { id: payload.id };
-    } else {
-        // CASO DI RECUPERO (vecchi eventi corrotti): l'ID manca.
-        // Aggiungo l'evento come un nuovo documento in Firestore e lascio che generi un ID.
-        console.warn(`Check-in senza ID rilevato (dato vecchio/corrotto). Procedo con il recupero.`);
-        const collectionRef = collection(firestore, 'checkin_giornalieri');
-        const docRef = await addDoc(collectionRef, {
-            ...dataToSync,
-            timestampSync: serverTimestamp(),
-            recuperato: true // Aggiungo un flag per riconoscere questi dati
-        });
-        console.log(`Check-in recuperato sincronizzato con successo (metodo: addDoc). Nuovo ID: ${docRef.id}`);
-        return { id: docRef.id };
-    }
+    } 
+    throw new Error("Tentativo di sincro checkin senza ID.");
 };
 
-/**
- * Processa la coda di sincronizzazione salvata in Dexie.
- */
 export const processSyncQueue = async () => {
     const itemsToSync = await db.syncQueue.where('syncStatus').equals('pending').toArray();
     if (itemsToSync.length === 0) return;
   
     for (const item of itemsToSync) {
       try {
+        let syncResult: any;
+
         switch (item.type) {
           case 'rapportino':
-            switch (item.action) {
-              case 'create':
-                await createRapportino(item.payload);
-                break;
-              case 'update':
-                if (!item.entityId) {
-                  throw new Error(`ID entità mancante per l'azione di update del rapportino con ID (coda): ${item.id}`);
+            if (item.action === 'create') {
+                syncResult = await createRapportino(item.payload);
+                const newRapportino = syncResult.data as Rapportino;
+
+                if (!newRapportino || !newRapportino.id) {
+                    console.warn(`createRapportino non ha restituito un ID valido. Tentativo di fallback.`);
+                    const tecnicoId = item.payload?.tecnicoId;
+                    if (!tecnicoId) throw new Error("ID tecnico mancante per il fallback.");
+                    await db.rapportini.delete(item.entityId);
+                    await syncUserRapportini(tecnicoId);
+                } else {
+                    await db.transaction('rw', db.rapportini, async () => {
+                        await db.rapportini.delete(item.entityId);
+                        await db.rapportini.put(newRapportino);
+                        console.log(`Rapportino locale ${item.entityId} riconciliato con l'ID remoto ${newRapportino.id}`);
+                    });
                 }
-                await updateRapportino(item.entityId, item.payload);
-                break;
-              default:
-                throw new Error(`Azione non supportata per rapportino: ${item.action}`);
+
+            } else if (item.action === 'update' && item.entityId) {
+                 if (item.entityId.startsWith('local-')) {
+                    // Questa logica è ora gestita in `aggiungiAllaCoda` per consolidamento.
+                    // Se un task di update per un ID locale arriva qui, significa che il consolidamento
+                    // non è avvenuto (es. l'app è stata chiusa prima). 
+                    // Lo ignoriamo per sicurezza, perché il task di create avrà già i dati aggiornati.
+                    console.log(`Ignoro task di update per ${item.entityId} perché già consolidato.`);
+                } else {
+                    await updateRapportino(item.entityId, item.payload);
+                }
+            } else {
+                throw new Error(`Azione non valida per rapportino: ${item.action}`);
             }
             break;
           
@@ -145,23 +163,19 @@ export const processSyncQueue = async () => {
           default:
             throw new Error(`Tipo non supportato: ${item.type}`);
         }
-        // Se la sincronizzazione ha successo, rimuovi l'elemento dalla coda.
+        
         await db.syncQueue.delete(item.id!);
+
       } catch (error) {
-        console.error(`Errore sync elemento ${item.id}:`, error);
+        console.error(`Errore durante la sincr. dell'elemento ${item.id}. L'elemento rimane in coda.`, error);
+        await db.syncQueue.update(item.id!, { syncStatus: 'error' });
       }
     }
   };
 
-/**
- * Ascolta gli aggiornamenti in tempo reale dei rapportini per il tecnico loggato.
- */
 export const listenForRapportiniUpdates = (tecnicoId: string, onUpdate: (rapportini: Rapportino[]) => void) => {
   const rapportiniRef = collection(firestore, 'rapportini');
-  const q = query(
-    rapportiniRef,
-    where('tecnicoId', '==', tecnicoId)
-  );
+  const q = query(rapportiniRef, where('tecnicoId', '==', tecnicoId));
 
   return onSnapshot(q, async (snapshot) => {
     const rapportini: Rapportino[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Rapportino));

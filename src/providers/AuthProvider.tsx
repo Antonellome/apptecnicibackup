@@ -1,7 +1,7 @@
 
 import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, User, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, db as firestoreDb } from '@/utils/firebase'; // <-- CORREZIONE: puntare al file di utils
+import { auth, db as firestoreDb } from '@/utils/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/models/definitions';
 import { AuthContext, AuthContextType } from '../contexts/AuthContextDefinition';
@@ -13,18 +13,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // --- PRIMO useEffect: Gestisce solo il cambiamento di stato dell'autenticazione ---
+  // --- Gestisce il cambiamento di stato dell'autenticazione ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
+      if (!currentUser) {
+        // Se l'utente si disconnette, puliamo il profilo e smettiamo di caricare
+        setUserProfile(null);
+        setLoading(false);
+      }
     });
-
-    // Cleanup: rimuove il listener quando il componente viene smontato
     return () => unsubscribe();
   }, []);
 
-  // --- SECONDO useEffect: Reagisce al cambiamento dell'utente per recuperare il profilo ---
+  // --- Reagisce al cambiamento dell'utente per recuperare/aggiornare il profilo ---
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (user) {
@@ -35,9 +37,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           if (tecnicoDocSnap.exists()) {
             const tecnicoData = tecnicoDocSnap.data();
-            const isAdmin = tecnicoData.isAdmin || false;
-            const id_categoria = tecnicoData.categoriaId || tecnicoData.id_categoria || '';
-
             const nome = tecnicoData.nome || '';
             const cognome = tecnicoData.cognome || '';
 
@@ -50,42 +49,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               tecnicoId: tecnicoDocSnap.id,
               nome: nome,
               cognome: cognome,
-              isAdmin: isAdmin,
-              categoriaId: id_categoria,
+              isAdmin: tecnicoData.isAdmin || false,
+              categoriaId: tecnicoData.categoriaId || tecnicoData.id_categoria || '',
               displayName: `${nome} ${cognome}`.trim(),
               theme: 'light',
             };
             
+            // Aggiorna lo stato e il DB locale
             setUserProfile(profile);
-            await localDb.tecnici.put(profile);
-            console.log(`[Auth] Profilo per ${profile.displayName} salvato in localDb.tecnici.`);
+            // USA PUT invece di ADD per fare un "upsert": crea o aggiorna
+            await localDb.tecnici.put(profile); 
+            console.log(`[Auth] Profilo per ${profile.displayName} salvato/aggiornato in localDb.`);
 
           } else {
-            console.warn(`[Auth] Profilo tecnico non trovato per UID: ${user.uid}.`);
+            // Se il profilo non esiste in Firestore, l'utente non può usare l'app
+            console.error(`[Auth] ERRORE CRITICO: Profilo tecnico non trovato in Firestore per UID: ${user.uid}. L'utente non può essere autorizzato.`);
             setUserProfile(null);
-            await localDb.tecnici.clear();
+            // Non pulire la tabella, l'utente potrebbe semplicemente non avere un profilo valido
           }
         } catch (error) {
-          console.error("[Auth] Errore critico nel caricamento del profilo utente:", error);
+          console.error("[Auth] Errore nel caricamento del profilo utente:", error);
           setUserProfile(null);
-          await localDb.tecnici.clear();
         } finally {
           setLoading(false);
         }
-      } else {
-        // Utente non loggato
-        setUserProfile(null);
-        await localDb.tecnici.clear();
-        console.log("[Auth] Utente non loggato, localDb.tecnici pulito.");
       }
+      // Se user è null, non facciamo nulla qui, la gestione è nell'altro useEffect
     };
 
     fetchUserProfile();
-  }, [user]); // <-- La dipendenza ora è [user]
+  }, [user]);
 
   const logout = useCallback(async () => {
     try {
       await signOut(auth);
+      // Non è necessario pulire manualmente i dati locali qui,
+      // la logica di sincronizzazione dovrebbe gestire la coerenza.
+      console.log("[Auth] Utente disconnesso.");
     } catch (error) {
       console.error("Errore durante il logout:", error);
     }
@@ -103,7 +103,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     resetPassword,
   }), [user, userProfile, loading, logout, resetPassword]);
 
-  if (loading && !userProfile) { // Mostra il loader solo al primo caricamento
+  // Mostra il loader solo durante il caricamento iniziale dell'autenticazione/profilo
+  if (loading) {
     return <FullScreenLoader />;
   }
 

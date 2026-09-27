@@ -37,7 +37,6 @@ const callCloudFunction = async (url: string, payload: any) => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
         },
-        // CORREZIONE DEFINITIVA: Le funzioni onCall chiamate via HTTPS richiedono un involuto { data: ... }
         body: JSON.stringify({ data: sanitizedPayload }),
     });
 
@@ -60,8 +59,9 @@ const callCloudFunction = async (url: string, payload: any) => {
  */
 export const createRapportino = async (rapportinoData: any) => {
     const url = 'https://createrapportino-2xbiermwyq-oa.a.run.app';
-    // La funzione onCall si aspetta un oggetto { rapportinoData: ... }
-    return await callCloudFunction(url, { rapportinoData });
+    const result = await callCloudFunction(url, { rapportinoData });
+    const rapportinoCreato = result.result || result.data || result;
+    return { data: rapportinoCreato };
 };
 
 /**
@@ -70,8 +70,16 @@ export const createRapportino = async (rapportinoData: any) => {
  * @param rapportinoData I dati aggiornati del rapportino.
  */
 export const updateRapportino = async (reportId: string, rapportinoData: any) => {
+    if (reportId.startsWith('local-')) {
+        // Questa condizione indica un errore di logica a monte. 
+        // Un 'update' non dovrebbe mai essere chiamato per un ID locale.
+        // La logica di consolidamento dovrebbe avvenire in `processSyncQueue`.
+        throw new Error(`Tentativo di chiamare updateRapportino con un ID locale (${reportId}). Questo non è permesso.`);
+    }
+
     const url = 'https://updaterapportino-2xbiermwyq-oa.a.run.app';
-    // La funzione onCall si aspetta { id: ..., rapportinoData: ... }
     const payload = { id: reportId, rapportinoData };
-    return await callCloudFunction(url, payload);
+    const result = await callCloudFunction(url, payload);
+    const rapportinoAggiornato = result.result || result.data || result;
+    return { data: rapportinoAggiornato };
 };

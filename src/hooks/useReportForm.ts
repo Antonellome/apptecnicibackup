@@ -177,7 +177,7 @@ export const useReportForm = () => {
     const navigate = useNavigate();
     const authContext = useContext(AuthContext);
     const userProfile = authContext?.userProfile;
-    const { requestManualSync } = useSyncManager();
+    const { triggerQueueSync } = useSyncManager();
     const { reportId } = useParams<{ reportId: string }>();
     const { showSnackbar } = useSnackbar();
 
@@ -396,8 +396,8 @@ export const useReportForm = () => {
                 savedId = entityId;
             }
             localStorage.removeItem(FORM_AUTOSAVE_KEY);
-            requestManualSync();
             if (options.navigateOnSuccess) navigate('/lista-report');
+            triggerQueueSync(); 
             return savedId;
         } catch (error) { showSnackbar(`Errore: ${(error as Error).message}`, "error"); return null; }
     };
