@@ -1,12 +1,13 @@
 
 import { useState, useMemo, useContext, useRef, useEffect } from 'react';
-import { Box, Typography, Button, Paper, Grid, TextField, Select, MenuItem, FormControl, InputLabel, CircularProgress, Alert, ListSubheader } from '@mui/material';
+import { Box, Typography, Button, Paper, Grid, TextField, Select, MenuItem, FormControl, InputLabel, CircularProgress, Alert } from '@mui/material';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as dexieDb } from '@/db/local-db';
 import { AuthContext } from '@/contexts/AuthContextDefinition';
 import { useMasterData } from '@/hooks/useMasterData';
 import { aggiungiAllaCoda } from '@/services/offlineSync';
 import { useSyncManager } from '@/hooks/useSyncManager';
+import { CheckinGiornaliero } from '@/models/definitions';
 
 const FullScreenLoader = () => (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -16,9 +17,8 @@ const FullScreenLoader = () => (
 
 type MachineState = 'GIORNATA_NON_INIZIATA' | 'DENTRO_LUOGO' | 'FUORI_LUOGO';
 type ActionType = 'INIZIO_GIORNATA' | 'FINE_GIORNATA' | 'ENTRATA' | 'USCITA';
-type CheckinEvent = { id?: string; tecnicoId: string; tipo: string; timestampImpostato: string; timestampReale: string; naveId?: string; luogoId?: string; };
 
-const calculateCurrentState = (events: CheckinEvent[] | undefined): { state: MachineState, place: string | null } => {
+const calculateCurrentState = (events: CheckinGiornaliero[] | undefined): { state: MachineState, place: string | null } => {
     if (!events || events.length === 0) {
         return { state: 'GIORNATA_NON_INIZIATA', place: null };
     }
@@ -56,7 +56,7 @@ const getLocalDateTime = () => {
 
 const CheckinPage = () => {
     const authContext = useContext(AuthContext);
-    const { masterData, loading: loadingAnagrafiche } = useMasterData();
+    const { masterData } = useMasterData();
     const { triggerQueueSync } = useSyncManager();
     const scrollBoxRef = useRef<HTMLDivElement>(null);
 
@@ -78,7 +78,7 @@ const CheckinPage = () => {
         return dexieDb.checkin_giornalieri.where('tecnicoId').equals(user.uid).sortBy('timestampImpostato');
     }, [user?.uid]);
 
-    const { state: uiState, place: currentPlace } = useMemo(() => calculateCurrentState(allUserEvents), [allUserEvents]);
+    const { state: uiState } = useMemo(() => calculateCurrentState(allUserEvents), [allUserEvents]);
 
     useEffect(() => {
         if (scrollBoxRef.current) {
@@ -97,7 +97,7 @@ const CheckinPage = () => {
         setError(null);
 
         if (!user?.uid || !authContext?.userProfile) {
-            setError("Utente non trovato.");
+            setError("Profilo utente non caricato o non valido.");
             setIsSubmitting(false);
             return;
         }
@@ -108,21 +108,32 @@ const CheckinPage = () => {
                 const freshEvents = await dexieDb.checkin_giornalieri.where('tecnicoId').equals(user.uid).sortBy('timestampImpostato');
                 const { state: realTimeState, place: realTimePlace } = calculateCurrentState(freshEvents);
                 
-                const lastEventTimestamp = freshEvents.length > 0 ? new Date(freshEvents[freshEvents.length - 1].timestampImpostato) : null;
+                const lastEventTimestamp = freshEvents.length > 0 ? new Date(freshEvents[freshEvents.length - 1].timestampImpostato as Date) : null;
                 const impostatoTimestamp = new Date(timeValues[action]);
 
                 if (lastEventTimestamp && impostatoTimestamp <= lastEventTimestamp) {
                     throw new Error("L'orario impostato deve essere successivo all'ultimo evento registrato.");
                 }
 
-                const addEventToDbAndQueue = async (eventPayload: Omit<CheckinEvent, 'id' | 'timestampReale'> & { tecnicoName: string }) => {
+                const addEventToDbAndQueue = async (eventPayload: Omit<CheckinGiornaliero, 'id' | 'timestampReale' | 'data' | 'checkIn' | 'checkOut' | 'isSync' | 'userId'>) => {
                     const localId = `local_${Date.now()}_${Math.random()}`;
-                    const finalPayload = { ...eventPayload, id: localId, timestampReale: new Date().toISOString() };
-                    await dexieDb.checkin_giornalieri.add(finalPayload as any);
+                    
+                    const finalPayload: CheckinGiornaliero = { 
+                        ...eventPayload, 
+                        id: localId, 
+                        timestampReale: new Date().toISOString() as any,
+                        data: new Date().toISOString().split('T')[0],
+                        checkIn: new Date().toISOString() as any,
+                        checkOut: new Date().toISOString() as any,
+                        isSync: false,
+                        userId: user.uid,
+                        tecnicoName: authContext.userProfile?.displayName || user.email || 'N/D'
+                    };
+
+                    await dexieDb.checkin_giornalieri.add(finalPayload);
                     await aggiungiAllaCoda({ type: 'checkin', action: 'create', entityId: localId, payload: finalPayload });
                 };
 
-                const tecnicoName = authContext.userProfile.displayName || user.email || 'N/D';
                 const impostatoISO = impostatoTimestamp.toISOString();
 
                 switch (action) {
@@ -130,11 +141,11 @@ const CheckinPage = () => {
                         if (realTimeState !== 'GIORNATA_NON_INIZIATA') throw new Error("La giornata è già iniziata.");
                         if (!selectedLuogo) throw new Error("Seleziona un luogo o una nave per iniziare.");
                         
-                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'inizio_giornata', timestampImpostato: impostatoISO });
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tipo: 'inizio_giornata', timestampImpostato: impostatoISO as any });
                         
                         const [source, id] = selectedLuogo.split('_');
                         const timestampCheckin = new Date(impostatoTimestamp.getTime() + 1000).toISOString();
-                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_in_luogo', timestampImpostato: timestampCheckin, ...(source === 'navi' ? { naveId: id } : { luogoId: id }) });
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tipo: 'check_in_luogo', timestampImpostato: timestampCheckin as any, ...(source === 'navi' ? { naveId: id } : { luogoId: id }) });
                         break;
 
                     case 'FINE_GIORNATA':
@@ -144,10 +155,10 @@ const CheckinPage = () => {
                             if (!realTimePlace) throw new Error("Stato inconsistente: sei dentro un luogo non identificato.");
                             const [sourceCheckout, idCheckout] = realTimePlace.split('_');
                             const timestampUscita = new Date(impostatoTimestamp.getTime() - 1000).toISOString();
-                            await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_out_luogo', timestampImpostato: timestampUscita, ...(sourceCheckout === 'navi' ? { naveId: idCheckout } : { luogoId: idCheckout }) });
+                            await addEventToDbAndQueue({ tecnicoId: user.uid, tipo: 'check_out_luogo', timestampImpostato: timestampUscita as any, ...(sourceCheckout === 'navi' ? { naveId: idCheckout } : { luogoId: idCheckout }) });
                         }
                         
-                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'fine_giornata', timestampImpostato: impostatoISO });
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tipo: 'fine_giornata', timestampImpostato: impostatoISO as any });
                         break;
 
                     case 'ENTRATA':
@@ -155,7 +166,7 @@ const CheckinPage = () => {
                         if (!selectedLuogo) throw new Error("Seleziona un luogo o nave in cui entrare.");
                         
                         const [entrataSource, entrataId] = selectedLuogo.split('_');
-                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_in_luogo', timestampImpostato: impostatoISO, ...(entrataSource === 'navi' ? { naveId: entrataId } : { luogoId: entrataId }) });
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tipo: 'check_in_luogo', timestampImpostato: impostatoISO as any, ...(entrataSource === 'navi' ? { naveId: entrataId } : { luogoId: entrataId }) });
                         break;
 
                     case 'USCITA':
@@ -163,7 +174,7 @@ const CheckinPage = () => {
                         if (!realTimePlace) throw new Error("Stato inconsistente: non è possibile determinare da dove uscire.");
                         
                         const [uscitaSource, uscitaId] = realTimePlace.split('_');
-                        await addEventToDbAndQueue({ tecnicoId: user.uid, tecnicoName, tipo: 'check_out_luogo', timestampImpostato: impostatoISO, ...(uscitaSource === 'navi' ? { naveId: uscitaId } : { luogoId: uscitaId }) });
+                        await addEventToDbAndQueue({ tecnicoId: user.uid, tipo: 'check_out_luogo', timestampImpostato: impostatoISO as any, ...(uscitaSource === 'navi' ? { naveId: uscitaId } : { luogoId: uscitaId }) });
                         break;
                 }
             });
@@ -227,8 +238,9 @@ const CheckinPage = () => {
                         }}
                       >
                           {allUserEvents.slice(-3).map((e) => {
+                              if (!e.tipo) return null;
                               const nome = e.naveId ? masterData?.navi?.find(n => n.id === e.naveId)?.nome : masterData?.luoghi?.find(l => l.id === e.luogoId)?.nome;
-                              const orario = new Date(e.timestampImpostato).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                              const orario = new Date(e.timestampImpostato as Date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
                               const tipoEvento = e.tipo.replace(/_/g, ' ');
                               return (<li key={e.id}><b>{tipoEvento.charAt(0).toUpperCase() + tipoEvento.slice(1)}</b> alle {orario} {nome ? `- ${nome}` : ''}</li>);
                           })}
@@ -239,7 +251,6 @@ const CheckinPage = () => {
               {isSubmitting && <Box sx={{display: 'flex', justifyContent: 'center', my: 2}}><CircularProgress /></Box>}
 
               <Grid container spacing={3}>
-                {/* SEZIONE 1: INIZIO GIORNATA */}
                 <Grid size={12}>
                     <Paper sx={getSectionStyle(canStartDay)} elevation={2}>
                         <Typography variant="h6" gutterBottom>1. Inizio Giornata</Typography>
@@ -259,7 +270,6 @@ const CheckinPage = () => {
                     </Paper>
                 </Grid>
 
-                {/* SEZIONE 2: ENTRATA */}
                 <Grid size={12}>
                      <Paper sx={getSectionStyle(canEnter)} elevation={2}>
                         <Typography variant="h6" gutterBottom>2. Entrata</Typography>
@@ -279,7 +289,6 @@ const CheckinPage = () => {
                     </Paper>
                 </Grid>
 
-                {/* SEZIONE 3: USCITA */}
                 <Grid size={12}>
                     <Paper sx={getSectionStyle(canExit)} elevation={2}>
                         <Typography variant="h6" gutterBottom>3. Uscita</Typography>
@@ -298,7 +307,6 @@ const CheckinPage = () => {
                     </Paper>
                 </Grid>
 
-                {/* SEZIONE 4: FINE GIORNATA */}
                  <Grid size={12}>
                     <Paper sx={getSectionStyle(canEndDay)} elevation={2}>
                         <Typography variant="h6" gutterBottom>4. Fine Giornata</Typography>

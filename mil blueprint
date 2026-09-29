@@ -1,0 +1,27 @@
+# Blueprint del Progetto
+
+Questo documento definisce le linee guida e le procedure operative per lo sviluppo e il deploy dell'applicazione.
+
+## Istruzioni per il Deploy
+
+Questa sezione descrive la procedura corretta per effettuare il deploy dell'applicazione sull'ambiente dei tecnici.
+
+### Prerequisito: Configurazione del Target
+
+Assicurarsi che il target di deploy per l'hosting `tecnici` sia configurato correttamente. Questa operazione va eseguita solo una volta per l'ambiente di sviluppo.
+
+```bash
+firebase target:apply hosting tecnici tecnici
+```
+
+### Procedura di Deploy
+
+Per garantire un deploy affidabile, la fase di build e quella di deploy devono essere eseguite in un unico comando concatenato. Questo previene problemi legati alla possibile cancellazione della cartella di build prima del deploy.
+
+```bash
+npm run build && firebase deploy --only hosting:tecnici
+```
+
+Questo comando si occupa di:
+1.  Costruire l'applicazione per la produzione.
+2.  Eseguire il deploy della cartella di build (`dist`) sull'hosting site `tecnici`.

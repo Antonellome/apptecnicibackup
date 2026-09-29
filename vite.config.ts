@@ -8,14 +8,13 @@ import { fileURLToPath, URL } from 'url';
 export default defineConfig({
   plugins: [
     react(),
-    // RIABILITATO CON LA CONFIGURAZIONE CORRETTA
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json,vue,txt,woff2}'],
-        // CORREZIONE: Aggiunta regola per ignorare le chiamate API dalla cache.
-        // Qualsiasi richiesta che corrisponde a questo pattern andrà direttamente alla rete.
+        // AUMENTO IL LIMITE PER IL PRECACHING DEL SERVICE WORKER
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/europe-west6-riso-project-app\.cloudfunctions\.net\/.*/,
@@ -25,14 +24,14 @@ export default defineConfig({
               backgroundSync: {
                 name: 'api-queue',
                 options: {
-                  maxRetentionTime: 24 * 60, // Ore
+                  maxRetentionTime: 24 * 60,
                 },
               },
             },
           },
         ],
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo png trasp.png'],
       manifest: {
         name: 'App Tecnici',
         short_name: 'Tecnici',
@@ -42,17 +41,17 @@ export default defineConfig({
         orientation: 'any',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'logo png trasp.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'logo png trasp.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'logo png trasp.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'

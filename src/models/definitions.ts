@@ -1,3 +1,4 @@
+
 // =====================================================================================
 // --- TIPI DI BASE E ALIAS ---
 // =====================================================================================
@@ -100,18 +101,14 @@ export interface Tecnico {
     updatedAt?: FirebaseTimestamp; 
 }
 
-// --- ANAGRAFICHE SECONDARIE --- 
+// --- ANAGRAFICHE SECONDARIE (PULITE) --- 
 export interface Veicolo { id?: string; nome: string; marca?: string; modello?: string; targa?: string; }
 export interface Cliente { id?: string; nome: string; }
 export interface Ditta { id?: string; nome: string; }
 export interface Categoria { id?: string; nome: string; }
-export interface Lavorazione { id?: string; nome: string; categoriaId: string; }
 export interface Nave { id?: string; nome: string; clienteId: string; }
 export interface Luogo { id?: string; nome: string; naveId?: string; clienteId?: string; }
 export interface TipoGiornata { id: string; nome: string; tipo: 'oraria' | 'giornaliera'; colore: string; sigla: string; categoria?: string; }
-export interface Qualifica { id?: string; nome: string; }
-export interface Sede { id?: string; nome: string; }
-export interface Sistema { id?: string; nome: string; }
 export interface WebAppUser { uid: string; email: string; displayName: string; tecnicoId: string; dittaId: string; }
 export interface Notifica { id: string; title: string; body: string; createdAt: FirebaseTimestamp; isRead: boolean; letta: boolean; tecnicoId?: string; categoriaId?: string; target?: string; }
 export interface CheckinGiornaliero {
@@ -122,8 +119,10 @@ export interface CheckinGiornaliero {
     checkOut: FirebaseTimestamp;
     isSync: boolean;
     userId: string;
-    timestampImpostato?: FirebaseTimestamp;
-    tipo?: 'checkin' | 'checkout' | 'inizio_giornata' | 'fine_giornata' | 'check_in_luogo' | 'check_out_luogo'; 
+    timestampImpostato: FirebaseTimestamp;
+    timestampReale: FirebaseTimestamp;
+    tecnicoName?: string;
+    tipo: 'checkin' | 'checkout' | 'inizio_giornata' | 'fine_giornata' | 'check_in_luogo' | 'check_out_luogo'; 
     naveId?: string;
     luogoId?: string;
 }
@@ -151,10 +150,6 @@ export interface MasterData {
     tipiGiornata: TipoGiornata[];
     impostazioni: Impostazioni;
     clienti: Cliente[];
-    lavorazioni: Lavorazione[];
-    sedi: Sede[];
-    qualifiche: Qualifica[];
-    sistemi: Sistema[];
 }
 
 export interface FormField {

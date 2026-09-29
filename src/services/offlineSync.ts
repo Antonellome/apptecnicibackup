@@ -1,24 +1,36 @@
+
 import { db } from '@/db/local-db';
 import { functions, db as firestore } from '@/utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { createRapportino, updateRapportino } from './rapportiniService';
 import { onSnapshot, collection, query, where, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Rapportino, CheckinGiornaliero, SyncQueueItem } from '@/models/definitions';
+import { Rapportino, CheckinGiornaliero, SyncEvent } from '@/models/definitions';
+import { TipiGiornataSchema, CategorieSchema, ClientiSchema, DitteSchema, LuoghiSchema, NaviSchema, TecniciSchema, VeicoliSchema } from '@/models/schemas';
+import { z } from 'zod';
 
 const syncAllAnagraficheCallable = httpsCallable(functions, 'syncAllAnagrafiche');
 const getAllRapportiniForSyncCallable = httpsCallable(functions, 'getAllRapportiniForSync');
 
-export const aggiungiAllaCoda = async (item: Omit<SyncQueueItem, 'id' | 'timestamp' | 'syncStatus'>) => {
+const schemaMap: { [key: string]: z.ZodArray<any> } = {
+  tipiGiornata: TipiGiornataSchema,
+  categorie: CategorieSchema,
+  clienti: ClientiSchema,
+  ditte: DitteSchema,
+  luoghi: LuoghiSchema,
+  navi: NaviSchema,
+  tecnici: TecniciSchema,
+  veicoli: VeicoliSchema,
+};
+
+export const aggiungiAllaCoda = async (item: Omit<SyncEvent, 'id' | 'timestamp' | 'syncStatus'>) => {
   console.log("Aggiungo alla coda di sincronizzazione", item);
   
-  // Logica di consolidamento per gli aggiornamenti offline
   if (item.type === 'rapportino' && item.action === 'update' && item.entityId && item.entityId.startsWith('local-')) {
     const createOp = await db.syncQueue.where({ entityId: item.entityId, action: 'create' }).first();
     if (createOp) {
       console.log(`Consolido l'update per ${item.entityId} nel task di creazione esistente.`);
       const mergedPayload = { ...createOp.payload, ...item.payload };
       await db.syncQueue.update(createOp.id!, { payload: mergedPayload });
-      // L'update è stato consolidato, non serve aggiungerlo come task separato.
       return; 
     }
   }
@@ -27,44 +39,73 @@ export const aggiungiAllaCoda = async (item: Omit<SyncQueueItem, 'id' | 'timesta
     ...item,
     timestamp: new Date(),
     syncStatus: 'pending'
-  } as SyncQueueItem);
+  } as SyncEvent);
 };
 
 export const syncAllAnagrafiche = async () => {
-  console.log("Avvio procedura di sincronizzazione ANAGRAFICHE...");
-  try {
-    const result = await syncAllAnagraficheCallable();
-    const allData = result.data as { [key: string]: any[] };
+    console.log("Avvio procedura di sincronizzazione ANAGRAFICHE...");
+    try {
+        const result = await syncAllAnagraficheCallable();
+        const allData = result.data as { [key: string]: any[] };
 
-    if (!allData || Object.keys(allData).length === 0) {
-      console.warn("La funzione di sync anagrafiche non ha restituito dati.");
-      return;
-    }
-
-    const tablesToUpdate = Object.keys(allData).filter(key => db.table(key) && key !== 'impostazioni');
-    
-    if (tablesToUpdate.length === 0) {
-        console.warn("Nessuna delle collezioni anagrafiche ricevute corrisponde a una tabella da aggiornare.");
-        return;
-    }
-    
-    const dexieTables = tablesToUpdate.map(name => (db as any)[name]);
-
-    await db.transaction('rw', dexieTables, async () => {
-      for (const collectionName of tablesToUpdate) {
-        const items = allData[collectionName];
-        if (items && Array.isArray(items)) {
-            const table = (db as any)[collectionName];
-            await table.bulkPut(items);
-            console.log(`Sync anagrafiche (non-distruttiva) completata per ${collectionName}: ${items.length} record.`);
+        if (!allData || Object.keys(allData).length === 0) {
+            console.warn("La funzione di sync anagrafiche non ha restituito dati.");
+            return;
         }
-      }
-    });
-  } catch (error) {
-    console.error("ERRORE CRITICO durante la sincronizzazione delle anagrafiche:", error);
-    throw new Error("La procedura di sync anagrafiche è fallita.");
-  }
+
+        const knownTables = Object.keys(schemaMap);
+        const dexieTables = knownTables.map(name => (db as any)[name]);
+
+        await db.transaction('rw', dexieTables, async () => {
+            for (const collectionName of knownTables) {
+                const items = allData[collectionName];
+
+                if (!items || !Array.isArray(items)) {
+                    console.warn(`Dati per l'anagrafica '${collectionName}' non presenti o non validi nella risposta del server. Salto.`);
+                    continue;
+                }
+
+                const schema = schemaMap[collectionName];
+                const validationResult = schema.safeParse(items);
+
+                if (validationResult.success) {
+                    const table = (db as any)[collectionName];
+                    await table.bulkPut(validationResult.data);
+                    console.log(`Sync anagrafiche completata per ${collectionName}: ${validationResult.data.length} record validi.`);
+                } else {
+                    console.error(`Validazione fallita per ${collectionName}.`, validationResult.error.issues);
+
+                    // LOG DI DEBUG AVANZATO
+                    const firstFailingItem = items.find(item => !schema.element.safeParse(item).success);
+                    if (firstFailingItem) {
+                        console.error(`Dati del primo record fallito per ${collectionName}:`, JSON.stringify(firstFailingItem, null, 2));
+                        const itemValidation = schema.element.safeParse(firstFailingItem);
+                        if (!itemValidation.success) {
+                            console.error(`Errore di validazione specifico per il record:`, JSON.stringify(itemValidation.error.issues, null, 2));
+                        }
+                    }
+
+                    const validItems = items.filter(item => schema.element.safeParse(item).success);
+                    if (validItems.length > 0) {
+                        const table = (db as any)[collectionName];
+                        await table.bulkPut(validItems);
+                        console.log(`Salvato un subset di dati validi per ${collectionName}: ${validItems.length}/${items.length} record.`);
+                    }
+                }
+            }
+        });
+    } catch (error: any) {
+        console.error("ERRORE CRITICO durante la sincronizzazione delle anagrafiche. Dettagli:", error);
+        if (error.message) {
+            console.error("Messaggio Errore:", error.message);
+        }
+        if (error.details) {
+            console.error("Dettagli Errore:", JSON.stringify(error.details));
+        }
+        throw new Error(`La procedura di sync anagrafiche è fallita: ${error.message || 'Errore sconosciuto'}`);
+    }
 }
+
 
 export const syncUserRapportini = async (tecnicoId: string) => {
   console.log(`Avvio procedura di sincronizzazione RAPPORTINI per tecnico: ${tecnicoId}...`);
@@ -143,10 +184,6 @@ export const processSyncQueue = async () => {
 
             } else if (item.action === 'update' && item.entityId) {
                  if (item.entityId.startsWith('local-')) {
-                    // Questa logica è ora gestita in `aggiungiAllaCoda` per consolidamento.
-                    // Se un task di update per un ID locale arriva qui, significa che il consolidamento
-                    // non è avvenuto (es. l'app è stata chiusa prima). 
-                    // Lo ignoriamo per sicurezza, perché il task di create avrà già i dati aggiornati.
                     console.log(`Ignoro task di update per ${item.entityId} perché già consolidato.`);
                 } else {
                     await updateRapportino(item.entityId, item.payload);
@@ -168,7 +205,7 @@ export const processSyncQueue = async () => {
 
       } catch (error) {
         console.error(`Errore durante la sincr. dell'elemento ${item.id}. L'elemento rimane in coda.`, error);
-        await db.syncQueue.update(item.id!, { syncStatus: 'error' });
+        await db.syncQueue.update(item.id!, { syncStatus: 'failed' });
       }
     }
   };

@@ -133,6 +133,7 @@ const TecniciPage: React.FC = () => {
                                 columns={columns}
                                 rowHeight={60}
                                 slots={{ toolbar: GridToolbarContainer }}
+                                hideFooter
                             />
                         }
                     </Box>

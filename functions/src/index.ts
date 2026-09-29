@@ -1,3 +1,4 @@
+
 import * as admin from "firebase-admin";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
@@ -7,10 +8,10 @@ import { setGlobalOptions } from "firebase-functions/v2";
 initializeApp();
 const db = getFirestore();
 
-// IMPOSTAZIONE GLOBALE DELLA REGIONE. QUESTA SOVRASCRIVE IL DEFAULT DEL PROGETTO.
+// IMPOSTAZIONE GLOBALE DELLA REGIONE.
 setGlobalOptions({ region: "europe-west6" });
 
-// --- FUNZIONI RAPPORTINI (VALIDATE) ---
+// --- FUNZIONI RAPPORTINI ---
 
 export const createRapportino = onCall(async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
@@ -64,7 +65,7 @@ export const getAllRapportiniForSync = onCall(async (request) => {
     return { data: snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) };
 });
 
-// --- FUNZIONI CHECK-IN (VALIDATE) ---
+// --- FUNZIONI CHECK-IN ---
 
 export const createCheckin = onCall(async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
@@ -85,12 +86,12 @@ export const getCheckinsUpdates = onCall(async (request) => {
     return { data: snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) };
 });
 
-// --- FUNZIONE ANAGRAFICHE (VALIDATA E CORRETTA) ---
+// --- FUNZIONE ANAGRAFICHE ---
 
 export const syncAllAnagrafiche = onCall(async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
     
-    // FIX DEFINITIVO: Questo elenco ora corrisponde alla realtà del DB e dell'UI.
+    // Elenco delle collezioni REALI da sincronizzare
     const collections = ["clienti", "navi", "luoghi", "ditte", "categorie", "tipiGiornata", "veicoli", "tecnici"];
     
     const snapshots = await Promise.all(collections.map(c => db.collection(c).get()));

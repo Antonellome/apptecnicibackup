@@ -9,111 +9,93 @@ import { hasInitialSyncBeenTriggered, markInitialSyncAsTriggered } from '@/servi
 
 export const useSyncManager = () => {
     const { showSnackbar } = useSnackbar();
-    const { userProfile } = useAuth();
-    // Lo stato di sincronizzazione è vero solo se la sincronizzazione iniziale NON è ancora avvenuta.
+    const { user } = useAuth();
     const [isSyncing, setIsSyncing] = useState(() => !hasInitialSyncBeenTriggered());
     const isOnline = useOnlineStatus();
     const hasBeenOfflineRef = useRef(false);
 
-    // Usiamo una ref per avere sempre l'ID più aggiornato nelle callback senza causare re-render
-    const tecnicoIdRef = useRef(userProfile?.tecnicoId);
-    useEffect(() => {
-        tecnicoIdRef.current = userProfile?.tecnicoId;
-    }, [userProfile?.tecnicoId]);
-
-    // Sincronizza la coda di upload (operazioni offline)
-    const triggerQueueSync = useCallback(async (isComingBackOnline = false) => {
-        if (!isOnline) {
-            console.log("[Sync] Trigger per la coda ignorato: offline.");
-            return;
-        }
-        try {
-            await processSyncQueue();
-            if (isComingBackOnline) {
-                showSnackbar('Bentornato online! Le tue modifiche sono state sincronizzate.', 'success');
-            }
-            console.log("[Sync] Coda di upload processata con successo.");
-        } catch (error) {
-            console.error('[Sync] Errore durante il processamento della coda:', error);
-            showSnackbar('Errore nel sincronizzare le ultime modifiche.', 'error');
-        }
-    }, [isOnline, showSnackbar]);
-
-    // Esegue una sincronizzazione completa (upload + download)
-    const runFullSync = useCallback(async (syncType: 'Iniziale' | 'Manuale') => {
-        // Per le richieste manuali, impedisce doppie sincronizzazioni.
-        // Per quella iniziale, questo controllo viene bypassato.
+    const runFullSync = useCallback(async (syncType: 'Iniziale' | 'Manuale', tecnicoId: string) => {
         if (syncType === 'Manuale' && isSyncing) {
             showSnackbar("Sincronizzazione già in corso.", "info");
             return;
-        }
-
-        const tecnicoId = tecnicoIdRef.current;
-        if (!tecnicoId) {
-             console.error("[Sync] Sincronizzazione abortita: ID Tecnico non disponibile.");
-             // Se è l'iniziale, dobbiamo sbloccare l'UI per evitare caricamenti infiniti
-             if (syncType === 'Iniziale') setIsSyncing(false);
-             return;
         }
 
         setIsSyncing(true);
         console.log(`[Sync] Avvio sincronizzazione ${syncType} per utente ${tecnicoId}.`);
 
         try {
-            await processSyncQueue();
-            await syncAllAnagrafiche();
-            await syncUserRapportini(tecnicoId);
-            
+            if (syncType === 'Iniziale') {
+                await syncAllAnagrafiche();
+                await syncUserRapportini(tecnicoId);
+                await processSyncQueue();
+            } else {
+                await processSyncQueue();
+                await syncAllAnagrafiche();
+                await syncUserRapportini(tecnicoId);
+            }
+
             if (syncType === 'Manuale') {
                 showSnackbar('Sincronizzazione completata!', 'success');
             }
             console.log(`[Sync] Sincronizzazione ${syncType} completata con successo.`);
-
         } catch (error) {
             console.error(`[Sync] Errore critico durante la sincronizzazione ${syncType}.`, error);
             if (syncType === 'Manuale') showSnackbar("Errore durante la sincronizzazione.", "error");
-
         } finally {
-            // Fondamentale: sblocca l'UI solo alla fine di tutto il processo.
             setIsSyncing(false);
+            if (syncType === 'Iniziale') {
+                // Questa chiamata ora scrive su una variabile globale, non su uno stato React
+                markInitialSyncAsTriggered();
+            }
         }
-    }, [showSnackbar, isOnline, isSyncing]); // Aggiunto isSyncing per avere sempre il valore corretto
+    }, [isSyncing, showSnackbar]);
 
     // Effetto per la SINCRONIZZAZIONE INIZIALE
     useEffect(() => {
-        // La sincronizzazione iniziale parte solo se:
-        // 1. Siamo online
-        // 2. Il profilo utente è stato caricato (abbiamo un tecnicoId)
-        // 3. Non è mai stata avviata prima in questa sessione
-        if (isOnline && userProfile?.tecnicoId && !hasInitialSyncBeenTriggered()) {
-            console.log("[Sync] Trigger: Avvio sincronizzazione iniziale.");
+        // La condizione ora si basa sullo stato globale, immune ai ri-render
+        if (isOnline && user?.uid && !hasInitialSyncBeenTriggered()) {
+            console.log("[Sync] Trigger: Avvio sincronizzazione iniziale (una tantum per sessione).");
+            // Marco lo stato globale. Anche se questo useEffect venisse richiamato,
+            // hasInitialSyncBeenTriggered() restituirebbe true, bloccando il loop.
             markInitialSyncAsTriggered();
-            runFullSync('Iniziale');
+            runFullSync('Iniziale', user.uid);
         }
-    }, [isOnline, userProfile, runFullSync]);
+    }, [isOnline, user, runFullSync]);
 
-    // Effetto per il RIENTRO ONLINE
+    const triggerQueueSync = useCallback(async (tecnicoId: string, isComingBackOnline = false) => {
+        if (!isOnline) return;
+        try {
+            await processSyncQueue();
+            await syncUserRapportini(tecnicoId);
+            if (isComingBackOnline) {
+                showSnackbar('Bentornato online! Le tue modifiche sono state sincronizzate.', 'success');
+            }
+        } catch (error) {
+            console.error('[Sync] Errore durante il processamento della coda:', error);
+            showSnackbar('Errore nel sincronizzare le ultime modifiche.', 'error');
+        }
+    }, [isOnline, showSnackbar]);
+
+    // Effetto per gestire il RIENTRO DALLA MODALITÀ OFFLINE
     useEffect(() => {
         if (!isOnline) {
             hasBeenOfflineRef.current = true;
             return;
         }
-        if (isOnline && hasBeenOfflineRef.current) {
+        if (isOnline && hasBeenOfflineRef.current && user?.uid) {
             console.log("[Sync] Trigger: Rientro online, avvio sincronizzazione della coda.");
-            triggerQueueSync(true);
+            triggerQueueSync(user.uid, true);
             hasBeenOfflineRef.current = false;
         }
-    }, [isOnline, triggerQueueSync]);
+    }, [isOnline, user, triggerQueueSync]);
 
     const requestManualSync = useCallback(() => {
-        if (!isOnline) {
-            showSnackbar('Sei offline. Le modifiche verranno sincronizzate appena tornerai online.', 'warning');
-            return;
-        }
-        runFullSync('Manuale');
-    }, [isOnline, runFullSync]);
+        if (!user?.uid) return showSnackbar('Impossibile avviare la sincronizzazione: utente non valido.', 'error');
+        if (!isOnline) return showSnackbar('Sei offline. La sincronizzazione manuale non è disponibile.', 'warning');
+        runFullSync('Manuale', user.uid);
+    }, [isOnline, user, runFullSync]);
 
     const pendingSyncItems = useLiveQuery(() => db.syncQueue.where('syncStatus').equals('pending').count(), []);
 
-    return { requestManualSync, triggerQueueSync, isSyncing, pendingSyncItems, error: null };
+    return { requestManualSync, triggerQueueSync: () => user?.uid && triggerQueueSync(user.uid), isSyncing, pendingSyncItems, error: null };
 };

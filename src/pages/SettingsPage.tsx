@@ -133,14 +133,10 @@ const SettingsPage: React.FC = () => {
     const [clickCount, setClickCount] = useState(0);
     const [showTariffe, setShowTariffe] = useState(false);
 
-    // =====================================================================================
-    // --- LOGICA DI INIZIALIZZAZIONE TARIFFE --- V3 - DEFINITIVA
-    // =====================================================================================
     useEffect(() => {
         if (masterData?.tipiGiornata && masterData.impostazioni) {
             const tariffeSalvate = masterData.impostazioni.tariffe || [];
             
-            // Costruisce la lista UI partendo dai tipiGiornata per garantire che tutte le voci siano presenti.
             const tariffeComplete = masterData.tipiGiornata.map((tipoGiornata: TipoGiornata) => {
                 const tariffaSalvata = tariffeSalvate.find(t => t.tipoGiornataId === tipoGiornata.id);
                 
@@ -148,8 +144,6 @@ const SettingsPage: React.FC = () => {
                     id: tipoGiornata.id,
                     tipoGiornataId: tipoGiornata.id,
                     nome: tipoGiornata.nome,
-                    // USA L'UNITA' DELLA TARIFFA SALVATA, NON QUELLA DEL TIPO GIORNATA.
-                    // Se la tariffa non è salvata, fa un fallback basato sul tipo, ma dovrebbe sempre esserci.
                     unita: tariffaSalvata ? tariffaSalvata.unita : (tipoGiornata.tipo === 'oraria' ? 'h' : 'g'),
                     costo: tariffaSalvata ? tariffaSalvata.costo : 0, 
                     tariffa: tariffaSalvata ? tariffaSalvata.tariffa : 0,
@@ -160,8 +154,7 @@ const SettingsPage: React.FC = () => {
 
             dispatch({ type: 'SET_TARIFFE', payload: tariffeOrdinate });
         }
-    }, [masterData]); // Dipendenza semplificata: reagisce a qualsiasi cambio di masterData.
-    // =====================================================================================
+    }, [masterData]); 
 
     const handleTitleClick = () => {
         const newClickCount = clickCount + 1;
@@ -319,37 +312,34 @@ const SettingsPage: React.FC = () => {
                 </Paper>
             )}
 
-            <Accordion elevation={3} sx={{ mb: 4 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography>Gestione Account</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                     <Typography paragraph>Qui puoi gestire le impostazioni del tuo account.</Typography>
-                    <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-                        <Typography variant="h5" gutterBottom>Gestione Account</Typography>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-                            <Button variant="contained" color="secondary" onClick={handlePasswordReset}>Recupero Password</Button>
-                            <Button variant="outlined" color="error" onClick={handleLogout}>Logout</Button>
-                        </Box>
-                    </Paper>
-                </AccordionDetails>
-            </Accordion>
+            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+                <Typography variant="h6" gutterBottom>Gestione Account</Typography>
+                <Typography paragraph variant="body2" color="text.secondary">Qui puoi gestire le impostazioni del tuo account.</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                    <Button variant="contained" color="secondary" onClick={handlePasswordReset}>Recupero Password</Button>
+                    <Button variant="outlined" color="error" onClick={handleLogout}>Logout</Button>
+                </Box>
+            </Paper>
 
-             <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
-                <Typography variant="h6" gutterBottom>Manutenzione App</Typography>
+
+            <Paper elevation={3} sx={{ p: 3, mt: 4, borderColor: 'error.main', borderWidth: 2, borderStyle: 'solid' }}>
+                <Typography variant="h6" gutterBottom color="error">
+                    Zona Pericolosa
+                </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Se riscontri problemi o l'app non sembra aggiornata, usa questo pulsante per forzare un riavvio e scaricare la versione più recente. 
-                    <strong>Attenzione: questa operazione può cancellare i dati non ancora sincronizzati con il server, come i report creati offline.</strong>
+                    Usa questo pulsante solo se l'app non funziona correttamente o non si aggiorna. Verranno cancellati TUTTI i dati locali. 
+                    <strong>Assicurarsi che non ci siano report in coda o verranno cancellati e dovranno essere ricreati.</strong>
                 </Typography>
                 <ForceUpdateButton />
             </Paper>
+
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4, p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                     APP TECNICI
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    V 3.0
+                    V 3.1
                 </Typography>
             </Box>
 

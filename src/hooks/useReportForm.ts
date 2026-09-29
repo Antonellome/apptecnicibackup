@@ -41,8 +41,9 @@ function removeUndefinedKeys(obj: any): any {
     return newObj;
 }
 
-const ASSENZA_KEYWORDS = ['ferie', 'malattia', 'legge 104', 'permesso'];
+const ASSENZA_KEYWORDS = ['ferie', 'malattia'];
 const MULTI_DAY_ALLOWED_KEYWORDS = ['ferie', 'malattia'];
+const ECCEZIONE_VALIDAZIONE_KEYWORDS = ['permesso', '104', 'festivo'];
 
 const isTipoGiornataLavorativo = (tipo: TipoGiornata | undefined): boolean => {
     if (!tipo || !tipo.nome) return true;
@@ -292,9 +293,16 @@ export const useReportForm = () => {
         if (!state.tipoGiornataId) { showSnackbar("Il tipo di giornata è obbligatorio.", "error"); return false; }
 
         if (isLavorativo && !state.isMultiDay) {
-            if (!state.naveId) { showSnackbar("La Nave è obbligatoria per gli interventi.", "error"); return false; }
-            if (!state.luogoId) { showSnackbar("Il Luogo è obbligatorio per gli interventi.", "error"); return false; }
-            if (!state.lavoroEseguito.trim()) { showSnackbar("Il campo 'Lavoro Eseguito' è obbligatorio.", "error"); return false; }
+            const tipo = tipiGiornata.find(t => t.id === state.tipoGiornataId);
+            const nomeTipo = tipo?.nome.toLowerCase() || '';
+            
+            const isEccezione = ECCEZIONE_VALIDAZIONE_KEYWORDS.some(keyword => nomeTipo.includes(keyword));
+
+            if (!isEccezione) {
+                if (!state.naveId || state.naveId === 'Nessuna') { showSnackbar("La Nave è obbligatoria per gli interventi.", "error"); return false; }
+                if (!state.luogoId || state.luogoId === 'Nessuno') { showSnackbar("Il Luogo è obbligatorio per gli interventi.", "error"); return false; }
+                if (!state.lavoroEseguito.trim()) { showSnackbar("Il campo 'Lavoro Eseguito' è obbligatorio.", "error"); return false; }
+            }
 
             if (state.firmaVettoriale && (!state.firmaFirmatarioNome.trim() || !state.firmaFirmatarioSocieta.trim())) {
                  showSnackbar("Nome e Società del Firmatario sono obbligatori se è presente la firma.", "error"); return false; 

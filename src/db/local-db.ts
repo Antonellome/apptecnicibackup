@@ -11,11 +11,7 @@ import {
     Tecnico,
     Luogo,
     Categoria,
-    Lavorazione,
     Ditta,
-    Qualifica,
-    Sistema,
-    Sede, // Aggiunta
     Notifica,
     SyncEvent,
     UserProfile,
@@ -37,11 +33,7 @@ export class MySubClassedDexie extends Dexie {
     tecnici!: Table<Tecnico>;
     luoghi!: Table<Luogo>;
     categorie!: Table<Categoria>;
-    lavorazioni!: Table<Lavorazione>;
     ditte!: Table<Ditta>;
-    qualifiche!: Table<Qualifica>; // Esisteva già
-    sistemi!: Table<Sistema>;       // Esisteva già
-    sedi!: Table<Sede>;             // Aggiunta
     notifiche!: Table<Notifica>;
     syncQueue!: Table<SyncEvent>; 
     syncState!: Table<SyncState>;
@@ -50,8 +42,8 @@ export class MySubClassedDexie extends Dexie {
     constructor() {
         super('rapportini-db-v3'); 
 
-        // Incremento versione a 2 per applicare il nuovo schema che include TUTTE le tabelle
-        this.version(2).stores({
+        // Versione 3: Rimuove le tabelle fantasma (qualifiche, sistemi, sedi, lavorazioni)
+        this.version(3).stores({
             rapportini: '++id, data, tecnicoId, luogoId, clienteId',
             clienti: '++id, nome',
             navi: '++id, clienteId, nome',
@@ -62,18 +54,14 @@ export class MySubClassedDexie extends Dexie {
             tecnici: '&id, userId', 
             luoghi: '++id, nome',
             categorie: '++id, nome',
-            lavorazioni: '++id, nome',
             ditte: '++id, nome',
-            qualifiche: '++id, nome',
-            sistemi: '++id, nome',
-            sedi: '++id, nome', // Aggiunta la definizione della tabella
             notifiche: '++id, isRead',
             syncQueue: '++id, syncStatus',
             syncState: '&id',
             webAppUsers: '&id',
         });
-        
-        // La vecchia versione viene lasciata per gestire la migrazione, ma vuota.
+
+        this.version(2).stores({});
         this.version(1).stores({});
     }
 }
