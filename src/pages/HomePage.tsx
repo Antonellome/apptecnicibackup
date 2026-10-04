@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Box, Paper, Typography, ButtonBase, Badge } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -14,13 +14,31 @@ import { useSyncManager } from '@/hooks/useSyncManager';
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
-    // Recuperiamo sia l'utente completo che il profilo specifico
     const { user, userProfile } = useAuth();
-    
-    // Passiamo il PROFILO UTENTE all'hook, come richiesto dalla nuova versione
     const unreadCount = useUnreadNotificationsCount(userProfile);
-    
     const { pendingSyncItems } = useSyncManager();
+
+    const [secretClickCount, setSecretClickCount] = useState(0);
+    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const handleSecretClick = useCallback(() => {
+        if (clickTimeoutRef.current) {
+            clearTimeout(clickTimeoutRef.current);
+        }
+
+        const newClickCount = secretClickCount + 1;
+        setSecretClickCount(newClickCount);
+
+        if (newClickCount >= 5) {
+            navigate('/dati');
+            setSecretClickCount(0); // Reset after navigation
+        } else {
+            // Reset count if the user doesn't click again within 2 seconds
+            clickTimeoutRef.current = setTimeout(() => {
+                setSecretClickCount(0);
+            }, 2000);
+        }
+    }, [secretClickCount, navigate]);
 
     const iconStyles = { fontSize: 'clamp(40px, 10vw, 60px)' };
 
@@ -149,20 +167,23 @@ const HomePage: React.FC = () => {
                     </ButtonBase>
                 </Box>
                 
-                <Box 
-                    sx={{
-                      border: '2px solid',
-                      borderColor: 'primary.main',
-                      borderRadius: '16px',
-                      p: 1,
-                      textAlign: 'center',
-                      width: '100%',
-                    }}
-                >
-                    <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                      by AS
-                    </Typography>
-                </Box>
+                {/* Area cliccabile per la navigazione segreta */}
+                <ButtonBase onClick={handleSecretClick} sx={{ borderRadius: '16px', width: '100%', maxWidth: '500px' }}>
+                    <Box 
+                        sx={{
+                            border: '2px solid',
+                            borderColor: 'primary.main',
+                            borderRadius: '16px',
+                            p: 1,
+                            textAlign: 'center',
+                            width: '100%',
+                        }}
+                    >
+                        <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                        by AS
+                        </Typography>
+                    </Box>
+                </ButtonBase>
             </Box>
         </Box>
     );

@@ -1,11 +1,10 @@
-
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 // Layout
 import AuthLayout from '@/components/layout/AuthLayout';
 import ProtectedLayout from './ProtectedLayout';
 
-// Pagine caricate in modo statico
+// Pagine
 import LoginPage from '@/pages/LoginPage';
 import HomePage from '@/pages/HomePage';
 import NuovoReportPage from '@/pages/NuovoReportPage';
@@ -17,6 +16,7 @@ import EditReportPage from '@/pages/EditReportPage';
 import EditOfflineReportPage from '@/pages/EditOfflineReportPage';
 import NotifichePage from '@/pages/NotifichePage';
 import TestVisibilita from '@/pages/TestVisibilita';
+import DatiPage from '@/pages/DatiPage'; // Importa la nuova pagina
 
 export const router = createBrowserRouter([
     {
@@ -32,7 +32,8 @@ export const router = createBrowserRouter([
             { path: 'report-mensile', element: <MonthlyReportPage /> },
             { path: 'check-in', element: <CheckinPage /> },
             { path: 'notifiche', element: <NotifichePage /> },
-            { path: 'test-visibilita', element: <TestVisibilita /> }
+            { path: 'test-visibilita', element: <TestVisibilita /> },
+            { path: 'dati', element: <DatiPage /> } // Aggiungi la nuova rotta
         ]
     },
     {
