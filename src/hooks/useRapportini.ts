@@ -5,14 +5,14 @@
 
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
-import { useAuth } from '@/hooks/useAuth';
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
+import { GlobalDataContext } from '@/contexts/GlobalDataContext';
 
 export const useRapportini = () => {
-  const { user, userProfile } = useAuth();
+  const { userProfile } = useContext(GlobalDataContext);
 
   const rapportini = useLiveQuery(() => {
-    if (!user || !userProfile) return [];
+    if (!userProfile) return [];
 
     console.log(`useRapportini (LiveQuery): Avvio query locale per tecnico ${userProfile.tecnicoId}`);
 
@@ -23,7 +23,7 @@ export const useRapportini = () => {
       .or('presenze').equals(userProfile.tecnicoId) // Nota: 'equals' su un array multientry si comporta come 'includes'.
       .sortBy('data'); // Ordina per data, ma potrebbe essere necessario un reverse in UI
 
-  }, [user, userProfile]);
+  }, [userProfile]);
 
   // Dexie non ordina di default in modo decrescente, quindi lo facciamo in memoria.
   const sortedRapportini = useMemo(() => {

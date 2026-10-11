@@ -118,14 +118,14 @@ export const syncUserRapportini = async (tecnicoId: string) => {
     const result = await getAllRapportiniForSyncCallable({ tecnicoId });
     const rapportini = result.data as Rapportino[];
 
-    if (!rapportini) {
-      console.warn("Nessun rapportino restituito dalla funzione di sync. La tabella locale non verrà modificata.");
+    if (!rapportini || !Array.isArray(rapportini) || rapportini.length === 0) {
+      console.warn("La funzione di sync non ha restituito un array valido e non vuoto. La tabella locale non verrà modificata per sicurezza.");
       return;
     }
 
     await db.rapportini.bulkPut(rapportini);
 
-    console.log(`Sync (non-distruttiva) completata per i rapportini: ${rapportini.length} record.`);
+    console.log(`Sync completata per i rapportini: ${rapportini.length} record.`);
 
   } catch (error) {
     console.error("ERRORE CRITICO during la sincronizzazione dei rapportini:", error);
@@ -216,6 +216,12 @@ export const listenForRapportiniUpdates = (tecnicoId: string, onUpdate: (rapport
 
   return onSnapshot(q, async (snapshot) => {
     const rapportini: Rapportino[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Rapportino));
+    
+    if (!rapportini || !Array.isArray(rapportini) || rapportini.length === 0) {
+        console.warn("Il listener ha ricevuto un array non valido o vuoto. La tabella locale non verrà modificata per sicurezza.");
+        return;
+    }
+
     try {
       await db.rapportini.bulkPut(rapportini);
       onUpdate(rapportini);
