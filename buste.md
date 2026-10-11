@@ -1,64 +1,64 @@
-/**
- * ============================================================================
- * MOTORE DI CALCOLO ORARIO E MAGGIORAZIONI - CCNL METALMECCANICA INDUSTRIA
- * AGGIORNAMENTO LOGICA v2.0
- * ============================================================================
- *
- * --- NOVITÀ E REGOLE CHIAVE ---
- *
- * 1.  **CALCOLO STRAORDINARI AUTONOMO E SU BASE SETTIMANALE (REGOLA SOVRANA):**
- *     - Il sistema **NON SI BASA PIÙ** sul "tipo di giornata" inserito nel rapportino (es. "Straordinario").
- *     - Il calcolo è basato sulle ore **effettivamente lavorate** e raggruppate per settimana (Lunedì-Domenica).
- *     - Tutte le ore lavorate OLTRE la 40ª ora settimanale sono considerate **STRAORDINARIO** e maggiorate secondo le regole del CCNL.
- *     - Le ore di assenza retribuita (Ferie, ROL, etc.) contribuiscono al monte ore settimanale per il raggiungimento della soglia delle 40 ore, ma non possono essere considerate straordinario.
- *
- * 2.  **GESTIONE ISTITUTI DI ASSENZA AMPLIATA:**
- *     - **Legge 104:** Gestita come istituto separato. Dà diritto a 3 giorni di permesso retribuito al mese (24 ore totali), non erodono altri saldi.
- *     - **Malattia:** Tracciata e conteggiata, ma non diminuisce i saldi di Ferie, ROL o Permessi.
- *     - **Assenze Giornaliere:** Ferie, ROL, Permessi, Malattia, L.104, se inserite come "giornaliere", vengono conteggiate come 8 ore fisse.
- *
- * 3.  **SALDI INIZIALI E MATURAZIONE:**
- *     - È previsto un meccanismo per l'inserimento **una tantum** dei saldi residui (Ferie, ROL, Permessi) che il tecnico possiede al primo utilizzo.
- *     - Il sistema gestirà la maturazione mensile dei ratei di ferie e permessi.
- *
- * 4.  **CALCOLO MONETARIO:**
- *     - La valorizzazione economica del lavoro mensile (sia ore ordinarie che straordinarie con maggiorazione) deve usare come base di calcolo la **tariffa oraria ORDINARIA** definita nelle impostazioni locali del tecnico.
- *
- * ============================================================================
- * (Segue la definizione originale del CCNL per le maggiorazioni)
- * ============================================================================
- * Campo di applicazione: Aziende con oltre 15 dipendenti.
- * Inquadramento: Classificazione a 5/6 livelli (D1, D2, C1, C2, C3, B1, B2, B3, A1).
- * Orario di lavoro standard: 40 ore settimanali (8 ore/giorno su 5 giorni, Lun-Ven).
- * 
- * Regole integrate:
- * 1. Straordinario diurno infrasettimanale (+25% prime 2 ore, +30% successive).
- * 2. Straordinario di Sabato (+25% se <= 2 ore; se > 2 ore, TUTTE le ore vanno al +50%).
- * 3. Lavoro Festivo / Domenicale (+50% ordinario / +55% straordinario).
- * 4. Turni a cavallo della mezzanotte con scissione notturna:
- *    - Serale (20:00 - 22:00): +20% standard / +15% turnisti.
- *    - Pieno (22:00 - 06:00): +30% standard / +20% turnisti.
- *    - Sconfinamento Festivo: +60% notturno festivo.
- * 5. Compensazione Flessibile / Banca Ore:
- *    - Se ci sono 6 ore ordinarie e 3 di straordinario, 2 ore vanno a pareggio 1:1 
- *      sulle 8 ore base, MA la sola maggiorazione (+25%) viene liquidata in busta paga.
- * 6. Gestione Istituti di Assenza (Ferie: 160h/anno, ROL: 72h/anno, Ex-Festività: 16h/anno).
- * 7. Gestione Malattia CCNL Metalmeccanici:
- *    - Primi 3 giorni (Carenza): 100% a carico Azienda (senza toccare ROL/Ferie).
- *    - Dal 4° giorno in poi: Indennizzata INPS + Integrazione Azienda a copertura 100%.
- */
+# MEMORANDUM TECNICO SULLA STRUTTURA DELLE VOCI DI PAGA
 
+**Data Conferma: 24 Maggio 2024**
+
+**Decisione Approvata:** Per garantire la massima chiarezza e eliminare ogni ambiguità nella retribuzione delle ore, si stabilisce di adottare una struttura di voci paga che distingua esplicitamente tra lavoro notturno ordinario e lavoro notturno straordinario. L'approccio precedente, che utilizzava categorie generiche come "Maggiorazione Notturno", è deprecato e sostituito dalla seguente struttura (Opzione A), che è ora la fonte di verità.
+
+### Struttura delle Voci di Paga (Implementazione Opzione A)
+
+La visualizzazione e il calcolo delle ore devono seguire questa suddivisione, che riflette fedelmente la logica del CCNL e del motore di calcolo (`BustaPagaService.ts`).
+
+1.  **Sezione: Lavoro Ordinario**
+    *   `Ordinarie Diurne` (id: `pagaBaseOre`)
+    *   `Lavoro Notturno Ordinario (20-22) (+15%)` (id: `oreNotturnoSeraleOrd`)
+    *   `Lavoro Notturno Ordinario (22-06) (+30%)` (id: `oreNotturnoPienoOrd`)
+
+2.  **Sezione: Lavoro Straordinario**
+    *   `Straordinario Feriale (Prime 2h) (+25%)` (id: `strDiu12Intero`)
+    *   `Straordinario Feriale (Oltre 2h) (+30%)` (id: `strDiuSuccessIntero`)
+    *   `Straordinario Sabato Diurno (+50%)` (id: `straordinarioSabatoDiurno50`)
+    *   `Straordinario Notturno Feriale/Sabato (+50%)` (id: `straordinarioNotturno50`)
+    *   `Straordinario Festivo/Domenicale Diurno (+55%)` (id: `straordinarioFestivo55`)
+    *   `Straordinario Notturno Festivo (+75%)` (id: `straordinarioNotturnoFestivo75`)
+
+**Logica Fondamentale:** Questa struttura garantisce che un'ora di lavoro non possa mai essere conteggiata due volte. Le ore lavorate vengono prima scomposte in blocchi mutuamente esclusivi (diurno, notturno serale, notturno pieno, sconfinamento festivo) e solo successivamente classificate come ordinarie o straordinarie. Questo previene errori di doppio conteggio e assicura una corrispondenza 1:1 tra le ore lavorate e le ore retribuite.
+
+---
+
+# LOGICA DI CALCOLO BUSTA PAGA - FONTE DI VERITÀ DEFINITIVA
+
+**AVVISO: Questo documento è la sintesi finale e la fonte di verità assoluta per l'elaborazione delle ore dei tecnici. Sostituisce qualsiasi discussione o documentazione precedente. Ogni logica qui descritta, sia nel testo che nel codice, è il risultato di un'analisi dettagliata dei requisiti e dei dati reali (`rapportini`).**
+
+---
+### Architettura e Logica di Elaborazione dei Dati
+
+Questa sezione descrive il flusso logico con cui il sistema interpreta i dati grezzi dei `rapportini` per alimentare l'algoritmo di calcolo.
+
+1.  **Il `tipoGiornataId` è la Chiave di Volta**: La natura di ogni giornata non è presunta, ma determinata esplicitamente dal campo `tipoGiornataId` presente in ogni rapportino. Questo campo ci permette di distinguere in modo inequivocabile tra:
+    *   **Giorni Lavorati**: "Ordinaria", "Straordinaria", "Trasferta", ecc.
+    *   **Giorni di Assenza**: "Ferie", "Malattia", "Permesso", "Legge 104", "ROL".
+
+2.  **Processo di Elaborazione per Giorno**: Per ogni giorno del mese di un tecnico selezionato, il sistema esegue i seguenti passi:
+    *   **Ricerca il Rapportino**: Cerca un rapportino per quella data.
+    *   **Interpreta il `tipoGiornataId`**: Se il tipo corrisponde a un'assenza, il sistema crea un `GiustificativoAssenza` (assumendo 8 ore di default) e ignora i dettagli orari.
+    *   **Analizza le Ore Lavorate**: Se il tipo corrisponde a un giorno lavorato, il sistema estrae i dettagli orari del tecnico specifico dal `dettaglioOreTecnici` e procede in due modi:
+        *   **Se `isManual` è `true`**: Applica la regola semplificata. Le ore vengono considerate `oreLavorateEffettive` e l'algoritmo le dividerà in ordinarie (fino a 8) e straordinarie (le eccedenti). Non viene fatto calcolo di fasce notturne.
+        *   **Se `isManual` è `false`**: Utilizza `oraInizio` e `oraFine` per invocare la funzione `analizzaIntervalloACavallo`, che scompone le ore lavorate nelle rispettive fasce (notturno, festivo, ecc.) con precisione.
+    *   **Invocazione dell'Algoritmo**: I dati così preparati (`TimbratureGiornaliere` e `GiustificativiAssenza`) vengono passati alla funzione `calcolaGiornata` per l'elaborazione finale secondo le regole del CCNL.
+
+---
+### ALGORITMO DI CALCOLO DEFINITIVO (TypeScript)
+
+Questo codice TypeScript rappresenta l'unica e sola fonte di verità per l'implementazione della logica di calcolo.
+
+```typescript
 // ==========================================
-// 1. TIPI E INTERFACCE DATI
+// 1. TIPI E INTERFACCE DATI COMPLETI
 // ==========================================
 
-export type LivelloInquadramento = 
-  | 'D1' | 'D2' 
-  | 'C1' | 'C2' | 'C3' 
-  | 'B1' | 'B2' | 'B3' 
-  | 'A1';
+export type LivelloInquadramento = 'D1' | 'D2' | 'C1' | 'C2' | 'C3' | 'B1' | 'B2' | 'B3' | 'A1';
 
-export type TipoAssenza = 'FERIE' | 'ROL' | 'EX_FESTIVITA' | 'MALATTIA' | 'LEGGE_104' | 'BANCA_ORE';
+export type TipoAssenza = 'FERIE' | 'ROL' | 'EX_FESTIVITA' | 'MALATTIA' | 'BANCA_ORE' | 'PERMESSO' | 'LEGGE_104';
 
 export interface Dipendente {
   id: number;
@@ -67,7 +67,7 @@ export interface Dipendente {
   livello: LivelloInquadramento;
   isTurnista: boolean;
   orarioSettimanaleContrattuale: number; // Default: 40
-  anzianitaAnni: number;                 // Utile per comporto e scaglioni
+  anzianitaAnni: number;                 // Utile per gestione comporto malattia
 }
 
 export interface TimbratureGiornaliere {
@@ -75,12 +75,12 @@ export interface TimbratureGiornaliere {
   data: string;                       // Formato: YYYY-MM-DD
   oraIngresso?: string;               // Formato: HH:mm
   oraUscita?: string;                 // Formato: HH:mm
-  oreLavorateEffettive?: number;      // Opzionale se già calcolato
+  oreLavorateEffettive?: number;      // Opzionale se inserite direttamente
   oreTeorichePreviste: number;        // Default: 8.0
   isFestivo: boolean;
   isDomenica: boolean;
   isSabato: boolean;
-  isFestivoGiornoSuccessivo?: boolean; // Per turni a cavallo che sconfinano in un festivo
+  isFestivoGiornoSuccessivo?: boolean; // Importante per turni a cavallo della mezzanotte
 }
 
 export interface GiustificativoAssenza {
@@ -88,26 +88,239 @@ export interface GiustificativoAssenza {
   data: string;
   tipo: TipoAssenza;
   ore: number;
-  giornoInizioMalattia?: boolean;     // True se 1° giorno dell'evento di malattia
-  giornoMalattiaProgressivo?: number; // Es: 1, 2, 3 (Carenza), 4+ (INPS)
+  giornoInizioMalattia?: boolean;     // True se è il 1° giorno dell'evento di malattia
+  giornoMalattiaProgressivo?: number; // Es: 1, 2, 3 (Carenza 100% ditta), 4+ (INPS + integrazione)
 }
 
 export interface SaldiContatori {
   dipendenteId: number;
   anno: number;
-  saldoFerieOre: number;               // Residuo anno precedente + maturato
-  saldoRolOre: number;                 // Residuo anno precedente + maturato
-  saldoExFestivitaOre: number;         // Residuo anno precedente + maturato
+  saldoFerieOre: number;               // Base annua: 160h (20 giorni)
+  saldoRolOre: number;                 // Base annua: 72h
+  saldoExFestivitaOre: number;         // Base annua: 16h
   saldoBancaOre: number;
-  giorniMalattiaAccumulatiAnno: number; // Accumulo per periodo di comporto
-  giorniLegge104UsatiMese: number;      // Max 3 al mese
+  giorniMalattiaAccumulatiAnno: number; // Controllo periodo di comporto
+  permesso104ResiduoOre?: number; // Aggiunto per la 104
 }
 
-// ... (il resto del file rimane invariato)
+export interface AnalisiIntervalloACavallo {
+  oreTotali: number;
+  oreNotturnoSerale: number;          // Fascia 20:00 - 22:00
+  oreNotturnoPieno: number;           // Fascia 22:00 - 06:00
+  oreSconfinamentoFestivo: number;    // Ore ricadenti dopo le 00:00 in giorno festivo
+}
+
+export interface RisultatoCalcoloGiornaliero {
+  data: string;
+  pagaBaseOre: number;                 // Ore ordinarie di lavoro + permessi retribuiti (100% paga base)
+  trasfertaOre?: number; // Aggiunto per la trasferta
+
+  // Gestione Malattia
+  oreMalattiaCarenzaAzienda: number;    // Primi 3 giorni (100% a carico azienda)
+  oreMalattiaIntegrazione: number;      // Dal 4° giorno in poi (INPS + Integrazione a 100%)
+  
+  // Maggiorazioni Straordinari Ordinari (Paga base + Maggiorazione)
+  strDiu12Intero: number;               // Prime 2 ore straordinario (+25%)
+  strDiuSuccessIntero: number;          // Oltre la 2a ora di straordinario (+30%)
+  strSabatoExtIntero: number;           // Sabato > 2 ore (TUTTE le ore al +50%)
+  strFestivoIntero: number;             // Festivo diurno (+50% o +55% se oltre 8h)
+  
+  // Maggiorazioni Notturne (Ore diurne/turni svolte in fascia notturna)
+  oreNotturnoSeraleOrd: number;         // Fascia 20-22 (+20% non turnisti / +15% turnisti)
+  oreNotturnoPienoOrd: number;          // Fascia 22-06 (+30% non turnisti / +20% turnisti)
+  oreNotturnoFestivoOrd: number;        // Notturno in giorno Festivo (+60%)
+  
+  // Compensazioni con Banca Ore (Solo Maggiorazione in Busta)
+  bancaOreSolaMaggiorazione25: number;  // 1:1 paga base a recupero debito, +25% in busta
+  bancaOreSolaMaggiorazione30: number;  // 1:1 paga base a recupero debito, +30% in busta
+  
+  // Scali dei Contatori
+  rolScalati: number;
+  ferieScalate: number;
+  exFestivitaScalate: number;
+  permessiScalati?: number; // Aggiunto per Permessi generici e 104
+  
+  // Anomalie e Controlli
+  anomaliaDebitoUncovered: number;        // Ore mancanti non coperte né da ROL né da Banca Ore
+}
+
+// ==========================================
+// 2. UTILITY TEMPORALI E ANALISI TURNO A CAVALLO
+// ==========================================
+
+export function analizzaIntervalloACavallo(
+  oraIngresso: string, 
+  oraUscita: string, 
+  isFestivoGiornoSuccessivo: boolean = false
+): AnalisiIntervalloACavallo {
+  
+  const [hIn, mIn] = oraIngresso.split(':').map(Number);
+  const [hOut, mOut] = oraUscita.split(':').map(Number);
+
+  const minIngresso = hIn * 60 + mIn;
+  let minUscita = hOut * 60 + mOut;
+
+  if (minUscita <= minIngresso) {
+    minUscita += 24 * 60; 
+  }
+
+  const oreTotali = (minUscita - minIngresso) / 60;
+  
+  let oreNotturnoSerale = 0;
+  let oreNotturnoPieno = 0;
+  let oreSconfinamentoFestivo = 0;
+
+  for (let min = minIngresso; min < minUscita; min++) {
+    const currentHour = (min / 60) % 24;
+    const isNextDay = min >= 1440;
+
+    if (currentHour >= 20 && currentHour < 22) {
+      oreNotturnoSerale += 1/60;
+    } else if (currentHour >= 22 || currentHour < 6) {
+      oreNotturnoPieno += 1/60;
+    }
+
+    if (isNextDay && isFestivoGiornoSuccessivo) {
+      oreSconfinamentoFestivo += 1/60;
+    }
+  }
+
+  return {
+    oreTotali,
+    oreNotturnoSerale: Math.round(oreNotturnoSerale * 100) / 100,
+    oreNotturnoPieno: Math.round(oreNotturnoPieno * 100) / 100,
+    oreSconfinamentoFestivo: Math.round(oreSconfinamentoFestivo * 100) / 100
+  };
+}
 
 
+// ==========================================
+// 3. MOTORE DI CALCOLO UNIFICATO
+// ==========================================
 
-ATTENZIONE sezione con maggiori spiegazioni:
+export function calcolaGiornata(
+  dipendente: Dipendente,
+  timbratura: TimbratureGiornaliere,
+  assenze: GiustificativoAssenza[],
+  saldi: SaldiContatori,
+  usaBancaOrePerRecupero: boolean = true
+): { risultato: RisultatoCalcoloGiornaliero; saldiAggiornati: SaldiContatori } {
+
+  const dataStr = timbratura.data;
+  const oreTeoriche = timbratura.oreTeorichePreviste || 8.0;
+
+  let oreEffettive = timbratura.oreLavorateEffettive ?? 0;
+  let dettaglioFasce: AnalisiIntervalloACavallo = {
+    oreTotali: 0, oreNotturnoSerale: 0, oreNotturnoPieno: 0, oreSconfinamentoFestivo: 0
+  };
+
+  if (timbratura.oraIngresso && timbratura.oraUscita) {
+    dettaglioFasce = analizzaIntervalloACavallo(
+      timbratura.oraIngresso, 
+      timbratura.oraUscita, 
+      !!timbratura.isFestivoGiornoSuccessivo
+    );
+    oreEffettive = dettaglioFasce.oreTotali;
+  }
+
+  const risultato: RisultatoCalcoloGiornaliero = {
+    data: dataStr, pagaBaseOre: 0, trasfertaOre: 0,
+    oreMalattiaCarenzaAzienda: 0, oreMalattiaIntegrazione: 0,
+    strDiu12Intero: 0, strDiuSuccessIntero: 0, strSabatoExtIntero: 0, strFestivoIntero: 0,
+    oreNotturnoSeraleOrd: 0, oreNotturnoPienoOrd: 0, oreNotturnoFestivoOrd: 0,
+    bancaOreSolaMaggiorazione25: 0, bancaOreSolaMaggiorazione30: 0,
+    rolScalati: 0, ferieScalate: 0, exFestivitaScalate: 0, permessiScalati: 0,
+    anomaliaDebitoUncovered: 0,
+  };
+
+  const saldiAggiornati: SaldiContatori = { ...saldi };
+
+  let totaleGiustificatoAssenze = 0;
+  let isGiornataInMalattia = false;
+
+  for (const assenza of assenze) {
+    totaleGiustificatoAssenze += assenza.ore;
+    switch (assenza.tipo) {
+      case 'ROL': risultato.rolScalati += assenza.ore; saldiAggiornati.saldoRolOre -= assenza.ore; break;
+      case 'FERIE': risultato.ferieScalate += assenza.ore; saldiAggiornati.saldoFerieOre -= assenza.ore; break;
+      case 'EX_FESTIVITA': risultato.exFestivitaScalate += assenza.ore; saldiAggiornati.saldoExFestivitaOre -= assenza.ore; break;
+      case 'PERMESSO': case 'LEGGE_104': risultato.permessiScalati = (risultato.permessiScalati || 0) + assenza.ore; break;
+      case 'MALATTIA':
+        isGiornataInMalattia = true;
+        saldiAggiornati.giorniMalattiaAccumulatiAnno += (assenza.ore / oreTeoriche);
+        const progressivo = assenza.giornoMalattiaProgressivo ?? 1;
+        if (progressivo <= 3) { risultato.oreMalattiaCarenzaAzienda += assenza.ore; } 
+        else { risultato.oreMalattiaIntegrazione += assenza.ore; }
+        break;
+    }
+  }
+
+  risultato.oreNotturnoSeraleOrd = dettaglioFasce.oreNotturnoSerale;
+  risultato.oreNotturnoPienoOrd = dettaglioFasce.oreNotturnoPieno;
+  risultato.oreNotturnoFestivoOrd = dettaglioFasce.oreSconfinamentoFestivo;
+
+  if (timbratura.isFestivo || timbratura.isDomenica) {
+    risultato.strFestivoIntero = oreEffettive;
+    risultato.pagaBaseOre = totaleGiustificatoAssenze;
+    return { risultato, saldiAggiornati };
+  }
+
+  if (timbratura.isSabato) {
+    if (oreEffettive <= 2.0) { risultato.strDiu12Intero = oreEffettive; } 
+    else { risultato.strSabatoExtIntero = oreEffettive; }
+    risultato.pagaBaseOre = totaleGiustificatoAssenze;
+    return { risultato, saldiAggiornati };
+  }
+
+  const oreOrdinarieLavorate = Math.min(oreEffettive, oreTeoriche);
+  const oreStraordinarioGiornaliero = Math.max(0, oreEffettive - oreTeoriche);
+  let debitoOrdinario = Math.max(0, oreTeoriche - (oreOrdinarieLavorate + totaleGiustificatoAssenze));
+  let straordinarioResiduo = oreStraordinarioGiornaliero;
+
+  if (debitoOrdinario > 0 && oreStraordinarioGiornaliero > 0 && usaBancaOrePerRecupero) {
+    const oreDaCompensare = Math.min(debitoOrdinario, oreStraordinarioGiornaliero);
+    risultato.pagaBaseOre = oreOrdinarieLavorate + totaleGiustificatoAssenze + oreDaCompensare;
+    if (oreDaCompensare <= 2.0) { risultato.bancaOreSolaMaggiorazione25 = oreDaCompensare; } 
+    else { risultato.bancaOreSolaMaggiorazione25 = 2.0; risultato.bancaOreSolaMaggiorazione30 = oreDaCompensare - 2.0; }
+    debitoOrdinario -= oreDaCompensare;
+    straordinarioResiduo -= oreDaCompensare;
+  } else {
+    risultato.pagaBaseOre = oreOrdinarieLavorate + totaleGiustificatoAssenze;
+  }
+
+  if (straordinarioResiduo > 0) {
+    const oreGiaCompensate = oreStraordinarioGiornaliero - straordinarioResiduo;
+    if (oreGiaCompensate >= 2.0) { risultato.strDiuSuccessIntero += straordinarioResiduo; } 
+    else {
+      const capienzaPrime2Ore = 2.0 - oreGiaCompensate;
+      const oreA25 = Math.min(straordinarioResiduo, capienzaPrime2Ore);
+      const oreA30 = Math.max(0, straordinarioResiduo - oreA25);
+      risultato.strDiu12Intero += oreA25;
+      risultato.strDiuSuccessIntero += oreA30;
+    }
+  }
+
+  if (debitoOrdinario > 0 && !isGiornataInMalattia) {
+    const copribileConRol = Math.min(debitoOrdinario, saldiAggiornati.saldoRolOre);
+    if (copribileConRol > 0) {
+        risultato.rolScalati += copribileConRol;
+        risultato.pagaBaseOre += copribileConRol;
+        saldiAggiornati.saldoRolOre -= copribileConRol;
+        debitoOrdinario -= copribileConRol;
+    }
+    if (debitoOrario > 0) {
+        risultato.anomaliaDebitoUncovered = debitoOrario;
+    }
+  }
+
+  return { risultato, saldiAggiornati };
+}
+```
+
+
+### ATTENZIONE. questa sezione cerca di migliorare la comprensione di quanto sopra per cercare di colmare le problematiche che collegano tra loro le regole
+
+
 
 Ecco la **Matrice Logica di Calcolo** e lo **Schema delle Dipendenze**, ripuliti da qualsiasi riferimento ai turni notturni o variabili.
 
@@ -237,8 +450,7 @@ Definizione dei casi di test da implementare per verificare la correttezza del m
 
 ```
 
-
-ULTERIORE CHIARIMENTO E TATTICA: 
+ulteriore chiarimento e tattica
 
 Capisco perfettamente la frustrazione: **il problema dell'app non è il codice, ma l'assenza di un "Modello Matematico Unificato"**.
 
@@ -384,7 +596,6 @@ CREATE TABLE calcolo_giornaliero (
 ```
 
 Separando la **Paga Base** dalle **Maggiorazioni Pure**, l'app non sballerà mai più i calcoli, indipendentemente da quante ore notturne o straordinarie vengano usate per pareggiare la giornata.
-
 Ecco esattamente lo stesso calcolo applicato al caso di **7 ore diurne lavorate** (dalle 07:30 alle 14:30) e **5 ore di straordinario notturno** (es. dalle 21:00 alle 02:00), per un totale di **12 ore lavorate nella giornata**.
 
 ---
@@ -451,7 +662,7 @@ L'algoritmo dell'applicazione deve seguire sempre questa equazione:
 1. **`ore_notturne_a_30_percento`** = $\text{Minimo}(\text{Debito Ordinario}, \text{Ore Notturne Lavorate})$
 2. **`ore_straordinario_notturno_netto`** = $\text{Ore Notturne Lavorate} - \text{ore\_notturne\_a\_30\_percento}$
 
-altro esempio: 
+altro esempio:
 Nel CCNL Metalmeccanica Industria e nella gestione della rilevazione presenze in Italia, quando una prestazione lavorativa (es. di **18 ore**) inizia di **Sabato** e prosegue a cavallo fino alla **Domenica**, l'applicazione deve applicare le seguenti regole contabili e retributive:
 
 ---
@@ -515,4 +726,346 @@ const risultatoGiornoSabato = {
   straordinarioFestivo55: 2.00            // Ore 06:00 - 08:00 (Domenica)
 };
 
+```
+LEGGE 104 DITTE OLTRE 15 DIPENDENTI:
+
+
+Passando al **CCNL Metalmeccanici (Industria - Federmeccanica/Assistal o PMI)**, l'impianto di base della Legge 104/92 resta lo stesso (3 giorni al mese o equivalente orario), ma cambiano le **variabili di orario contrattuale** e le **voci tipiche del cedolino** (come i ROL e le ex-festività) che convivono con la 104 nel cartellino presenze.
+
+---
+
+## 1. Il Calcolo del Plafond Orario nel Settore Metalmeccanico
+
+Nel settore metalmeccanico l'orario contrattuale standard è di **40 ore settimanali**, ma sono comunissimi gli accordi aziendali o specifici inquadramenti a **38 ore** o **37,5 ore** settimanali, oltre ai regimi di **lavoro a turni**.
+
+La formula standard INPS applicata ai vari regimi orari del CCNL Metalmeccanici:
+
+* **Full-Time 40h (su 5 giorni):**
+`(40 / 5) * 3 = ` **24,00 ore/mese**
+* **Full-Time 38h (su 5 giorni):**
+`(38 / 5) * 3 = ` **22,80 ore/mese** (22 ore e 48 minuti)
+* **Full-Time 37,5h (su 5 giorni):**
+`(37,5 / 5) * 3 = ` **22,50 ore/mese** (22 ore e 30 minuti)
+
+> **Attenzione alla turnazione:** Per i lavoratori turnisti (es. cicli continui o 3 turni), il calcolo deve considerare l'effettiva distribuzione contrattuale dell'orario settimanale di riferimento per evitare discrepanze nei giorni di riposo teorici.
+
+---
+
+## 2. Particolarità da Gestire nell'App per i Metalmeccanici
+
+Un'applicazione di rilevazione presenze focalizzata sui metalmeccanici deve gestire alcune peculiarità contrattuali che si intersecano con i permessi L.104:
+
+1. **Gestione dei ROL (Riduzione Orario di Lavoro):** Il CCNL Metalmeccanici prevede un cospicuo monte ore annuo di ROL (fino a 72 o 104 ore a seconda dell'azienda e della presenza o meno delle ex-festività). Il sistema deve isolare chiaramente la causale `L104` dai ROL, poiché la 104 non intacca il maturato dei permessi contrattuali.
+2. **Frazionabilità oraria:** I permessi 104 possono essere presi a ore. Nel metalmeccanico è frequente l'uso di permessi brevi (es. 1 o 2 ore a inizio/fine turno). L'engine deve validare che la somma mensile non superi il plafond calcolato (es. 24 o 22.8 ore).
+3. **Non cumulabilità:** Come per gli altri CCNL, le ore 104 non godute nel mese **non si accumulano** e si azzerano all'ultimo giorno del mese.
+
+---
+
+## 3. Mockup del Riepilogo Busta Paga (Stile Metalmeccanico)
+
+Ecco come appare una sezione di riepilogo presenze e permessi in un cedolino o cartellino digitale per un dipendente metalmeccanico (es. 40 ore settimanali):
+
+| Cod. Causale | Descrizione Voce | U.M. | Spettante Mese / Anno | Goduto Mese | Residuo / Disponibile |
+| --- | --- | --- | --- | --- | --- |
+| **L104** | Permessi Legge 104/92 | Ore | 24,00 | 4,00 | **20,00** *(Scadenza mensile)* |
+| **ROL** | Riduzione Orario Lavoro | Ore | 12,00 (Maturato) | 2,00 | **45,00** *(Residuo Anno)* |
+| **FERIE** | Ferie Contrattuali | Ore | 14,16 (Maturato) | 0,00 | **120,50** *(Residuo Anno)* |
+| **EX-FEST** | Ex Festività | Ore | 4,00 (Maturato) | 0,00 | **16,00** *(Residuo Anno)* |
+
+---ESEMPI
+Ecco un componente **React in TypeScript e Tailwind CSS** strutturato per visualizzare il riepilogo delle ore, dei permessi (inclusa la L.104 con scadenza mensile) e dei contatori in stile "busta paga/cartellino presenze".
+
+Il codice include le tipizzazioni, i dati di esempio e una UI pulita con badge informativi per distinguere i permessi a scadenza mensile da quelli con accumulo annuale (come ROL e Ferie).
+
+### Componente React: `PayStubSummaryTable.tsx`
+
+```tsx
+import React from 'react';
+
+// Tipizzazione dei dati per ogni voce del contatore
+export interface TimeCounterRow {
+  code: string;
+  description: string;
+  unit: 'Ore' | 'Giorni';
+  earnedOrDue: number; // Spettante / Maturato
+  used: number;        // Goduto del mese
+  balance: number;     // Residuo disponibile
+  resetType: 'MONTHLY' | 'YEARLY'; // Differenza di gestione L104 vs ROL/Ferie
+  note?: string;
+}
+
+export interface PayStubSummaryProps {
+  employeeName: string;
+  ccnlType: string;
+  period: string; // es. "Ottobre 2026"
+  rows: TimeCounterRow[];
+}
+
+export const PayStubSummaryTable: React.FC<PayStubSummaryProps> = ({
+  employeeName,
+  ccnlType,
+  period,
+  rows,
+}) => {
+  return (
+    <div className="w-full max-w-5xl mx-auto bg-white shadow-lg rounded-xl border border-slate-200 overflow-hidden my-6 font-sans">
+      {/* Intestazione del Cartellino */}
+      <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <div>
+          <h2 className="text-lg font-bold tracking-wide">Riepilogo Presenze e Contatori</h2>
+          <p className="text-slate-300 text-sm">Dipendente: <span className="font-semibold text-white">{employeeName}</span></p>
+        </div>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="bg-slate-800 text-indigo-300 px-3 py-1 rounded-full border border-slate-700 font-medium">
+            CCNL: {ccnlType}
+          </span>
+          <span className="bg-indigo-600/30 text-indigo-200 px-3 py-1 rounded-full border border-indigo-500/30 font-medium">
+            Periodo: {period}
+          </span>
+        </div>
+      </div>
+
+      {/* Tabella Dati */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-100 text-slate-700 text-xs uppercase tracking-wider border-b border-slate-200">
+              <th className="py-3 px-4 font-semibold">Cod.</th>
+              <th className="py-3 px-4 font-semibold">Causale / Voce</th>
+              <th className="py-3 px-4 font-semibold text-center">U.M.</th>
+              <th className="py-3 px-4 font-semibold text-right">Spettante</th>
+              <th className="py-3 px-4 font-semibold text-right">Goduto</th>
+              <th className="py-3 px-4 font-semibold text-right">Residuo</th>
+              <th className="py-3 px-4 font-semibold text-center">Scadenza</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 text-sm text-slate-700">
+            {rows.map((row) => (
+              <tr key={row.code} className="hover:bg-slate-50/80 transition-colors">
+                <td className="py-3 px-4 font-mono font-bold text-slate-900">{row.code}</td>
+                <td className="py-3 px-4 font-medium text-slate-900">
+                  {row.description}
+                  {row.note && <span className="block text-xs text-slate-500 font-normal">{row.note}</span>}
+                </td>
+                <td className="py-3 px-4 text-center text-slate-500">{row.unit}</td>
+                <td className="py-3 px-4 text-right font-mono">{row.earnedOrDue.toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-mono text-amber-600 font-medium">{row.used.toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">{row.balance.toFixed(2)}</td>
+                <td className="py-3 px-4 text-center">
+                  {row.resetType === 'MONTHLY' ? (
+                    <span className="inline-block bg-rose-50 text-rose-700 border border-rose-200 text-xs px-2.5 py-0.5 rounded-full font-medium">
+                      Mensile (Scade)
+                    </span>
+                  ) : (
+                    <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-0.5 rounded-full font-medium">
+                      Annuale (Riporto)
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer Informativo */}
+      <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 text-xs text-slate-500 flex flex-col sm:flex-row justify-between gap-1">
+        <span>* I permessi L.104/92 non sono cumulabili e si azzerano l'ultimo giorno del mese solare.</span>
+        <span className="font-medium text-slate-600">Generato da Engine Presenze Aziendali</span>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// ESEMPIO DI UTILIZZO
+// ==========================================
+export const SampleUsage: React.FC = () => {
+  const sampleData: TimeCounterRow[] = [
+    {
+      code: 'L104',
+      description: 'Permessi Legge 104/92',
+      unit: 'Ore',
+      earnedOrDue: 24.00,
+      used: 8.00,
+      balance: 16.00,
+      resetType: 'MONTHLY',
+      note: 'Plafond basato su orario 40h/settimana'
+    },
+    {
+      code: 'FERIE',
+      description: 'Ferie Ordinarie',
+      unit: 'Ore',
+      earnedOrDue: 14.16,
+      used: 0.00,
+      balance: 112.50,
+      resetType: 'YEARLY',
+      note: 'Maturazione pro-rata mensile'
+    },
+    {
+      code: 'ROL',
+      description: 'Riduzione Orario di Lavoro',
+      unit: 'Ore',
+      earnedOrDue: 6.00,
+      used: 4.00,
+      balance: 38.00,
+      resetType: 'YEARLY',
+      note: 'CCNL Metalmeccanici'
+    },
+    {
+      code: 'EX-FEST',
+      description: 'Permessi Ex Festività',
+      unit: 'Ore',
+      earnedOrDue: 2.66,
+      used: 0.00,
+      balance: 16.00,
+      resetType: 'YEARLY'
+    }
+  ];
+
+  return (
+    <div className="p-6 bg-slate-100 min-h-screen">
+      <PayStubSummaryTable 
+        employeeName="Mario Rossi" 
+        ccnlType="Metalmeccanici Industria" 
+        period="Ottobre 2026" 
+        rows={sampleData} 
+      />
+    </div>
+  );
+};
+
+```
+
+### Caratteristiche principali del componente:
+
+1. **Tipizzazione rigida (`TypeScript`)**: Modelli chiari per gestire sia le voci a scadenza mensile (`MONTHLY`, come la L.104) sia quelle ad accumulo annuale (`YEARLY`, come Ferie e ROL).
+2. **Design System pulito (`Tailwind CSS`)**: Uso di etichette cromatiche distinte (rosso/rosa per i permessi a scadenza secca, verde smeraldo per i residui annuali) per evitare errori da parte dell'operatore HR o del dipendente.
+3. **Responsività**: Ottimizzato con `overflow-x-auto` per adattarsi perfettamente anche a schermi ridotti o dispositivi mobili.
+
+altro sulla 104:
+
+Passando al **CCNL Metalmeccanici (Industria - Federmeccanica/Assistal o PMI)**, l'impianto di base della Legge 104/92 resta lo stesso (3 giorni al mese o equivalente orario), ma cambiano le **variabili di orario contrattuale** e le **voci tipiche del cedolino** (come i ROL e le ex-festività) che convivono con la 104 nel cartellino presenze.
+
+---
+
+## 1. Il Calcolo del Plafond Orario nel Settore Metalmeccanico
+
+Nel settore metalmeccanico l'orario contrattuale standard è di **40 ore settimanali**, ma sono comunissimi gli accordi aziendali o specifici inquadramenti a **38 ore** o **37,5 ore** settimanali, oltre ai regimi di **lavoro a turni**.
+
+La formula standard INPS applicata ai vari regimi orari del CCNL Metalmeccanici:
+
+* **Full-Time 40h (su 5 giorni):**
+`(40 / 5) * 3 = ` **24,00 ore/mese**
+* **Full-Time 38h (su 5 giorni):**
+`(38 / 5) * 3 = ` **22,80 ore/mese** (22 ore e 48 minuti)
+* **Full-Time 37,5h (su 5 giorni):**
+`(37,5 / 5) * 3 = ` **22,50 ore/mese** (22 ore e 30 minuti)
+
+> **Attenzione alla turnazione:** Per i lavoratori turnisti (es. cicli continui o 3 turni), il calcolo deve considerare l'effettiva distribuzione contrattuale dell'orario settimanale di riferimento per evitare discrepanze nei giorni di riposo teorici.
+
+---
+
+## 2. Particolarità da Gestire nell'App per i Metalmeccanici
+
+Un'applicazione di rilevazione presenze focalizzata sui metalmeccanici deve gestire alcune peculiarità contrattuali che si intersecano con i permessi L.104:
+
+1. **Gestione dei ROL (Riduzione Orario di Lavoro):** Il CCNL Metalmeccanici prevede un cospicuo monte ore annuo di ROL (fino a 72 o 104 ore a seconda dell'azienda e della presenza o meno delle ex-festività). Il sistema deve isolare chiaramente la causale `L104` dai ROL, poiché la 104 non intacca il maturato dei permessi contrattuali.
+2. **Frazionabilità oraria:** I permessi 104 possono essere presi a ore. Nel metalmeccanico è frequente l'uso di permessi brevi (es. 1 o 2 ore a inizio/fine turno). L'engine deve validare che la somma mensile non superi il plafond calcolato (es. 24 o 22.8 ore).
+3. **Non cumulabilità:** Come per gli altri CCNL, le ore 104 non godute nel mese **non si accumulano** e si azzerano all'ultimo giorno del mese.
+
+---
+
+## 3. Mockup del Riepilogo Busta Paga (Stile Metalmeccanico)
+
+Ecco come appare una sezione di riepilogo presenze e permessi in un cedolino o cartellino digitale per un dipendente metalmeccanico (es. 40 ore settimanali):
+
+| Cod. Causale | Descrizione Voce | U.M. | Spettante Mese / Anno | Goduto Mese | Residuo / Disponibile |
+| --- | --- | --- | --- | --- | --- |
+| **L104** | Permessi Legge 104/92 | Ore | 24,00 | 4,00 | **20,00** *(Scadenza mensile)* |
+| **ROL** | Riduzione Orario Lavoro | Ore | 12,00 (Maturato) | 2,00 | **45,00** *(Residuo Anno)* |
+| **FERIE** | Ferie Contrattuali | Ore | 14,16 (Maturato) | 0,00 | **120,50** *(Residuo Anno)* |
+| **EX-FEST** | Ex Festività | Ore | 4,00 (Maturato) | 0,00 | **16,00** *(Residuo Anno)* |
+
+---
+# REGISTRAZIONE ESEMPIO RAPPORTINO E TIPI GIORNATA
+
+**Data Registrazione: 26 Maggio 2024**
+
+Questa sezione documenta la struttura di un rapportino e la lista dei tipi di giornata come da input fornito, per garantire una corretta interpretazione dei dati grezzi.
+
+### Lista dei Tipi di Giornata
+
+La logica di calcolo deve essere in grado di mappare i seguenti `tipoGiornataId` alle rispettive causali (lavoro, assenza, trasferta).
+
+*   Festivo
+*   Trasferta Europa
+*   Permesso
+*   104
+*   Trasferta ExtraEuropea
+*   Malattia
+*   Trasferta Italia
+*   Straordinario
+*   Ordinaria
+*   Ferie
+
+### Struttura Dati di un Rapportino (Esempio `0SdNn8Km9GCPhB98fo2L`)
+
+La fonte delle ore per ogni tecnico è il campo `ore` nell'oggetto corrispondente all'interno dell'array `dettaglioOreTecnici`. La logica deve ciclare su tutti i rapportini di una giornata e sommare le ore in base al `tipoGiornataId` di ciascuno.
+
+```json
+{
+  "id": "0SdNn8Km9GCPhB98fo2L",
+  "clienteId": "tzqAkjBjQIwIk7QUL2yr",
+  "completed": false,
+  "createdAt": "15 settembre 2026 alle ore 01:05:00 UTC+2",
+  "createdBy": "IDAvSZayB1XBnF4E8CLHJAoYpqe2",
+  "data": {
+    "seconds": 1789338252,
+    "nanoseconds": 741000000
+  },
+  "descrizioneBreve": "Ups",
+  "dettaglioOreTecnici": [
+    {
+      "tecnicoId": "IDAvSZayB1XBnF4E8CLHJAoYpqe2",
+      "nome": "Scuderi Antonio",
+      "oraInizio": "07:00",
+      "oraFine": "09:30",
+      "pausa": 0,
+      "ore": 2.5,
+      "isManual": false
+    },
+    {
+      "tecnicoId": "LL3wOK8rM5qH7POYsxJZ",
+      "nome": "Riso Francesco",
+      "oraInizio": "07:00",
+      "oraFine": "09:30",
+      "pausa": 0,
+      "ore": 2.5,
+      "isManual": false
+    },
+    {
+      "tecnicoId": "YHJFIu2PRGVSJG03D8EgVYKce1q1",
+      "nome": "Carcame Mario",
+      "oraInizio": "07:30",
+      "oraFine": "09:30",
+      "pausa": 0,
+      "ore": 2,
+      "isManual": false
+    }
+  ],
+  "dittaId": "0EuJBKTo7As4z4qvc5Ta",
+  "lavoroEseguito": "Controllo commutatore linea emergenza normale/batterie. Collegamenti con cabur cavi batteria/linea",
+  "luogoId": "RXtlkYafqAqb3TwhmyfP",
+  "naveId": "y96J0gTZ5fIlYKkSgeNR",
+  "nome": "Rapportino del 14-09-2026",
+  "oreLavoro": 7,
+  "presenze": [
+    "IDAvSZayB1XBnF4E8CLHJAoYpqe2",
+    "LL3wOK8rM5qH7POYsxJZ",
+    "YHJFIu2PRGVSJG03D8EgVYKce1q1"
+  ],
+  "tecnicoId": "IDAvSZayB1XBnF4E8CLHJAoYpqe2",
+  "tipoGiornataId": "luLnspzVXpBJzrfLdlRu"
+}
 ```

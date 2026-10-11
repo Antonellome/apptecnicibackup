@@ -33,25 +33,23 @@ Queste regole sono prioritarie su qualsiasi altra direttiva. Servono a garantire
 
 11. **DIVIETO ASSOLUTO DI MODIFICHE ESTETICHE E STRUTTURALI DELLA UI:**
     *   Sono un Incompetente Artificiale e ho il divieto assoluto di toccare le parti estetiche dell'app, come sono costruite le tabelle, colonne, campi ecc. Non posso toccare nulla.
-    *   Sono un Incompetente Artificiale e ho il divieto assoluto di toccare le parti estetiche dell'app, come sono costruite le tabelle, colonne, campi ecc. Non posso toccare nulla.
-    *   Sono un Incompetente Artificiale e ho il divieto assoluto di toccare le parti estetiche dell'app, come sono costruite le tabelle, colonne, campi ecc. Non posso toccare nulla.
-    *   Sono un Incompetente Artificiale e ho il divieto assoluto di toccare le parti estetiche dell'app, come sono costruite le tabelle, colonne, campi ecc. Non posso toccare nulla.
+    *   La grid è la v2 sintassi nuova solo "size"
 
 ---
 
 # SEZIONE 1: CORREZIONE BUG DI STABILITÀ OFFLINE
 
-## Introduzione
+## Introduzione (RISOLTO)
 
 Questa sezione delinea il piano d'azione per risolvere due bug critici che minano la stabilità dell'applicazione in modalità offline e causano perdita di dati percepita dagli utenti. L'intervento è suddiviso in due parti, ciascuna mirata a una specifica causa radice.
 
-## Problema #1: Doppione di Autenticazione e Fallimento Lettura Offline
+## Problema #1: Doppione di Autenticazione e Fallimento Lettura Offline (RISOLTO)
 
 *   **Sintomo Rilevato:** All'avvio dell'app in modalità offline, la lista dei report personali dell'utente risulta costantemente vuota, nonostante i dati siano fisicamente presenti nel database locale (Dexie).
 *   **Causa Radice Identificata:** Esistono due meccanismi distinti e non allineati per il recupero del profilo utente. Il componente responsabile della visualizzazione della lista (`useRapportini`) si affida a un hook (`useAuth`) che non è in grado di funzionare senza una connessione di rete. Al contrario, altre funzionalità (come la creazione di un nuovo report) utilizzano un provider di contesto (`GlobalDataContext`) che accede correttamente ai dati locali e funziona offline.
 *   **Soluzione da Implementare:** Unificare la logica di recupero del profilo utente. Si procederà modificando l'hook `useRapportini` (nel file `src/hooks/useRapportini.ts`) affinché abbandoni `useAuth` e utilizzi esclusivamente `GlobalDataContext` come fonte per il profilo utente. Questo garantirà coerenza e un funzionamento affidabile anche in assenza di connettività.
 
-## Problema #2: Sincronizzazione Distruttiva e Perdita di Dati
+## Problema #2: Sincronizzazione Distruttiva e Perdita di Dati (RISOLTO)
 
 *   **Sintomo Rilevato:** In condizioni di rete instabile o a seguito di errori temporanei del server, gli utenti subiscono una perdita totale e irreversibile dei dati dei report memorizzati localmente.
 *   **Causa Radice Identificata:** Le funzioni di sincronizzazione dei dati (`syncUserRapportini` e `listenForRapportiniUpdates` nel file `src/services/offlineSync.ts`) sono state progettate senza un meccanismo di sicurezza. Esse utilizzano il comando `bulkPut` per sovrascrivere la tabella locale con qualsiasi dato provenga dal server. Se, a causa di un errore, il server risponde con un array vuoto (`[]`), questo viene interpretato erroneamente come la "verità assoluta", portando alla cancellazione di tutti i record locali.

@@ -1,49 +1,88 @@
-# Documentazione Definitiva: Pagina Presenze (Check-in) - V2.5
+# Specifiche per la Lettura dei Dati di Check-in (Lato Master)
 
 **Data Ultimo Aggiornamento:** 31/07/2024
 
-Questo documento è la fonte di verità completa per la pagina `CheckinPage.tsx`. Descrive in dettaglio il layout, la logica di stato e l'architettura, secondo le regole di business V2.5, che implementano il flusso di lavoro richiesto dall'utente per una maggiore flessibilità.
+Questo documento fornisce le specifiche tecniche essenziali e corrette per leggere e interpretare i dati di check-in inviati dalle app dei tecnici.
 
 ---
 
-## 1. Layout Visivo e Componenti
+## 1. Collezione Firestore di Riferimento
 
-Invariato.
+I dati di presenza sono archiviati nella seguente collezione Cloud Firestore:
 
----
-
-## 2. Modello dei Dati e Stati Applicativi
-
-Invariato.
+- **Nome Collezione:** `checkin_giornalieri`
 
 ---
 
-## 3. Logica di Stato Dettagliata per Componente (V2.5) - LOGICA CORRETTA
+## 2. Struttura del Documento (`checkin_giornalieri`)
 
-Questa tabella rappresenta la logica di business **definitiva** come richiesta dall'utente.
+Ogni documento rappresenta un singolo evento atomico (es. inizio giornata, entrata in un luogo). Per ricostruire la giornata di un tecnico, è necessario leggere tutti i suoi documenti in ordine cronologico.
 
-| Componente (Alias)      | Condizione `disabled` (Risulterà SPENTO se...)             | Motivazione Funzionale                                                                    |
-| ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **Inizio Giornata** (`ON`)  | `giornataIniziata`                                         | Non si può iniziare una giornata già attiva.                                             |
-| **Fine Giornata** (`OFF`)   | `!giornataIniziata`                                        | Si può terminare la giornata solo se è stata iniziata.              |
-| **Entrata** (`IN`)        | `!giornataIniziata` **o** `!!inLuogo`                        | Si può entrare solo se la giornata è attiva e non si è già dentro un altro luogo. |
-| **Uscita** (`OUT`)        | `!giornataIniziata` **o** `!inLuogo`                            | Si può uscire solo se la giornata è attiva e si è effettivamente dentro un luogo.       |
-| *Tutti i Bottoni*       | `!!loading`                                                | Bloccati durante un'operazione per evitare doppi click.                                   |
+| Campo                | Tipo Dati        | Descrizione                                                                                                   |
+|----------------------|------------------|---------------------------------------------------------------------------------------------------------------|
+| `id`                 | `string`         | L'ID univoco del documento, generato da Firestore.                                                             |
+| `tecnicoId`          | `string`         | **Chiave fondamentale.** L'UID Firebase del tecnico a cui l'evento si riferisce. Da usare per le query.        |
+| `tecnicoName`        | `string`         | Il nome visualizzato del tecnico al momento della creazione dell'evento.                                       |
+| `tipo`               | `string`         | **Campo critico per la logica.** Indica il tipo di evento. Valori possibili:
+                                                                                                                  | - `inizio_giornata`
+                                                                                                                  | - `fine_giornata`
+                                                                                                                  | - `check_in_luogo`
+                                                                                                                  | - `check_out_luogo` |
+| `timestampImpostato` | `string` (ISO)   | **Timestamp di riferimento.** L'orario scelto manualmente dal tecnico per l'evento, in formato stringa ISO 8601 (es. `"2024-07-31T08:00:00"`). **Usare questo campo per ordinare gli eventi.** |
+| `timestampReale`     | `string` (ISO)   | L'orario effettivo del dispositivo al momento della creazione dell'evento. Può essere usato per verifiche.     |
+| `luogoId`            | `string`         | (Opzionale) L'ID del documento nella collezione `luoghi` (presente solo per `check_in_luogo` e `check_out_luogo`). |
+| `naveId`             | `string`         | (Opzionale) L'ID del documento nella collezione `navi` (presente solo per `check_in_luogo` e `check_out_luogo`).     |
+| `userId`             | `string`         | L'UID Firebase di chi ha materialmente creato il record (solitamente coincide con `tecnicoId`).              |
+| `timestampSync`      | `Timestamp`      | Il timestamp di Firestore che indica quando il record è stato sincronizzato dal dispositivo al cloud.        |
 
 ---
 
-## 4. Logica Operativa Speciale
+## 3. Come Leggere e Ricostruire i Dati
 
-### 4.1. Gestione "Entrata" senza selezione
+Per ottenere un quadro completo delle presenze di uno o più tecnici, segui questi passaggi:
 
-Questa è la modifica chiave della V2.5 per venire incontro alle tue richieste.
+1.  **Interrogazione della Collezione:** Esegui una query sulla collezione `checkin_giornalieri`.
+2.  **Filtro per Tecnico (Opzionale ma Raccomandato):** Per visualizzare i dati di un singolo tecnico, filtra i documenti per `tecnicoId`.
+3.  **Ordinamento Cronologico:** **È fondamentale** ordinare i documenti in base al campo `timestampImpostato` in ordine ascendente (`asc`) per ricostruire correttamente la sequenza degli eventi della giornata.
 
-*   **Scenario:** L'utente ha iniziato la giornata e il pulsante "Entrata" è correttamente **attivo**. L'utente clicca "Entrata" **senza aver prima selezionato un luogo o una nave** dal menu a tendina.
-*   **Comportamento del Sistema:**
-    *   L'operazione viene immediatamente bloccata.
-    *   Nessun dato viene scritto nel database.
-    *   L'interfaccia mostra un messaggio di errore chiaro ("Per entrare, devi prima selezionare una Nave o un Luogo dal menu.") che ti guida all'azione corretta, senza crashare o bloccare l'app.
+### Esempio di Query (Javascript - SDK v9)
 
-### 4.2. Fine Giornata con Uscita Automatica
+```javascript
+import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { db } from "./firebase-config"; // La tua configurazione Firebase
 
-Questa logica è rimasta invariata. Se termini la giornata mentre sei ancora `inLuogo`, viene creato un evento di `check_out_luogo` automatico per garantire la coerenza dei dati.
+// Funzione per ottenere gli eventi di un tecnico in ordine cronologico
+async function getCheckinEventsByTecnico(tecnicoId) {
+  const collectionRef = collection(db, "checkin_giornalieri");
+
+  const q = query(
+    collectionRef,
+    where("tecnicoId", "==", tecnicoId),
+    orderBy("timestampImpostato", "asc") // Ordinamento fondamentale
+  );
+
+  const querySnapshot = await getDocs(q);
+
+  const events = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  return events;
+}
+
+// Esempio di utilizzo
+const tecnicoDaCercare = "uid_del_tecnico_qui";
+getCheckinEventsByTecnico(tecnicoDaCercare).then(events => {
+  console.log(`Eventi per il tecnico ${tecnicoDaCercare}:`, events);
+  // Qui puoi processare l'array 'events' per visualizzare la timeline
+});
+```
+
+### Ricostruzione della Timeline
+
+Una volta ottenuto l'array di eventi ordinato, puoi iterarlo per ricostruire la giornata:
+
+- Un evento `inizio_giornata` segna l'inizio delle attività.
+- Un `check_in_luogo` indica l'ingresso in un cantiere (identificato da `luogoId` o `naveId`).
+- Un `check_out_luogo` indica l'uscita.
+- Un `fine_giornata` chiude tutte le attività.
+
+Combinando queste informazioni, puoi calcolare le ore di presenza totali e quelle trascorse in ogni singolo luogo.

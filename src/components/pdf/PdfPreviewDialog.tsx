@@ -1,102 +1,85 @@
-
 import React from 'react';
 import {
-    Dialog,
-    AppBar,
-    Toolbar,
-    IconButton,
-    Typography,
-    Box,
-    Button,
-    CircularProgress,
-    Slide
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+  Box,
+  useTheme,
 } from '@mui/material';
-import { TransitionProps } from '@mui/material/transitions';
+import { PDFViewer, BlobProvider } from '@react-pdf/renderer';
+import { RiepilogoPDF } from './RiepilogoPDF';
 import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
-
-const Transition = React.forwardRef(function Transition(
-    props: TransitionProps & {
-        children: React.ReactElement;
-    },
-    ref: React.Ref<unknown>,
-) {
-    return <Slide direction="up" ref={ref} {...props} />;
-});
+import { RisultatoCalcoloGiornaliero } from '@/services/BustaPagaService';
 
 interface PdfPreviewDialogProps {
-    open: boolean;
-    pdfDataUrl: string | null; // Il PDF come stringa data URL
-    isGenerating: boolean;
-    onClose: () => void;
-    onShare: () => void; // La funzione per la condivisione finale
-    fileName: string;
+  open: boolean;
+  onClose: () => void;
+  risultati: RisultatoCalcoloGiornaliero[];
+  dipendenteNome: string;
+  periodo: string;
 }
 
-const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({
-    open,
-    pdfDataUrl,
-    isGenerating,
-    onClose,
-    onShare,
-    fileName
-}) => {
+export const PdfPreviewDialog: React.FC<PdfPreviewDialogProps> = ({ open, onClose, risultati, dipendenteNome, periodo }) => {
+  const theme = useTheme();
 
-    return (
-        <Dialog
-            fullScreen
-            open={open}
-            onClose={onClose}
-            TransitionComponent={Transition}
-            aria-labelledby="pdf-preview-dialog-title"
+  const handleShare = async (blob: Blob | null) => {
+    if (!blob) {
+      alert('Impossibile generare il file per la condivisione.');
+      return;
+    }
+
+    const file = new File([blob], `Riepilogo_${periodo.replace(' ', '_')}.pdf`, { type: 'application/pdf' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: `Riepilogo Ore - ${periodo}`,
+          text: `Ecco il riepilogo ore per ${dipendenteNome} nel periodo ${periodo}.`,
+          files: [file],
+        });
+      } catch (error) {
+        console.error('Errore durante la condivisione:', error);
+      }
+    } else {
+      alert('La condivisione di file non è supportata su questo browser o dispositivo.');
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} fullScreen>
+      <DialogTitle sx={{ backgroundColor: theme.palette.primary.main, color: 'white' }}>
+        Anteprima Riepilogo PDF
+        <IconButton
+          aria-label="close"
+          onClick={onClose}
+          sx={{ position: 'absolute', right: 8, top: 8, color: 'white' }}
         >
-            <AppBar sx={{ position: 'relative' }}>
-                <Toolbar>
-                    <IconButton
-                        edge="start"
-                        color="inherit"
-                        onClick={onClose}
-                        aria-label="Chiudi anteprima"
-                    >
-                        <CloseIcon />
-                    </IconButton>
-                    <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-                        Anteprima: {fileName}
-                    </Typography>
-                    <Button
-                        autoFocus
-                        color="inherit"
-                        onClick={onShare}
-                        disabled={!pdfDataUrl || isGenerating}
-                        startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <ShareIcon />}
-                    >
-                        Condividi
-                    </Button>
-                </Toolbar>
-            </AppBar>
-            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: 'grey.500', overflow: 'auto' }}>
-                {isGenerating && (
-                    <Box sx={{textAlign: 'center', color: 'white'}}>
-                        <CircularProgress color="inherit" />
-                        <Typography sx={{mt: 2}}>Generazione del PDF in corso...</Typography>
-                    </Box>
-                )}
-                {!isGenerating && pdfDataUrl ? (
-                    <iframe
-                        src={pdfDataUrl}
-                        title="Anteprima PDF"
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            border: 'none',
-                        }}
-                    />
-                ) : !isGenerating && (
-                     <Typography sx={{color: 'white'}}>Errore: impossibile visualizzare l&apos;anteprima.</Typography>
-                )}
-            </Box>
-        </Dialog>
-    );
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent sx={{ p: 0, height: 'calc(100vh - 110px)' }}>
+        <PDFViewer style={{ width: '100%', height: '100%', border: 'none' }}>
+          <RiepilogoPDF risultati={risultati} dipendenteNome={dipendenteNome} periodo={periodo} />
+        </PDFViewer>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center', p: 2 }}>
+        <BlobProvider document={<RiepilogoPDF risultati={risultati} dipendenteNome={dipendenteNome} periodo={periodo} />}>
+            {({ blob, loading }) => (
+                <Button 
+                    variant="contained" 
+                    startIcon={<ShareIcon />} 
+                    onClick={() => handleShare(blob)}
+                    disabled={loading}
+                >
+                    {loading ? 'Genero il PDF...' : 'Condividi Riepilogo'}
+                </Button>
+            )}
+        </BlobProvider>
+      </DialogActions>
+    </Dialog>
+  );
 };
-
-export default PdfPreviewDialog;

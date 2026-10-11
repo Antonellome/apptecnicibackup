@@ -1,178 +1,135 @@
 import { Rapportino, MasterData } from '@/models/definitions';
-import { toDateSafe, parseTimeString } from './dateUtils';
+import { toDateSafe, parseTimeString, timeToMinutes } from './dateUtils';
 import {
   getDay,
-  startOfDay,
-  endOfDay,
-  differenceInMinutes,
   format,
-  set,
-  addDays,
-  isBefore,
-  isAfter,
-  min,
-  max,
-  startOfWeek,
 } from 'date-fns';
 
 // --- TIPI DI ORE (COSTANTI) ---
-export const ORE_ORDINARIE = 'Ore Ordinarie';
+export const ORE_ORDINARIE = 'Ordinarie Diurne';
 export const LAVORO_NOTTURNO_ORDINARIO = 'Lavoro Notturno Ordinario';
 export const LAVORO_FESTIVO_ORDINARIO = 'Lavoro Festivo Ordinario';
 export const LAVORO_FESTIVO_NOTTURNO_ORDINARIO = 'Lavoro Festivo Notturno Ordinario';
-export const STRAORDINARIO_DIURNO = 'Straordinario Diurno';
-export const STRAORDINARIO_NOTTURNO = 'Straordinario Notturno';
-export const STRAORDINARIO_FESTIVO = 'Straordinario Festivo';
+export const STRAORDINARIO_DIURNO = 'Straordinario Feriale (Prime 2h) (+25%)';
+export const STRAORDINARIO_NOTTURNO = 'Straordinario Notturno Feriale';
+export const STRAORDINARIO_FESTIVO = 'Straordinario Festivo Diurno';
 export const STRAORDINARIO_FESTIVO_NOTTURNO = 'Straordinario Festivo Notturno';
 
 // --- INTERFACCE ---
 export interface DailyHours { [key: string]: number; }
 export interface WeeklyHours { [date: string]: DailyHours; }
-interface WorkInterval { start: Date; end: Date; }
 
 // --- FUNZIONI HELPER ---
 const roundToTwoDecimals = (num: number): number => Math.round((num + Number.EPSILON) * 100) / 100;
 
-const mergeOverlappingIntervals = (intervals: WorkInterval[]): WorkInterval[] => {
-    if (intervals.length <= 1) return intervals;
-    const sorted = [...intervals].sort((a, b) => a.start.getTime() - b.start.getTime());
-    const merged: WorkInterval[] = [sorted[0]];
-    for (let i = 1; i < sorted.length; i++) {
-        const last = merged[merged.length - 1];
-        const current = sorted[i];
-        if (current.start.getTime() < last.end.getTime()) {
-            last.end = max([last.end, current.end]);
-        } else {
-            merged.push(current);
-        }
-    }
-    return merged;
-};
+const getMinutiPerFascia = (startMinutes: number, endMinutes: number): { minutiDiurni: number; minutiNotturni: number } => {
+    let minutiDiurni = 0;
+    let minutiNotturni = 0;
 
-// --- FUNZIONE DI CALCOLO (FINALE E CORRETTA) ---
+    // Fascia Notturna 1 (00:00 -> 06:00)
+    minutiNotturni += Math.max(0, Math.min(endMinutes, 6 * 60) - Math.max(startMinutes, 0));
+    // Fascia Diurna (06:00 -> 22:00)
+    minutiDiurni += Math.max(0, Math.min(endMinutes, 22 * 60) - Math.max(startMinutes, 6 * 60));
+    // Fascia Notturna 2 (22:00 -> ...)
+    minutiNotturni += Math.max(0, endMinutes - Math.max(startMinutes, 22 * 60));
+    
+    return { minutiDiurni, minutiNotturni };
+}
+
+// --- FUNZIONE DI CALCOLO PRINCIPALE ---
 export const calculateWeeklyHours = (
   rapportini: Rapportino[],
   masterData: MasterData,
   tecnicoId: string
 ): WeeklyHours => {
-    const weeklyLimitMinutes = 40 * 60;
-    const dailyLimitMinutes = 8 * 60;
     const finalResult: WeeklyHours = {};
+    const dailyLimitMinutes = 8 * 60;
 
-    if (!rapportini || rapportini.length === 0) return {};
-
-    const allIntervals: WorkInterval[] = rapportini.flatMap(r => {
-        if (r.isDeleted) return [];
-        const rapportinoDate = toDateSafe(r.data);
-        if (!rapportinoDate) return [];
+    const rapportiniByDate: { [date: string]: Rapportino[] } = {};
+    for (const r of rapportini) {
+        if (r.isDeleted) continue;
         const techDetail = r.dettaglioOreTecnici?.find(d => d.tecnicoId === tecnicoId);
-        if (!techDetail || !techDetail.oraInizio || !techDetail.oraFine) return [];
-        
-        const start = parseTimeString(techDetail.oraInizio, rapportinoDate);
-        let end = parseTimeString(techDetail.oraFine, rapportinoDate);
-        if (!start || !end) return [];
-
-        if (isBefore(end, start)) {
-            end = addDays(end, 1);
+        if(!techDetail) continue; // Salta se non ci sono dettagli per questo tecnico
+        const dateKey = format(toDateSafe(r.data), 'yyyy-MM-dd');
+        if (!rapportiniByDate[dateKey]) {
+            rapportiniByDate[dateKey] = [];
         }
-        if (!isAfter(end, start)) return [];
-
-        const pause = techDetail.pausa || 0;
-        const netDuration = differenceInMinutes(end, start) - pause;
-        if (netDuration <= 0) return [];
-
-        return [{ start, end: new Date(start.getTime() + netDuration * 60000) }];
-    });
-
-    const mergedIntervals = mergeOverlappingIntervals(allIntervals);
-    if (mergedIntervals.length === 0) return {};
-    
-    // --- LOGICA DI SUDDIVISIONE GIORNALIERA (CORRETTA) ---
-    const dailyIntervals: Record<string, WorkInterval[]> = {};
-    mergedIntervals.forEach(interval => {
-        let cursor = interval.start;
-        while (isBefore(cursor, interval.end)) {
-            const dayKey = format(cursor, 'yyyy-MM-dd');
-            const nextDayStart = startOfDay(addDays(cursor, 1));
-            const endOfChunk = min([interval.end, nextDayStart]);
-
-            if (!dailyIntervals[dayKey]) {
-                dailyIntervals[dayKey] = [];
-            }
-            dailyIntervals[dayKey].push({ start: cursor, end: endOfChunk });
-            cursor = endOfChunk;
-        }
-    });
-
-    const weeks = Object.keys(dailyIntervals).reduce((acc, dayKey) => {
-        const weekKey = format(startOfWeek(toDateSafe(dayKey), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-        if (!acc[weekKey]) acc[weekKey] = [];
-        acc[weekKey].push(dayKey);
-        return acc;
-    }, {} as Record<string, string[]>);
-
-    for (const weekKey in weeks) {
-        let weeklyBaseMinutes = 0;
-        const weekDays = weeks[weekKey].sort();
-
-        for (const dayKey of weekDays) {
-            let dailyTotalMinutes = 0;
-            finalResult[dayKey] = {};
-            const intervalsForDay = mergeOverlappingIntervals(dailyIntervals[dayKey] || []);
-
-            for (const interval of intervalsForDay) {
-                let cursor = interval.start;
-                while (isBefore(cursor, interval.end)) {
-                    const h = cursor.getHours();
-                    const day = startOfDay(cursor);
-                    const sliceEnd = min([interval.end, (h >= 6 && h < 22) ? set(day, { hours: 22 }) : (h < 6 ? set(day, { hours: 6 }) : set(addDays(day, 1), { hours: 6 }))]);
-                    
-                    let chunkDuration = differenceInMinutes(sliceEnd, cursor);
-                    if (chunkDuration <= 0) { cursor = sliceEnd; continue; }
-                    
-                    const dayOfWeek = getDay(cursor);
-                    const isHoliday = masterData.festivi?.includes(dayKey) || dayOfWeek === 0;
-                    const type = (h >= 6 && h < 22) ? 'diurno' : 'notturno';
-
-                    const minutesToProcess = chunkDuration;
-                    let minutesRemainingInChunk = minutesToProcess;
-
-                    const dailyOvertimeStart = dailyLimitMinutes - dailyTotalMinutes;
-                    const dailyOvertimeMinutes = Math.max(0, minutesRemainingInChunk - Math.max(0, dailyOvertimeStart));
-
-                    if (dailyOvertimeMinutes > 0) {
-                        let category = isHoliday ? (type === 'notturno' ? STRAORDINARIO_FESTIVO_NOTTURNO : STRAORDINARIO_FESTIVO) : (type === 'notturno' ? STRAORDINARIO_NOTTURNO : STRAORDINARIO_DIURNO);
-                        finalResult[dayKey][category] = (finalResult[dayKey][category] || 0) + dailyOvertimeMinutes / 60;
-                        minutesRemainingInChunk -= dailyOvertimeMinutes;
-                    }
-
-                    const baseMinutesInChunk = minutesRemainingInChunk;
-                    if (baseMinutesInChunk > 0) {
-                        const weeklyOvertimeStart = weeklyLimitMinutes - weeklyBaseMinutes;
-                        const weeklyOvertimeMinutes = Math.max(0, baseMinutesInChunk - Math.max(0, weeklyOvertimeStart));
-
-                        if (weeklyOvertimeMinutes > 0) {
-                            let category = isHoliday ? (type === 'notturno' ? STRAORDINARIO_FESTIVO_NOTTURNO : STRAORDINARIO_FESTIVO) : (type === 'notturno' ? STRAORDINARIO_NOTTURNO : STRAORDINARIO_DIURNO);
-                            finalResult[dayKey][category] = (finalResult[dayKey][category] || 0) + weeklyOvertimeMinutes / 60;
-                        }
-
-                        const ordinaryMinutes = baseMinutesInChunk - weeklyOvertimeMinutes;
-                        if (ordinaryMinutes > 0) {
-                            let category = isHoliday ? (type === 'notturno' ? LAVORO_FESTIVO_NOTTURNO_ORDINARIO : LAVORO_FESTIVO_ORDINARIO) : (type === 'notturno' ? LAVORO_NOTTURNO_ORDINARIO : ORE_ORDINARIE);
-                            finalResult[dayKey][category] = (finalResult[dayKey][category] || 0) + ordinaryMinutes / 60;
-                            weeklyBaseMinutes += ordinaryMinutes;
-                        }
-                    }
-                    dailyTotalMinutes += minutesToProcess;
-                    cursor = sliceEnd;
-                }
-            }
-        }
+        rapportiniByDate[dateKey].push(r);
     }
 
-    for (const date in finalResult) {
-        for (const type in finalResult[date]) {
-            finalResult[date][type] = roundToTwoDecimals(finalResult[date][type]);
+    for (const dateKey in rapportiniByDate) {
+        const rapportiniDelGiorno = rapportiniByDate[dateKey];
+        const data = toDateSafe(dateKey);
+        if (!data) continue;
+
+        let totalMinutiDiurni = 0;
+        let totalMinutiNotturni = 0;
+        let totalPausa = 0;
+
+        for (const rapportino of rapportiniDelGiorno) {
+            const techDetail = rapportino.dettaglioOreTecnici?.find(d => d.tecnicoId === tecnicoId);
+            if (!techDetail) continue;
+
+            if (rapportino.isManual) {
+                totalMinutiDiurni += (techDetail.ore || 0) * 60;
+            } else if (techDetail.oraInizio && techDetail.oraFine) {
+                const start = parseTimeString(techDetail.oraInizio, data);
+                const end = parseTimeString(techDetail.oraFine, data);
+                if (!start || !end) continue;
+                
+                let startMinutes = timeToMinutes(format(start, 'HH:mm'));
+                let endMinutes = timeToMinutes(format(end, 'HH:mm'));
+
+                if (endMinutes < startMinutes) {
+                    endMinutes += 24 * 60;
+                }
+
+                const { minutiDiurni, minutiNotturni } = getMinutiPerFascia(startMinutes, endMinutes);
+                totalMinutiDiurni += minutiDiurni;
+                totalMinutiNotturni += minutiNotturni;
+                totalPausa += techDetail.pausa || 0;
+            }
+        }
+
+        // Sottrai la pausa, prioritariamente dalle ore diurne
+        const diurniPostPausa = Math.max(0, totalMinutiDiurni - totalPausa);
+        const pausaResidua = Math.max(0, totalPausa - totalMinutiDiurni);
+        const notturniPostPausa = Math.max(0, totalMinutiNotturni - pausaResidua);
+
+        if (diurniPostPausa + notturniPostPausa === 0) continue;
+
+        finalResult[dateKey] = {};
+        const dayOfWeek = getDay(data);
+        const isSaturday = dayOfWeek === 6;
+        const isHoliday = masterData.festivita?.some(f => format(toDateSafe(f.data), 'yyyy-MM-dd') === dateKey) || dayOfWeek === 0;
+
+        if (isSaturday || isHoliday) {
+            if (diurniPostPausa > 0) {
+                const category = isHoliday ? STRAORDINARIO_FESTIVO : STRAORDINARIO_DIURNO;
+                finalResult[dateKey][category] = roundToTwoDecimals(diurniPostPausa / 60);
+            }
+            if (notturniPostPausa > 0) {
+                const category = isHoliday ? STRAORDINARIO_FESTIVO_NOTTURNO : STRAORDINARIO_NOTTURNO;
+                finalResult[dateKey][category] = roundToTwoDecimals(notturniPostPausa / 60);
+            }
+        } else {
+            const totalMinutes = diurniPostPausa + notturniPostPausa;
+            const ordinaryMinutes = Math.min(totalMinutes, dailyLimitMinutes);
+            const extraordinaryMinutes = totalMinutes - ordinaryMinutes;
+
+            if (ordinaryMinutes > 0) {
+                const ordinaryDiurni = Math.min(diurniPostPausa, ordinaryMinutes);
+                const ordinaryNotturni = ordinaryMinutes - ordinaryDiurni;
+                if(ordinaryDiurni > 0) finalResult[dateKey][ORE_ORDINARIE] = roundToTwoDecimals(ordinaryDiurni / 60);
+                if(ordinaryNotturni > 0) finalResult[dateKey][LAVORO_NOTTURNO_ORDINARIO] = roundToTwoDecimals(ordinaryNotturni / 60);
+            }
+            
+            if (extraordinaryMinutes > 0) {
+                const extraordinaryDiurni = diurniPostPausa - (finalResult[dateKey][ORE_ORDINARIE] || 0) * 60;
+                const extraordinaryNotturni = notturniPostPausa - (finalResult[dateKey][LAVORO_NOTTURNO_ORDINARIO] || 0) * 60;
+                if(extraordinaryDiurni > 0) finalResult[dateKey][STRAORDINARIO_DIURNO] = roundToTwoDecimals(extraordinaryDiurni / 60);
+                if(extraordinaryNotturni > 0) finalResult[dateKey][STRAORDINARIO_NOTTURNO] = roundToTwoDecimals(extraordinaryNotturni / 60);
+            }
         }
     }
     return finalResult;

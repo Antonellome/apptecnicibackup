@@ -15,6 +15,8 @@ import {
     Notifica,
     SyncEvent,
     UserProfile,
+    SaldiContatori,
+    SaldoManuale, // Importo la nuova interfaccia
 } from '@/models/definitions';
 
 export interface SyncState {
@@ -38,12 +40,13 @@ export class MySubClassedDexie extends Dexie {
     syncQueue!: Table<SyncEvent>; 
     syncState!: Table<SyncState>;
     webAppUsers!: Table<UserProfile>;
+    saldi!: Table<SaldiContatori>;
+    saldiManuali!: Table<SaldoManuale>; // Aggiungo la nuova tabella
 
     constructor() {
-        super('rapportini-db-v3'); 
+        super('rapportini-db-v5'); // AUMENTO LA VERSIONE DEL DB a 5
 
-        // Versione 3: Rimuove le tabelle fantasma (qualifiche, sistemi, sedi, lavorazioni)
-        this.version(3).stores({
+        this.version(5).stores({
             rapportini: '++id, data, tecnicoId, luogoId, clienteId',
             clienti: '++id, nome',
             navi: '++id, clienteId, nome',
@@ -59,8 +62,31 @@ export class MySubClassedDexie extends Dexie {
             syncQueue: '++id, syncStatus',
             syncState: '&id',
             webAppUsers: '&id',
+            saldi: '&[dipendenteId+anno]', // Modifico l'indice per supportare la query
+            saldiManuali: '++id, dipendenteId, meseApplicazione', // Definisco la nuova tabella e i suoi indici
         });
 
+        // Mantengo le versioni precedenti per la migrazione
+         this.version(4).stores({
+            rapportini: '++id, data, tecnicoId, luogoId, clienteId',
+            clienti: '++id, nome',
+            navi: '++id, clienteId, nome',
+            tipiGiornata: '++id, nome',
+            impostazioni: '&id',
+            veicoli: '++id, nome',
+            checkin_giornalieri: '++id, data, tecnicoId',
+            tecnici: '&id, userId', 
+            luoghi: '++id, nome',
+            categorie: '++id, nome',
+            ditte: '++id, nome',
+            notifiche: '++id, isRead',
+            syncQueue: '++id, syncStatus',
+            syncState: '&id',
+            webAppUsers: '&id',
+            saldi: '&dipendenteId, anno',
+        });
+
+        this.version(3).stores({});
         this.version(2).stores({});
         this.version(1).stores({});
     }

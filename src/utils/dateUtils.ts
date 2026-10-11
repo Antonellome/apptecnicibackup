@@ -37,4 +37,21 @@ const parseTimeString = (timeString: string, baseDate: Date): Date | null => {
     }
 };
 
-export { toDateSafe, parseTimeString };
+/**
+ * Converte una stringa oraria (es. "14:30") nel numero totale di minuti dall'inizio della giornata.
+ * @param timeString La stringa oraria (HH:mm).
+ * @returns Il numero totale di minuti.
+ */
+const timeToMinutes = (timeString: string): number => {
+  if (!timeString) return 0;
+  try {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return 0;
+    return hours * 60 + minutes;
+  } catch (error) {
+    console.error("Errore nella conversione dell'ora in minuti:", error);
+    return 0;
+  }
+};
+
+export { toDateSafe, parseTimeString, timeToMinutes };
