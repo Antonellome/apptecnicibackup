@@ -1,0 +1,218 @@
+import * as XLSX from 'xlsx';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSunday } from 'date-fns';
+import { it } from 'date-fns/locale';
+import { RisultatoCalcoloGiornaliero, SaldiContatori } from '@/models/definitions';
+import { strutturaPaga } from '@/config/payrollStructure';
+
+// Funzione per generare e applicare stili in modo più robusto
+const getStyledSheet = (
+    sheetData: (string | number | null)[][],
+    colWidths: { wch: number }[],
+    title: string,
+    daysInMonth?: Date[]
+) => {
+    // 1. Aggiungi titolo e una riga vuota prima dei dati
+    const dataWithTitle = [
+        [title], // Titolo che verrà unito
+        [], // Riga vuota per spaziatura
+        ...sheetData
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(dataWithTitle);
+
+    // 2. Definisci gli stili
+    const styles = {
+        title: {
+            font: { name: 'Calibri', sz: 18, color: { rgb: "0D47A1" }, bold: true },
+            alignment: { horizontal: 'center', vertical: 'center' }
+        },
+        header: {
+            font: { name: 'Calibri', sz: 12, color: { rgb: "1565C0" }, bold: true },
+            alignment: { horizontal: 'center' }
+        },
+        rowHeader: {
+            font: { name: 'Calibri', sz: 11, color: { rgb: "1565C0" }, bold: false }
+        },
+        sectionHeader: {
+            font: { name: 'Calibri', sz: 13, color: { rgb: "0D47A1" }, bold: true },
+            fill: { fgColor: { rgb: "E3F2FD" } },
+            alignment: { horizontal: 'center' }
+        },
+        data: {
+            font: { name: 'Calibri', sz: 11, color: { rgb: "000000" } },
+            alignment: { horizontal: 'center' }
+        },
+        weeklySeparator: {
+            border: { right: { style: 'medium', color: { rgb: "1565C0" } } }
+        },
+        totalLabel: {
+            font: { name: 'Calibri', sz: 11, color: { rgb: "0D47A1" }, bold: true }
+        },
+        totalValue: {
+            font: { name: 'Calibri', sz: 11, color: { rgb: "000000" }, bold: true },
+            alignment: { horizontal: 'right' }
+        }
+    };
+
+    // 3. Unisci la riga del titolo
+    const sheetRange = XLSX.utils.decode_range(ws['!ref']!);
+    const titleMerge = { s: { r: 0, c: 0 }, e: { r: 0, c: sheetRange.e.c } };
+    if (!ws['!merges']) ws['!merges'] = [];
+    ws['!merges'].push(titleMerge);
+    ws['A1'].s = styles.title;
+
+    // 4. Applica gli stili alle celle
+    const headerRowIndex1 = 2;
+    const headerRowIndex2 = 3;
+    const dataStartIndex = 4;
+
+    for (let R = headerRowIndex1; R <= sheetRange.e.r; R++) {
+        for (let C = 0; C <= sheetRange.e.c; C++) {
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[cellRef];
+            if (!cell || cell.v === null) continue;
+
+            if (R === headerRowIndex1 || R === headerRowIndex2) {
+                cell.s = styles.header;
+            } else if (R >= dataStartIndex) {
+                if (C === 0) {
+                    if (typeof cell.v === 'string' && cell.v === cell.v.toUpperCase() && isNaN(Number(cell.v))) {
+                        cell.s = styles.sectionHeader;
+                        const sectionMerge = { s: { r: R, c: 0 }, e: { r: R, c: sheetRange.e.c } };
+                        ws['!merges'].push(sectionMerge);
+                    } else {
+                        cell.s = styles.rowHeader;
+                    }
+                } else {
+                    cell.s = styles.data;
+                }
+            }
+        }
+    }
+    
+    // 5. Applica separatori settimanali (solo per il primo foglio)
+    if (daysInMonth) {
+        daysInMonth.forEach((day, index) => {
+            if (isSunday(day) && index < daysInMonth.length - 1) {
+                const colIndex = index + 1; // +1 per la colonna delle etichette
+                for (let R = headerRowIndex1; R <= sheetRange.e.r; ++R) {
+                     const cellRef = XLSX.utils.encode_cell({ r: R, c: colIndex });
+                     if (!ws[cellRef]) ws[cellRef] = {t:'s', v:''};
+                     if (!ws[cellRef].s) ws[cellRef].s = {};
+                     ws[cellRef].s.border = styles.weeklySeparator.border;
+                }
+            }
+        });
+    }
+
+    // Applica stili specifici per il secondo foglio (Riepilogo)
+    if (!daysInMonth) {
+         for (let R = dataStartIndex -1; R <= sheetRange.e.r; R++) { // Adjusted start index
+            const cellRefA = XLSX.utils.encode_cell({ r: R, c: 0 });
+            const cellA = ws[cellRefA];
+            if (cellA && typeof cellA.v === 'string') {
+                 if (cellA.v.includes('Tabella') || cellA.v.includes('Contatori')) {
+                     cellA.s = styles.sectionHeader;
+                     const merge = { s: { r: R, c: 0 }, e: { r: R, c: 3 } }; // Merge across 4 columns
+                     if(!ws['!merges']) ws['!merges'] = [];
+                     ws['!merges'].push(merge);
+                 } else if (cellA.v) {
+                     ws[cellRefA].s = styles.totalLabel;
+                 }
+            }
+            for (let C = 1; C <= sheetRange.e.c; C++) {
+                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                 if(ws[cellRef]) ws[cellRef].s = styles.totalValue;
+            }
+         }
+    }
+
+    // 6. Imposta larghezza colonne e altezza riga titolo
+    ws['!cols'] = colWidths;
+    ws['!rows'] = [{ hpt: 30 }]; 
+
+    return ws;
+};
+
+export const exportDatiToExcel = (
+    risultati: RisultatoCalcoloGiornaliero[],
+    totaliMensili: { [key: string]: number },
+    saldiFinali: SaldiContatori,
+    saldiIniziali: SaldiContatori,
+    currentMonth: Date,
+    nomeDipendente: string
+) => {
+    const monthName = format(currentMonth, 'MMMM yyyy', { locale: it });
+    const daysInMonth = eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) });
+
+    // --- Foglio 1: Dettaglio Orario ---
+    const sheet1Title = `Dettaglio Orario - ${nomeDipendente} - ${monthName}`;
+    const headerRow1 = ['Voce', ...daysInMonth.map(d => format(d, 'E', { locale: it }).charAt(0))];
+    const headerRow2 = ['', ...daysInMonth.map(d => format(d, 'd'))];
+    
+    const bodyRows1: (string | number)[][] = [];
+    strutturaPaga.forEach(sezione => {
+        const sectionHasData = sezione.voci.some(voce =>
+            risultati.some(giorno => (giorno[voce.id as keyof RisultatoCalcoloGiornaliero] as number || 0) > 0)
+        );
+        if (sectionHasData) {
+            bodyRows1.push([sezione.titolo.toUpperCase()]);
+            sezione.voci.forEach(voce => {
+                 const rowHasData = risultati.some(giorno => (giorno[voce.id as keyof RisultatoCalcoloGiornaliero] as number || 0) > 0);
+                 if (rowHasData) {
+                    const rowData: (string | number)[] = [voce.label];
+                    daysInMonth.forEach(day => {
+                        const giornoDati = risultati.find(r => r.data === format(day, 'yyyy-MM-dd'));
+                        const value = giornoDati ? (giornoDati[voce.id as keyof RisultatoCalcoloGiornaliero] as number || 0) : 0;
+                        rowData.push(value > 0 ? value.toFixed(2) : '-');
+                    });
+                    bodyRows1.push(rowData);
+                 }
+            });
+        }
+    });
+
+    const colWidths1 = [{ wch: 35 }, ...daysInMonth.map(() => ({ wch: 5 }))];
+    const ws1 = getStyledSheet([headerRow1, headerRow2, ...bodyRows1], colWidths1, sheet1Title, daysInMonth);
+
+    // --- Foglio 2: Riepilogo e Saldi ---
+    const sheet2Title = `Riepilogo e Saldi - ${nomeDipendente} - ${monthName}`;
+    const bodyRows2: (string | number | null)[][] = [];
+    bodyRows2.push(['Tabella Totali Mensili']);
+    bodyRows2.push(['Voce', 'Totale']);
+    strutturaPaga.forEach(sezione => {
+        const sectionHasData = sezione.voci.some(v => (totaliMensili[v.id] || 0) > 0);
+        if (sectionHasData) {
+            bodyRows2.push([sezione.titolo.toUpperCase()]);
+            sezione.voci.forEach(voce => {
+                const total = totaliMensili[voce.id] || 0;
+                if (total > 0) {
+                    bodyRows2.push([voce.label, total.toFixed(2)]);
+                }
+            });
+        }
+    });
+
+    bodyRows2.push([null]); // Riga vuota per separare
+    bodyRows2.push(['Contatori e Saldi Residui']);
+    bodyRows2.push(['Contatore', 'Saldo Iniziale', 'Utilizzato nel Mese', 'Saldo Finale']);
+    bodyRows2.push(['Ferie', `${saldiIniziali.ferie.toFixed(2)}h`, `-${(totaliMensili.ferieScalate || 0).toFixed(2)}h`, `${saldiFinali.ferie.toFixed(2)}h`]);
+    bodyRows2.push(['ROL', `${saldiIniziali.rol.toFixed(2)}h`, `-${(totaliMensili.rolScalati || 0).toFixed(2)}h`, `${saldiFinali.rol.toFixed(2)}h`]);
+    bodyRows2.push(['Ex Festività', `${saldiIniziali.exFestivita.toFixed(2)}h`, `-${(totaliMensili.exFestivitaScalate || 0).toFixed(2)}h`, `${saldiFinali.exFestivita.toFixed(2)}h`]);
+    bodyRows2.push(['Permessi L. 104', '24.00h', `-${(totaliMensili.legge104Scalate || 0).toFixed(2)}h`, '24.00h' ]);
+
+
+    const colWidths2 = [{ wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 15 }];
+    const ws2 = getStyledSheet(bodyRows2, colWidths2, sheet2Title);
+    
+    // --- Crea Workbook e Blob ---
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, 'Dettaglio Orario');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Riepilogo e Saldi');
+
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+
+    const fileName = `Riepilogo_Dati_${nomeDipendente}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.xlsx`;
+
+    return { blob, fileName };
+};

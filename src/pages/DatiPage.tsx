@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -9,35 +9,30 @@ import {
   TableHead,
   TableRow,
   Typography,
-  Button,
   useTheme,
   CircularProgress,
   Stack,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachWeekOfInterval, endOfWeek, eachDayOfInterval, getDay } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useLiveQuery } from 'dexie-react-hooks';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { db } from '@/db/local-db';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { processaMese, RisultatoCalcoloGiornaliero } from '@/services/BustaPagaService';
 import { toDateSafe } from '@/utils/dateUtils';
-import { Dipendente, SaldiContatori } from '@/models/definitions';
+import { Dipendente, SaldiContatori, Rapportino } from '@/models/definitions';
 import { strutturaPaga } from '@/config/payrollStructure';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ShareIcon from '@mui/icons-material/Share';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import CloseIcon from '@mui/icons-material/Close';
 import { ResiduiModal } from '@/components/common/ResiduiModal';
+import { shareOrDownload } from '@/services/shareService';
+import { exportDatiToExcel } from '@/services/excelExporter';
+import ExcelPreviewModal from '@/components/common/ExcelPreviewModal';
+
 
 // Main Component
 const DatiPage: React.FC = () => {
@@ -45,12 +40,11 @@ const DatiPage: React.FC = () => {
   const { masterData, loading: masterDataLoading } = useMasterData();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [saldiIniziali, setSaldiIniziali] = useState<SaldiContatori | null>(null);
-  const printRef = useRef<HTMLDivElement>(null);
-  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [residuiModalOpen, setResiduiModalOpen] = useState(false);
+  const [excelPreviewBlob, setExcelPreviewBlob] = useState<Blob | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
 
   const fetchSaldi = async () => {
     if (userProfile?.tecnicoId) {
@@ -118,82 +112,46 @@ const DatiPage: React.FC = () => {
   const handleMonthChange = (increment: number) => {
     setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
   };
-
-  const openPdfPreview = async () => {
-    const element = printRef.current;
-    if (!element) return;
-
-    setIsGeneratingPdf(true);
-    setPdfPreviewOpen(true);
-
-    try {
-        const canvas = await html2canvas(element, { scale: 2 });
-        const data = canvas.toDataURL('image/png');
-
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgProps= pdf.getImageProperties(data);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        pdf.addImage(data, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        
-        const pdfBlob = pdf.output('blob');
-        const fileName = `Report_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.pdf`;
-        const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
-        
-        setPdfFile(file);
-        setPdfUrl(URL.createObjectURL(pdfBlob));
-    } catch (error) {
-        console.error("Error generating PDF:", error);
-    } finally {
-        setIsGeneratingPdf(false);
-    }
-  };
-
-  const handleClosePreview = () => {
-    setPdfPreviewOpen(false);
-    if (pdfUrl) {
-      URL.revokeObjectURL(pdfUrl);
-      setPdfUrl(null);
-    }
-    setPdfFile(null);
-  };
   
-  const handleActualShare = async () => {
-    if (!pdfFile) return;
-
-    const downloadFile = () => {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(pdfFile);
-        link.download = pdfFile.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          files: [pdfFile],
-          title: `Report Mensile - ${format(currentMonth, 'MMMM yyyy', { locale: it })}`,
-          text: `Ecco il report di ${userProfile?.nome} ${userProfile?.cognome} per il mese di ${format(currentMonth, 'MMMM yyyy', { locale: it })}.`
-        });
-      } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-            console.error('Share failed, falling back to download:', error);
-        }
-        downloadFile();
-      }
-    } else {
-      downloadFile();
+  const handleGenerateExcel = async () => {
+    if (!risultati || !saldiFinali || !saldiIniziali || !userProfile) {
+        console.error("Dati non pronti per l'esportazione in Excel.");
+        return;
     }
-    handleClosePreview();
+    setIsProcessing(true);
+    try {
+        const { blob, fileName } = exportDatiToExcel(
+            risultati,
+            totaliMensili,
+            saldiFinali,
+            saldiIniziali,
+            currentMonth,
+            userProfile.cognome
+        );
+        setExcelPreviewBlob(blob);
+        setIsPreviewOpen(true);
+    } catch (error) {
+        console.error("Errore durante la generazione del file Excel:", error);
+    } finally {
+        setIsProcessing(false);
+    }
   };
+
+  const handleShareFromPreview = async (blob: Blob, fileName: string) => {
+    try {
+        await shareOrDownload(blob, fileName);
+    } catch (error) {
+        console.error("Errore durante la condivisione:", error);
+    } finally {
+        setIsPreviewOpen(false);
+    }
+};
 
   const handleSaldiSave = (saldi: SaldiContatori) => {
       setSaldiIniziali(saldi);
   }
 
-  if (authLoading || masterDataLoading || !saldiIniziali) {
+  if (authLoading || masterDataLoading || !saldiIniziali || !userProfile) {
     return <FullScreenLoader />;
   }
 
@@ -201,12 +159,13 @@ const DatiPage: React.FC = () => {
 
   return (
     <>
-      <Box ref={printRef} sx={{ p: { xs: 1, sm: 2 }, backgroundColor: '#121212', color: 'white', minHeight: '100vh' }}>
+      <Box sx={{ p: { xs: 1, sm: 2 }, backgroundColor: '#121212', color: 'white', minHeight: '100vh' }}>
         <Header 
           onMonthChange={handleMonthChange} 
           currentMonth={currentMonth} 
-          onShare={openPdfPreview} 
+          onShare={handleGenerateExcel} 
           onAddResidui={() => setResiduiModalOpen(true)} 
+          isShareDisabled={isProcessing || !risultati || risultati.length === 0}
         />
 
         {processing ? (
@@ -222,24 +181,15 @@ const DatiPage: React.FC = () => {
         )}
       </Box>
 
-      <Dialog open={pdfPreviewOpen} onClose={handleClosePreview} fullScreen>
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            Anteprima Report
-            <IconButton edge="end" color="inherit" onClick={handleClosePreview} aria-label="close">
-                <CloseIcon />
-            </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', p: 0 }}>
-            {isGeneratingPdf && <CircularProgress />}
-            {!isGeneratingPdf && pdfUrl && <iframe src={pdfUrl} style={{ flexGrow: 1, width: '100%', height: '100%', border: 'none' }} title="Anteprima PDF" />}
-        </DialogContent>
-        <DialogActions sx={{ justifyContent: 'space-between', p: 2 }}>
-            <Button variant="outlined" onClick={handleClosePreview}>Chiudi</Button>
-            <Button variant="contained" onClick={handleActualShare} startIcon={<ShareIcon />} disabled={!pdfFile || isGeneratingPdf}>
-                Condividi
-            </Button>
-        </DialogActions>
-      </Dialog>
+      {userProfile && (
+        <ExcelPreviewModal
+          open={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          excelBlob={excelPreviewBlob}
+          fileName={`Riepilogo_Dati_${userProfile.cognome}_${format(currentMonth, 'MMMM_yyyy', { locale: it })}.xlsx`}
+          onShare={handleShareFromPreview}
+        />
+      )}
 
       {userProfile && (
         <ResiduiModal 
@@ -255,11 +205,11 @@ const DatiPage: React.FC = () => {
 };
 
 // Header Component
-const Header: React.FC<{ onMonthChange: (inc: number) => void; currentMonth: Date; onShare: () => void; onAddResidui: () => void; }> = ({ onMonthChange, currentMonth, onShare, onAddResidui }) => (
+const Header: React.FC<{ onMonthChange: (inc: number) => void; currentMonth: Date; onShare: () => void; onAddResidui: () => void; isShareDisabled: boolean; }> = ({ onMonthChange, currentMonth, onShare, onAddResidui, isShareDisabled }) => (
   <Paper sx={{ p: 1, mb: 3, backgroundColor: '#1e1e1e', border: '1px solid #424242' }}>
     <Stack direction="row" justifyContent="space-between" alignItems="center">
-       <IconButton onClick={onShare} sx={{ color: 'white' }}>
-         <ShareIcon />
+       <IconButton onClick={onShare} sx={{ color: 'white' }} disabled={isShareDisabled}>
+         {isShareDisabled ? <CircularProgress size={24} /> : <ShareIcon />}
        </IconButton>
       <Stack direction="row" alignItems="center" spacing={1}>
         <IconButton onClick={() => onMonthChange(-1)} sx={{ color: 'white' }}><ArrowBackIosNewIcon /></IconButton>
