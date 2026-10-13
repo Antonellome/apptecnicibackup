@@ -339,7 +339,7 @@ const SettingsPage: React.FC = () => {
                     APP TECNICI
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    V 3.1
+                    V 3.2
                 </Typography>
             </Box>
 

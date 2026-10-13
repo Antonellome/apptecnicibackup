@@ -1,66 +1,40 @@
 import * as XLSX from 'xlsx';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSunday } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSunday } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { RisultatoCalcoloGiornaliero, SaldiContatori } from '@/models/definitions';
 import { strutturaPaga } from '@/config/payrollStructure';
 
-// Funzione per generare e applicare stili in modo più robusto
 const getStyledSheet = (
     sheetData: (string | number | null)[][],
     colWidths: { wch: number }[],
     title: string,
     daysInMonth?: Date[]
 ) => {
-    // 1. Aggiungi titolo e una riga vuota prima dei dati
     const dataWithTitle = [
-        [title], // Titolo che verrà unito
-        [], // Riga vuota per spaziatura
+        [title], 
+        [], 
         ...sheetData
     ];
     const ws = XLSX.utils.aoa_to_sheet(dataWithTitle);
 
-    // 2. Definisci gli stili
     const styles = {
-        title: {
-            font: { name: 'Calibri', sz: 18, color: { rgb: "0D47A1" }, bold: true },
-            alignment: { horizontal: 'center', vertical: 'center' }
-        },
-        header: {
-            font: { name: 'Calibri', sz: 12, color: { rgb: "1565C0" }, bold: true },
-            alignment: { horizontal: 'center' }
-        },
-        rowHeader: {
-            font: { name: 'Calibri', sz: 11, color: { rgb: "1565C0" }, bold: false }
-        },
-        sectionHeader: {
-            font: { name: 'Calibri', sz: 13, color: { rgb: "0D47A1" }, bold: true },
-            fill: { fgColor: { rgb: "E3F2FD" } },
-            alignment: { horizontal: 'center' }
-        },
-        data: {
-            font: { name: 'Calibri', sz: 11, color: { rgb: "000000" } },
-            alignment: { horizontal: 'center' }
-        },
-        weeklySeparator: {
-            border: { right: { style: 'medium', color: { rgb: "1565C0" } } }
-        },
-        totalLabel: {
-            font: { name: 'Calibri', sz: 11, color: { rgb: "0D47A1" }, bold: true }
-        },
-        totalValue: {
-            font: { name: 'Calibri', sz: 11, color: { rgb: "000000" }, bold: true },
-            alignment: { horizontal: 'right' }
-        }
+        title: { font: { name: 'Calibri', sz: 18, color: { rgb: "0D47A1" }, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } },
+        header: { font: { name: 'Calibri', sz: 12, color: { rgb: "1565C0" }, bold: true }, alignment: { horizontal: 'center' } },
+        rowHeader: { font: { name: 'Calibri', sz: 11, color: { rgb: "1565C0" }, bold: false }, alignment: { horizontal: 'left'} },
+        sectionHeader: { font: { name: 'Calibri', sz: 13, color: { rgb: "0D47A1" }, bold: true }, fill: { fgColor: { rgb: "E3F2FD" } }, alignment: { horizontal: 'center' } },
+        data: { font: { name: 'Calibri', sz: 11, color: { rgb: "000000" } }, alignment: { horizontal: 'center' } },
+        weeklySeparator: { border: { right: { style: 'medium', color: { rgb: "1565C0" } } } },
+        totalLabel: { font: { name: 'Calibri', sz: 11, color: { rgb: "0D47A1" }, bold: true } },
+        totalValue: { font: { name: 'Calibri', sz: 11, color: { rgb: "000000" }, bold: true }, alignment: { horizontal: 'right' } },
+        footer: { font: { name: 'Calibri', sz: 11, bold: true }, alignment: { horizontal: 'center' }, border: { top: { style: 'thin', color: { rgb: "000000" } } } },
     };
 
-    // 3. Unisci la riga del titolo
     const sheetRange = XLSX.utils.decode_range(ws['!ref']!);
     const titleMerge = { s: { r: 0, c: 0 }, e: { r: 0, c: sheetRange.e.c } };
     if (!ws['!merges']) ws['!merges'] = [];
     ws['!merges'].push(titleMerge);
-    ws['A1'].s = styles.title;
+    if (ws['A1']) ws['A1'].s = styles.title;
 
-    // 4. Applica gli stili alle celle
     const headerRowIndex1 = 2;
     const headerRowIndex2 = 3;
     const dataStartIndex = 4;
@@ -69,31 +43,38 @@ const getStyledSheet = (
         for (let C = 0; C <= sheetRange.e.c; C++) {
             const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
             const cell = ws[cellRef];
-            if (!cell || cell.v === null) continue;
+            if (!cell || cell.v === null || cell.v === '') continue;
 
             if (R === headerRowIndex1 || R === headerRowIndex2) {
-                cell.s = styles.header;
+                if(cell.v) cell.s = styles.header;
             } else if (R >= dataStartIndex) {
                 if (C === 0) {
-                    if (typeof cell.v === 'string' && cell.v === cell.v.toUpperCase() && isNaN(Number(cell.v))) {
+                     if (typeof cell.v === 'string' && cell.v === cell.v.toUpperCase() && isNaN(Number(cell.v))) {
                         cell.s = styles.sectionHeader;
                         const sectionMerge = { s: { r: R, c: 0 }, e: { r: R, c: sheetRange.e.c } };
                         ws['!merges'].push(sectionMerge);
                     } else {
-                        cell.s = styles.rowHeader;
+                       if(cell.v === 'TOTALI') {
+                           cell.s = styles.footer;
+                       } else {
+                           cell.s = styles.rowHeader;
+                       }
                     }
                 } else {
-                    cell.s = styles.data;
+                    if (ws[XLSX.utils.encode_cell({r:R, c:0})]?.v === 'TOTALI') {
+                         cell.s = styles.footer;
+                    } else {
+                         cell.s = styles.data;
+                    }
                 }
             }
         }
     }
     
-    // 5. Applica separatori settimanali (solo per il primo foglio)
     if (daysInMonth) {
         daysInMonth.forEach((day, index) => {
             if (isSunday(day) && index < daysInMonth.length - 1) {
-                const colIndex = index + 1; // +1 per la colonna delle etichette
+                const colIndex = index + 1;
                 for (let R = headerRowIndex1; R <= sheetRange.e.r; ++R) {
                      const cellRef = XLSX.utils.encode_cell({ r: R, c: colIndex });
                      if (!ws[cellRef]) ws[cellRef] = {t:'s', v:''};
@@ -104,15 +85,14 @@ const getStyledSheet = (
         });
     }
 
-    // Applica stili specifici per il secondo foglio (Riepilogo)
     if (!daysInMonth) {
-         for (let R = dataStartIndex -1; R <= sheetRange.e.r; R++) { // Adjusted start index
+         for (let R = dataStartIndex -1; R <= sheetRange.e.r; R++) {
             const cellRefA = XLSX.utils.encode_cell({ r: R, c: 0 });
             const cellA = ws[cellRefA];
             if (cellA && typeof cellA.v === 'string') {
                  if (cellA.v.includes('Tabella') || cellA.v.includes('Contatori')) {
                      cellA.s = styles.sectionHeader;
-                     const merge = { s: { r: R, c: 0 }, e: { r: R, c: 3 } }; // Merge across 4 columns
+                     const merge = { s: { r: R, c: 0 }, e: { r: R, c: 3 } };
                      if(!ws['!merges']) ws['!merges'] = [];
                      ws['!merges'].push(merge);
                  } else if (cellA.v) {
@@ -126,7 +106,6 @@ const getStyledSheet = (
          }
     }
 
-    // 6. Imposta larghezza colonne e altezza riga titolo
     ws['!cols'] = colWidths;
     ws['!rows'] = [{ hpt: 30 }]; 
 
@@ -146,8 +125,8 @@ export const exportDatiToExcel = (
 
     // --- Foglio 1: Dettaglio Orario ---
     const sheet1Title = `Dettaglio Orario - ${nomeDipendente} - ${monthName}`;
-    const headerRow1 = ['Voce', ...daysInMonth.map(d => format(d, 'E', { locale: it }).charAt(0))];
-    const headerRow2 = ['', ...daysInMonth.map(d => format(d, 'd'))];
+    const headerRow1 = ['Voce', ...daysInMonth.map(d => format(d, 'E', { locale: it }).charAt(0)), 'Totale'];
+    const headerRow2 = ['', ...daysInMonth.map(d => format(d, 'd')), ''];
     
     const bodyRows1: (string | number)[][] = [];
     strutturaPaga.forEach(sezione => {
@@ -160,18 +139,49 @@ export const exportDatiToExcel = (
                  const rowHasData = risultati.some(giorno => (giorno[voce.id as keyof RisultatoCalcoloGiornaliero] as number || 0) > 0);
                  if (rowHasData) {
                     const rowData: (string | number)[] = [voce.label];
+                    let rowTotal = 0;
                     daysInMonth.forEach(day => {
                         const giornoDati = risultati.find(r => r.data === format(day, 'yyyy-MM-dd'));
                         const value = giornoDati ? (giornoDati[voce.id as keyof RisultatoCalcoloGiornaliero] as number || 0) : 0;
                         rowData.push(value > 0 ? value.toFixed(2) : '-');
+                        rowTotal += value;
                     });
+                    rowData.push(rowTotal > 0 ? rowTotal.toFixed(2) : '-');
                     bodyRows1.push(rowData);
                  }
             });
         }
     });
+    
+    // Footer Row with Totals
+    const footerRow: (string | number)[] = ['TOTALI'];
+    const columnTotals: number[] = new Array(daysInMonth.length).fill(0);
+    let grandTotal = 0;
 
-    const colWidths1 = [{ wch: 35 }, ...daysInMonth.map(() => ({ wch: 5 }))];
+    strutturaPaga
+      .flatMap(s => s.voci)
+      .forEach(voce => {
+        const isPayrollHour = voce.id !== 'debitoOrario' && voce.id !== 'permessoNonRetribuito'; // Definizione di ora in busta paga
+        if (isPayrollHour) {
+             grandTotal += totaliMensili[voce.id] || 0;
+        }
+
+        daysInMonth.forEach((day, index) => {
+            const giornoDati = risultati.find(r => r.data === format(day, 'yyyy-MM-dd'));
+            const value = giornoDati ? (giornoDati[voce.id as keyof RisultatoCalcoloGiornaliero] as number || 0) : 0;
+            if (isPayrollHour) {
+                columnTotals[index] += value;
+            }
+        });
+    });
+
+    columnTotals.forEach(total => footerRow.push(total > 0 ? total.toFixed(2) : '-'));
+    footerRow.push(grandTotal > 0 ? grandTotal.toFixed(2) : '-');
+
+    bodyRows1.push([]); // Empty separator row
+    bodyRows1.push(footerRow);
+
+    const colWidths1 = [{ wch: 35 }, ...daysInMonth.map(() => ({ wch: 5 })), {wch: 10}];
     const ws1 = getStyledSheet([headerRow1, headerRow2, ...bodyRows1], colWidths1, sheet1Title, daysInMonth);
 
     // --- Foglio 2: Riepilogo e Saldi ---
@@ -191,6 +201,12 @@ export const exportDatiToExcel = (
             });
         }
     });
+    
+    // Grand Total in Riepilogo
+    bodyRows2.push([]);
+    bodyRows2.push(['RIEPILOGO GENERALE']);
+    bodyRows2.push(['Totale Ore Busta Paga', grandTotal.toFixed(2)]);
+
 
     bodyRows2.push([null]); // Riga vuota per separare
     bodyRows2.push(['Contatori e Saldi Residui']);

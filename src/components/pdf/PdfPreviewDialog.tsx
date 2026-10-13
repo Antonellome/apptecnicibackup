@@ -6,14 +6,13 @@ import {
   DialogActions,
   Button,
   IconButton,
-  Box,
   useTheme,
 } from '@mui/material';
 import { PDFViewer, BlobProvider } from '@react-pdf/renderer';
 import { RiepilogoPDF } from './RiepilogoPDF';
 import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
-import { RisultatoCalcoloGiornaliero } from '@/services/BustaPagaService';
+import { RisultatoCalcoloGiornaliero } from '@/models/definitions';
 
 interface PdfPreviewDialogProps {
   open: boolean;

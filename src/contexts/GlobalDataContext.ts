@@ -1,12 +1,13 @@
 
 import { createContext, useContext } from 'react';
-import type { MasterData } from '@/models/definitions';
+import type { MasterData, UserProfile } from '@/models/definitions';
 
 // --- CONTEXT INTERFACE ---
 // Questa interfaccia è stata aggiornata per rispecchiare l'utilizzo nell'applicazione,
 // centralizzando i dati anagrafici sotto `masterData` e includendo stati per caricamento ed errori.
 export interface IGlobalDataContext {
   masterData?: MasterData;
+  userProfile?: UserProfile;
   loading: boolean;
   error: Error | null;
   // Funzione placeholder per risolvere gli errori di compilazione.

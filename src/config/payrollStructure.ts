@@ -20,6 +20,14 @@ export const strutturaPaga: SezionePaga[] = [
     ],
   },
   {
+    titolo: 'Banca Ore (Solo Maggiorazione)',
+    voci: [
+      { id: 'bancaOreSolaMaggiorazione25', label: 'Magg. Banca Ore (+25%)', abbreviation: 'B.O. 25%' },
+      { id: 'bancaOreSolaMaggiorazione30', label: 'Magg. Banca Ore (+30%)', abbreviation: 'B.O. 30%' },
+      { id: 'bancaOreSolaMaggiorazione50', label: 'Magg. Banca Ore (+50%)', abbreviation: 'B.O. 50%' },
+    ],
+  },
+  {
     titolo: 'Lavoro Straordinario',
     voci: [
       { id: 'strDiu12Intero', label: 'Straordinario Feriale (Prime 2h) (+25%)', abbreviation: 'Str. Fer. 25%' },

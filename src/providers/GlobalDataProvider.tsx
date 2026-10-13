@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/local-db';
 import { useAuth } from '@/hooks/useAuth';
 import { GlobalDataContext } from '@/contexts/GlobalDataContext';
-import { Impostazioni, MasterData, TariffaLocale, GlobalData, Tecnico } from '@/models/definitions';
+import { Impostazioni, MasterData, TariffaLocale, UserProfile } from '@/models/definitions';
 import { useSyncManager } from '@/hooks/useSyncManager';
 
 const IMPOSTAZIONI_VERSION = 8;
@@ -60,9 +60,19 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
     const clienti = useLiveQuery(() => isDbReady ? db.clienti.toArray() : [], [isDbReady], []);
     const tipiGiornata = useLiveQuery(() => isDbReady ? db.tipiGiornata.toArray() : [], [isDbReady], []);
     const impostazioni = useLiveQuery(() => isDbReady ? db.impostazioni.get('main') : undefined, [isDbReady]);
-    const rapportini = useLiveQuery(() => isDbReady ? db.rapportini.toArray() : [], [isDbReady], []);
-    const checkins = useLiveQuery(() => isDbReady ? db.checkin_giornalieri.toArray() : [], [isDbReady], []);
-    const userProfile = useLiveQuery(() => isDbReady && user ? db.tecnici.get(user.uid) : undefined, [isDbReady, user]) as Tecnico | undefined;
+
+    const userProfile = useLiveQuery(() => {
+        if (!isDbReady || !user) return undefined;
+        return db.tecnici.get(user.uid);
+    }, [isDbReady, user]);
+
+    const enhancedUserProfile = useMemo((): UserProfile | undefined => {
+        if (!userProfile) return undefined;
+        return {
+            ...userProfile,
+            tecnicoId: userProfile.uid || ''
+        };
+    }, [userProfile]);
 
     useEffect(() => {
         if (!isDbReady || !tipiGiornata) return;
@@ -122,6 +132,7 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
             clienti: clienti || [],
             tipiGiornata: tipiGiornata || [],
             impostazioni: impostazioni || { id: 'main', version: IMPOSTAZIONI_VERSION, tariffe: [] },
+            festivita: [], // Aggiunto per conformità con l'interfaccia MasterData
         };
     }, [authLoading, isDbReady, tecnici, ditte, categorie, navi, luoghi, veicoli, clienti, tipiGiornata, impostazioni]);
 
@@ -136,15 +147,13 @@ export const GlobalDataProvider: React.FC<{ children: ReactNode }> = ({ children
         }
     }, []);
 
-    const contextValue: GlobalData = useMemo(() => ({
-        masterData: masterData,
-        rapportini: rapportini || [],
-        checkins: checkins || [],
-        userProfile: userProfile,
+    const contextValue = useMemo(() => ({
+        masterData,
+        userProfile: enhancedUserProfile,
         loading: authLoading || !isDbReady,
-        error: undefined,
+        error: null,
         updateImpostazioni,
-    }), [masterData, rapportini, checkins, userProfile, authLoading, isDbReady, updateImpostazioni]);
+    }), [masterData, enhancedUserProfile, authLoading, isDbReady, updateImpostazioni]);
 
     return (
         <GlobalDataContext.Provider value={contextValue}>

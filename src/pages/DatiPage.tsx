@@ -9,7 +9,6 @@ import {
   TableHead,
   TableRow,
   Typography,
-  useTheme,
   CircularProgress,
   Stack,
   IconButton,
@@ -21,9 +20,9 @@ import { db } from '@/db/local-db';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterData } from '@/hooks/useMasterData';
 import FullScreenLoader from '@/components/FullScreenLoader';
-import { processaMese, RisultatoCalcoloGiornaliero } from '@/services/BustaPagaService';
+import { processaMese } from '@/services/BustaPagaService';
 import { toDateSafe } from '@/utils/dateUtils';
-import { Dipendente, SaldiContatori, Rapportino } from '@/models/definitions';
+import { Dipendente, SaldiContatori, Rapportino, RisultatoCalcoloGiornaliero } from '@/models/definitions';
 import { strutturaPaga } from '@/config/payrollStructure';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ShareIcon from '@mui/icons-material/Share';
@@ -85,21 +84,22 @@ const DatiPage: React.FC = () => {
       return { risultati: [], saldiFinali: null, loading: true };
     }
     const dipendente: Dipendente = { id: userProfile.tecnicoId, nome: userProfile.nome, cognome: userProfile.cognome, livello: 'D1', isTurnista: false, orarioSettimanaleContrattuale: 40, anzianitaAnni: 5 };
-    const processedData = processaMese(dipendente, rapportiniDelMese, tipiGiornata, saldiIniziali, currentMonth, masterData);
+    const processedData = processaMese(dipendente, rapportiniDelMese as Rapportino[], tipiGiornata, saldiIniziali, currentMonth, masterData);
     return { ...processedData, loading: false };
   }, [userProfile, rapportiniDelMese, tipiGiornata, masterData, currentMonth, saldiIniziali]);
 
   const totaliMensili = useMemo(() => {
     const totals: { [key: string]: number } = {};
     strutturaPaga.flatMap(s => s.voci).forEach(voce => {
-      totals[voce.id] = risultati.reduce((sum, giorno) => sum + (giorno[voce.id as keyof RisultatoCalcoloGiornaliero] as number || 0), 0);
+        const key = voce.id as keyof RisultatoCalcoloGiornaliero;
+        totals[voce.id] = risultati.reduce((sum, giorno) => sum + (giorno[key] as number || 0), 0);
     });
     return totals;
   }, [risultati]);
 
   const totaliGenerali = useMemo(() => {
     const oreLavorate = strutturaPaga
-      .filter(s => s.titolo === 'Lavoro Ordinario' || s.titolo === 'Lavoro Straordinario')
+      .filter(s => s.titolo === 'Lavoro Ordinario' || s.titolo === 'Lavoro Straordinario' || s.titolo === 'Banca Ore (Solo Maggiorazione)')
       .flatMap(s => s.voci)
       .reduce((acc, voce) => acc + (totaliMensili[voce.id] || 0), 0);
     const oreAssenza = strutturaPaga
@@ -108,6 +108,42 @@ const DatiPage: React.FC = () => {
       .reduce((acc, voce) => acc + (totaliMensili[voce.id] || 0), 0);
     return { lavorate: oreLavorate, assenze: oreAssenza, retribuite: oreLavorate + oreAssenza };
   }, [totaliMensili]);
+
+  const totaleBustaPaga = useMemo(() => {
+    const tariffaOrdinaria = masterData?.tariffe?.ordinaria || 10;
+    if (!totaliMensili) return 0;
+
+    const vociDaMoltiplicare = [
+      // Ore intere
+      { id: 'pagaBaseOre', moltiplicatore: 1 },
+      { id: 'trasfertaOre', moltiplicatore: 1 },
+      { id: 'strDiu12Intero', moltiplicatore: 1.25 },
+      { id: 'strDiuSuccessIntero', moltiplicatore: 1.30 },
+      { id: 'straordinarioSabatoDiurno50', moltiplicatore: 1.50 },
+      { id: 'straordinarioNotturno50', moltiplicatore: 1.50 },
+      { id: 'straordinarioFestivo55', moltiplicatore: 1.55 },
+      { id: 'straordinarioNotturnoFestivo75', moltiplicatore: 1.75 },
+      // Assenze
+      { id: 'ferieScalate', moltiplicatore: 1 },
+      { id: 'rolScalati', moltiplicatore: 1 },
+      { id: 'exFestivitaScalate', moltiplicatore: 1 },
+      { id: 'permessiScalati', moltiplicatore: 1 },
+      { id: 'legge104Scalate', moltiplicatore: 1 },
+      { id: 'oreMalattiaCarenzaAzienda', moltiplicatore: 1 },
+      { id: 'oreMalattiaIntegrazione', moltiplicatore: 1 },
+      // Sole maggiorazioni
+      { id: 'bancaOreSolaMaggiorazione25', moltiplicatore: 0.25 },
+      { id: 'bancaOreSolaMaggiorazione30', moltiplicatore: 0.30 },
+      { id: 'bancaOreSolaMaggiorazione50', moltiplicatore: 0.50 },
+    ];
+
+    const totale = vociDaMoltiplicare.reduce((acc, voce) => {
+      const ore = totaliMensili[voce.id] || 0;
+      return acc + (ore * tariffaOrdinaria * voce.moltiplicatore);
+    }, 0);
+
+    return totale;
+  }, [totaliMensili, masterData]);
 
   const handleMonthChange = (increment: number) => {
     setCurrentMonth(prev => increment > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
@@ -120,7 +156,7 @@ const DatiPage: React.FC = () => {
     }
     setIsProcessing(true);
     try {
-        const { blob, fileName } = exportDatiToExcel(
+        const { blob } = exportDatiToExcel(
             risultati,
             totaliMensili,
             saldiFinali,
@@ -159,6 +195,13 @@ const DatiPage: React.FC = () => {
 
   return (
     <>
+      <style>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
       <Box sx={{ p: { xs: 1, sm: 2 }, backgroundColor: '#121212', color: 'white', minHeight: '100vh' }}>
         <Header 
           onMonthChange={handleMonthChange} 
@@ -177,6 +220,17 @@ const DatiPage: React.FC = () => {
             ))}
             <TotalsTable totaliMensili={totaliMensili} totaliGenerali={totaliGenerali} />
             {saldiFinali && <BalancesTable saldiIniziali={saldiIniziali} saldiFinali={saldiFinali} totaliMensili={totaliMensili} />}
+             <Paper sx={{ p: 2, backgroundColor: '#1e1e1e', border: '1px solid #424242' }} className="no-print">
+                <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 1 }}>
+                    Stima Totale Busta Paga
+                </Typography>
+                <Typography variant="h4" sx={{ color: '#64b5f6', fontWeight: 'bold', textAlign: 'center' }}>
+                    {totaleBustaPaga.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'gray', display: 'block', textAlign: 'center', mt: 1 }}>
+                    Questo è un calcolo stimato e non sostituisce la busta paga ufficiale.
+                </Typography>
+            </Paper>
           </Stack>
         )}
       </Box>
@@ -206,7 +260,7 @@ const DatiPage: React.FC = () => {
 
 // Header Component
 const Header: React.FC<{ onMonthChange: (inc: number) => void; currentMonth: Date; onShare: () => void; onAddResidui: () => void; isShareDisabled: boolean; }> = ({ onMonthChange, currentMonth, onShare, onAddResidui, isShareDisabled }) => (
-  <Paper sx={{ p: 1, mb: 3, backgroundColor: '#1e1e1e', border: '1px solid #424242' }}>
+  <Paper sx={{ p: 1, mb: 3, backgroundColor: '#1e1e1e', border: '1px solid #424242' }} className="no-print">
     <Stack direction="row" justifyContent="space-between" alignItems="center">
        <IconButton onClick={onShare} sx={{ color: 'white' }} disabled={isShareDisabled}>
          {isShareDisabled ? <CircularProgress size={24} /> : <ShareIcon />}
@@ -243,7 +297,6 @@ const renderSectionHeader = (title: string, colSpan: number) => (
 
 // Weekly Table Component
 const WeeklyTable: React.FC<{ weekStart: Date; risultati: RisultatoCalcoloGiornaliero[], weekNumber: number }> = ({ weekStart, risultati, weekNumber }) => {
-  const theme = useTheme();
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
   const daysOfWeek = eachDayOfInterval({ start: weekStart, end: weekEnd });
 

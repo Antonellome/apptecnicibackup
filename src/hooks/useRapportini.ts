@@ -9,21 +9,21 @@ import { useContext, useMemo } from 'react';
 import { GlobalDataContext } from '@/contexts/GlobalDataContext';
 
 export const useRapportini = () => {
-  const { userProfile } = useContext(GlobalDataContext);
+  const context = useContext(GlobalDataContext);
 
   const rapportini = useLiveQuery(() => {
-    if (!userProfile) return [];
+    if (!context?.userProfile) return [];
 
-    console.log(`useRapportini (LiveQuery): Avvio query locale per tecnico ${userProfile.tecnicoId}`);
+    console.log(`useRapportini (LiveQuery): Avvio query locale per tecnico ${context.userProfile.tecnicoId}`);
 
     // Esegue la query su Dexie per trovare i rapportini in cui l'utente
     // è il creatore (tecnicoId) o è incluso nelle presenze.
     return db.rapportini
-      .where('tecnicoId').equals(userProfile.tecnicoId)
-      .or('presenze').equals(userProfile.tecnicoId) // Nota: 'equals' su un array multientry si comporta come 'includes'.
+      .where('tecnicoId').equals(context.userProfile.tecnicoId)
+      .or('presenze').equals(context.userProfile.tecnicoId) // Nota: 'equals' su un array multientry si comporta come 'includes'.
       .sortBy('data'); // Ordina per data, ma potrebbe essere necessario un reverse in UI
 
-  }, [userProfile]);
+  }, [context?.userProfile]);
 
   // Dexie non ordina di default in modo decrescente, quindi lo facciamo in memoria.
   const sortedRapportini = useMemo(() => {

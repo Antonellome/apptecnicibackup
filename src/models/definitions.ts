@@ -1,10 +1,63 @@
-
-// =====================================================================================
-// --- TIPI DI BASE E ALIAS ---
-// =====================================================================================
-
 export type FirebaseTimestamp = any;
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed' | 'error';
+
+// --- INTERFACCE PER LA LOGICA DI BUSINESS E DI CALCOLO ---
+
+export interface Dipendente {
+  id: string;
+  nome: string;
+  cognome: string;
+  livello: string;
+  isTurnista: boolean;
+  orarioSettimanaleContrattuale: number;
+  anzianitaAnni: number;
+}
+
+export interface Festivita {
+    data: string;
+    nome: string;
+}
+
+export interface SaldiContatori {
+    dipendenteId: string;
+    anno: number;
+    ferie: number; // ore
+    rol: number; // ore
+    exFestivita: number; // ore
+    bancaOre: number; // ore
+    malattiaGiorniAnno: number; // giorni
+}
+
+export interface RisultatoCalcoloGiornaliero {
+    data: string;
+    pagaBaseOre: number;
+    trasfertaOre: number;
+    // Lavoro ordinario notturno
+    oreNotturnoSeraleOrd: number; // +15%
+    oreNotturnoPienoOrd: number;  // +30%
+    // Straordinari
+    strDiu12Intero: number; // +25%
+    strDiuSuccessIntero: number; // +30%
+    straordinarioSabatoDiurno50: number; // +50%
+    straordinarioNotturno50: number; // +50% (feriale/sabato)
+    straordinarioFestivo55: number; // +55%
+    straordinarioNotturnoFestivo75: number; // +75%
+    // Voci di assenza che scalano contatori
+    ferieScalate: number;
+    rolScalati: number;
+    exFestivitaScalate: number;
+    permessiScalati: number; // non usati per ora, ma predisposti
+    legge104Scalate: number;
+    // Malattia
+    oreMalattiaCarenzaAzienda: number;
+    oreMalattiaIntegrazione: number;
+    // Banca Ore (contengono solo la maggiorazione, l'ora base va in pagaBaseOre)
+    bancaOreSolaMaggiorazione25?: number;
+    bancaOreSolaMaggiorazione30?: number;
+    bancaOreSolaMaggiorazione50?: number;
+    // Anomalie
+    anomaliaDebitoUncovered: number;
+}
 
 // =====================================================================================
 // --- INTERFACCE DATI DA FIRESTORE (SCHEMA UFFICIALE E CORRETTO) ---
@@ -150,6 +203,8 @@ export interface MasterData {
     tipiGiornata: TipoGiornata[];
     impostazioni: Impostazioni;
     clienti: Cliente[];
+    festivita: Festivita[];
+    tariffe?: { [key: string]: number };
 }
 
 export interface FormField {
@@ -176,7 +231,7 @@ export interface DayInfo { [key: string]: any; }
 export interface RiepilogoMese { [key: string]: any; }
 export interface RiepilogoMensile { [key: string]: any; }
 
-export interface Documento { id: string; nome: string; [key: string]: any;}
+export interface Documento { id: string; nome: string; [key: string]: any; }
 export interface GenericItem { id?: string; nome: string; }
 
 export interface EnrichedRapportino extends Rapportino {
@@ -204,7 +259,7 @@ export interface GlobalData {
     masterData: MasterData | undefined;
     rapportini: Rapportino[];
     checkins: Checkin[];
-    userProfile: Tecnico | undefined;
+    userProfile: UserProfile | undefined;
     loading: boolean;
     error: any | undefined;
     updateImpostazioni: (newImpostazioni: Impostazioni) => Promise<void>;
@@ -218,3 +273,4 @@ export interface Impostazioni { id: 'main'; version?: number; tariffe: TariffaLo
 export interface TariffaLocale { id: string; tipoGiornataId: string; nome: string; costo: number; unita: 'h' | 'g'; tariffa: number; }
 export interface Tariffa { id: string; nome: string; tariffa: number; unita: 'h' | 'g'; tipoGiornataId: string; }
 export interface SyncEvent { id?: number; type: 'rapportino' | 'checkin'; action: 'create' | 'update'; payload: any; entityId?: string; syncStatus: 'pending' | 'syncing' | 'synced' | 'failed'; timestamp: Date; }
+export interface SaldoManuale extends SaldiContatori { id?: string; }

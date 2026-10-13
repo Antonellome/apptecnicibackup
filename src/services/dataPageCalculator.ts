@@ -1,4 +1,4 @@
-import { Rapportino, MasterData, RiepilogoMese, Impostazioni, UserProfile } from '@/models/definitions';
+import { Rapportino, MasterData, RiepilogoMese, UserProfile } from '@/models/definitions';
 import { calculateWeeklyHours, WeeklyHours } from '@/utils/hoursCalculations'; // Importa la funzione corretta e il tipo
 
 /**
@@ -28,7 +28,6 @@ export const calculateOfflineSummary = (
         oreTotali: 0, costoTotale: 0, giorniTotaliLavorati: 0, giorniTrasferta: 0,
         oreOrdinarie: 0, oreStraordinarie: 0
     };
-    const tariffeMap = new Map((masterData.impostazioni as Impostazioni)?.tariffe?.map(t => [t.tipoGiornataId, t]) || []);
 
     // 3. Itera sui risultati settimanali e aggrega i dati per il riepilogo mensile
     let oreOrdinarieTotali = 0;

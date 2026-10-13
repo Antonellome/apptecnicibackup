@@ -14,9 +14,9 @@ import {
     TableBody,
     TableRow,
     TableCell,
-    Paper
+    Paper,
+    Grid
 } from '@mui/material';
-import Grid from '@mui/material/Grid'; // Updated import
 import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -59,40 +59,124 @@ const ExcelPreviewModal: React.FC<ExcelPreviewModalProps> = ({ open, onClose, on
     const [tabValue, setTabValue] = useState(0);
     const [zoom, setZoom] = useState(1);
 
+    const parseExcelBlob = (blob: Blob) => {
+        setLoading(true);
+        setZoom(1);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = e.target?.result;
+                const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
+                const sheetPreviews: SheetPreview[] = workbook.SheetNames.map(sheetName => {
+                    const ws = workbook.Sheets[sheetName];
+                    const rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                    const jsonData: any[][] = Array.isArray(rawData) ? rawData.map(row => Array.isArray(row) ? row : [row]) : [];
+                    const cellStyles: { [cellAddress: string]: any } = {};
+                    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+                    for (let R = range.s.r; R <= range.e.r; ++R) {
+                        for (let C = range.s.c; C <= range.e.c; ++C) {
+                            const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+                            if (ws[cell_ref] && ws[cell_ref].s) cellStyles[cell_ref] = ws[cell_ref].s;
+                        }
+                    }
+                    return { name: sheetName, data: jsonData, styles: cellStyles };
+                });
+                setSheets(sheetPreviews);
+                setTabValue(0);
+            } catch (error) {
+                console.error("Error reading Excel file:", error);
+                setSheets([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        reader.readAsArrayBuffer(blob);
+    };
+
     useEffect(() => {
         if (open && excelBlob) {
-            setLoading(true);
-            setZoom(1); 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const data = e.target?.result;
-                    const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
-                    const sheetPreviews: SheetPreview[] = workbook.SheetNames.map(sheetName => {
-                        const ws = workbook.Sheets[sheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-                        const cellStyles: { [cellAddress: string]: any } = {};
-                        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
-                        for (let R = range.s.r; R <= range.e.r; ++R) {
-                            for (let C = range.s.c; C <= range.e.c; ++C) {
-                                const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-                                if (ws[cell_ref] && ws[cell_ref].s) cellStyles[cell_ref] = ws[cell_ref].s;
-                            }
-                        }
-                        return { name: sheetName, data: jsonData, styles: cellStyles };
-                    });
-                    setSheets(sheetPreviews);
-                    setTabValue(0);
-                } catch (error) { console.error("Error reading Excel file:", error); setSheets([]); }
-                finally { setLoading(false); }
-            };
-            reader.readAsArrayBuffer(excelBlob);
+            parseExcelBlob(excelBlob);
         }
     }, [open, excelBlob]);
 
+    const handleShare = () => {
+        if (!excelBlob) return;
 
-    const handleShare = () => excelBlob && onShare(excelBlob, fileName);
-    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => setTabValue(newValue);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = e.target?.result;
+            const workbook = XLSX.read(data, { type: 'array' });
+            const newWorkbook = XLSX.utils.book_new();
+
+            // Definizione delle colonne da includere nel totale "busta paga"
+            const colonneLavoroEffettivo = [
+                "Ordinarie Diurne", "Trasferta", 
+                "Lavoro Notturno Ordinario (20-22) (+15%)", "Lavoro Notturno Ordinario (22-06) (+30%)",
+                "Straordinario Feriale (Prime 2h) (+25%)", "Straordinario Feriale (Oltre 2h) (+30%)",
+                "Straordinario Sabato Diurno (+50%)", "Straordinario Notturno Feriale/Sabato (+50%)",
+                "Straordinario Festivo/Domenicale Diurno (+55%)", "Straordinario Notturno Festivo (+75%)"
+            ];
+
+            const colonneAssenzeRetribuite = [
+                "Ferie", "ROL", "Ex Festività", "Permessi Retribuiti", "Permessi L. 104",
+                "Malattia (Carenza)", "Malattia (Integrazione INPS)"
+            ];
+            
+            const colonneBustaPaga = [...colonneLavoroEffettivo, ...colonneAssenzeRetribuite];
+
+            workbook.SheetNames.forEach(sheetName => {
+                const ws = workbook.Sheets[sheetName];
+                const json: any[] = XLSX.utils.sheet_to_json(ws);
+                
+                if (json.length === 0) {
+                    const newWs = XLSX.utils.json_to_sheet([]);
+                    XLSX.utils.book_append_sheet(newWorkbook, newWs, sheetName);
+                    return;
+                }
+
+                const headers = Object.keys(json[0]);
+                const numericHeaders = headers.filter(h => h !== 'Giorno' && h !== 'Data');
+                
+                // Aggiungi totali di riga
+                json.forEach(row => {
+                    const rowTotal = numericHeaders.reduce((sum, header) => sum + (Number(row[header]) || 0), 0);
+                    row['Totale Ore Riga'] = rowTotal;
+                });
+
+                // Aggiungi riga totali di colonna
+                const columnTotals: any = { Giorno: 'TOTALI' };
+                let totalGeneralBustaPaga = 0;
+
+                headers.concat('Totale Ore Riga').forEach(header => {
+                    if (header !== 'Giorno' && header !== 'Data') {
+                        const total = json.reduce((sum, row) => sum + (Number(row[header]) || 0), 0);
+                        columnTotals[header] = total;
+
+                        if (colonneBustaPaga.includes(header)) {
+                            totalGeneralBustaPaga += total;
+                        }
+                    }
+                });
+                
+                // Inserisce il totale generale corretto
+                columnTotals['Totale Ore Riga'] = totalGeneralBustaPaga;
+
+                json.push({}, columnTotals); // Aggiunge una riga vuota per separazione
+
+                const newWs = XLSX.utils.json_to_sheet(json);
+                XLSX.utils.book_append_sheet(newWorkbook, newWs, sheetName);
+            });
+
+            const newExcelBlob = new Blob([XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' })], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+
+            onShare(newExcelBlob, `Riepilogo_Ore_${fileName}`);
+        };
+        reader.readAsArrayBuffer(excelBlob);
+    };
+
+    const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => setTabValue(newValue);
     const handleZoomIn = () => setZoom(prev => prev + 0.1);
     const handleZoomOut = () => setZoom(prev => Math.max(0.2, prev - 0.1));
 
@@ -131,7 +215,8 @@ const ExcelPreviewModal: React.FC<ExcelPreviewModalProps> = ({ open, onClose, on
                                     <TableCell key={colIndex} sx={getCellStyle(rowIndex, colIndex)}>
                                         {isThumbnail ? '' : cellValue}
                                     </TableCell>
-                                ))}
+                                ))
+                                }
                             </TableRow>
                         ))}
                     </TableBody>
@@ -154,7 +239,6 @@ const ExcelPreviewModal: React.FC<ExcelPreviewModalProps> = ({ open, onClose, on
                 <Box sx={{ flexGrow: 1, p: 1, overflow: 'hidden' }}>
                     {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
                         <Grid container spacing={1} sx={{ height: '100%' }}>
-                            {/* Left: Thumbnail */}
                             <Grid size={{ md: 2.5 }} sx={{ height: '100%', display: {xs: 'none', md: 'block'} }}>
                                 <Paper variant="outlined" sx={{ height: '100%', p: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                    <Box sx={{ width: '100%', height: 'auto', overflow: 'hidden'}}>
@@ -163,7 +247,6 @@ const ExcelPreviewModal: React.FC<ExcelPreviewModalProps> = ({ open, onClose, on
                                 </Paper>
                             </Grid>
 
-                            {/* Center: Main Preview */}
                             <Grid size={{ xs: 12, md: 8 }} sx={{ height: '100%' }}>
                                 <Paper variant="outlined" sx={{ height: '100%', overflow: 'auto' }}>
                                     <Box sx={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `calc(100% / ${zoom})`, height: `calc(100% / ${zoom})` }}>
@@ -172,7 +255,6 @@ const ExcelPreviewModal: React.FC<ExcelPreviewModalProps> = ({ open, onClose, on
                                 </Paper>
                             </Grid>
 
-                            {/* Right: Zoom Controls */}
                             <Grid size={{ xs: 12, md: 1.5 }} sx={{ height: '100%', display: 'flex', flexDirection: {xs: 'row', md: 'column'}, alignItems: 'center', justifyContent: 'center' }}>
                                 <Stack direction={{xs: 'row', md: 'column'}} spacing={1} alignItems="center">
                                     <IconButton onClick={handleZoomIn} sx={{color: 'white'}}><AddCircleOutlineIcon/></IconButton>

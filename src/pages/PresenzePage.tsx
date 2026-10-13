@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect, useReducer } from 'react';
-import { Box, Paper, Typography, CircularProgress, Alert, IconButton, Tooltip, SxProps, Theme } from '@mui/material';
-import { ChevronLeft, ChevronRight } from '@mui/icons-material';
+import { Box, Paper, Typography, CircularProgress, Alert, IconButton, Tooltip, SxProps, Theme, Button } from '@mui/material';
+import { ChevronLeft, ChevronRight, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, addMonths, subMonths } from 'date-fns';
 import { it } from 'date-fns/locale';
+import * as XLSX from 'xlsx';
 import { useLocalData } from '@/hooks/useLocalData';
 import { db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -74,6 +75,25 @@ function presenzeReducer(state: PresenzeState, action: Action): PresenzeState {
     }
 }
 
+const getDayCellContent = (dayInfo?: DayInfo) => {
+    if (!dayInfo || !dayInfo.tipo) {
+        return { text: '-', numeric: 0 };
+    }
+    switch (dayInfo.tipo) {
+        case 'LAVORO':
+            return { text: dayInfo.ore?.toFixed(1) || 'L', numeric: dayInfo.ore || 0 };
+        case 'FERIE':
+            return { text: 'F', numeric: 8 };
+        case 'MALATTIA':
+            return { text: 'M', numeric: 8 };
+        case 'PERMESSO':
+            return { text: 'P', numeric: 8 };
+        default:
+            return { text: 'N/D', numeric: 0 };
+    }
+};
+
+
 // --- COMPONENTI (INVARIATI) ---
 
 const CalendarHeader: React.FC<{ days: Date[] }> = ({ days }) => (
@@ -133,7 +153,6 @@ const PresenzePage: React.FC = () => {
     const [state, dispatch] = useReducer(presenzeReducer, initialState);
     const { riepiloghi, loading, error } = state;
 
-    // La dipendenza ora è stabile grazie a useMemo
     const tecnici = useMemo(() => masterData?.tecnici ?? [], [masterData]);
 
     const sortedTecnici = useMemo(() => {
@@ -184,6 +203,60 @@ const PresenzePage: React.FC = () => {
 
     }, [currentDate, tecnici, userProfile]);
 
+    const handleExportToExcel = () => {
+        const dataForExcel = sortedTecnici.map(tecnico => {
+            const row: any = {
+                'Tecnico': `${tecnico.cognome} ${tecnico.nome}`
+            };
+            let totaleBustaPaga = 0;
+            const riepilogoTecnico = riepiloghi.get(tecnico.id || '');
+
+            daysOfMonth.forEach(day => {
+                const dayOfMonth = format(day, 'd');
+                const dayInfo = riepilogoTecnico?.giorni[dayOfMonth];
+                const { text, numeric } = getDayCellContent(dayInfo);
+                row[dayOfMonth] = text;
+
+                // Aggiungi al totale busta paga solo se è un'assenza o lavoro
+                if (dayInfo?.tipo) {
+                   totaleBustaPaga += numeric;
+                }
+            });
+
+            row['Totale Busta Paga'] = totaleBustaPaga;
+            return row;
+        });
+        
+        // Aggiungi riga totali
+        const totalsRow: any = { 'Tecnico': 'TOTALI' };
+        let grandTotalBustaPaga = 0;
+
+        daysOfMonth.forEach(day => {
+            const dayOfMonth = format(day, 'd');
+            const dayTotal = sortedTecnici.reduce((sum, tecnico) => {
+                const riepilogo = riepiloghi.get(tecnico.id || '');
+                const dayInfo = riepilogo?.giorni[dayOfMonth];
+                 // Somma solo le ore di lavoro, non i simboli di assenza
+                return sum + (dayInfo?.tipo === 'LAVORO' ? dayInfo.ore || 0 : 0);
+            }, 0);
+            totalsRow[dayOfMonth] = dayTotal > 0 ? dayTotal.toFixed(1) : '-';
+        });
+
+        grandTotalBustaPaga = dataForExcel.reduce((sum, row) => sum + (row['Totale Busta Paga'] || 0), 0);
+        totalsRow['Totale Busta Paga'] = grandTotalBustaPaga.toFixed(1);
+
+        dataForExcel.push({}, totalsRow);
+
+
+        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Presenze');
+
+        // Download
+        const fileName = `Presenze_${format(currentDate, 'yyyy-MM')}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+    };
+
 
     const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
     const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
@@ -200,15 +273,22 @@ const PresenzePage: React.FC = () => {
         return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
     }
 
-    // --- JSX (INVARIATO) ---
     return (
         <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
             <Paper elevation={3} sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
                     <Typography variant="h5" component="h1" fontWeight="bold">
                         Quadro Presenze
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                         <Button
+                            variant="outlined"
+                            startIcon={<FileDownloadIcon />}
+                            onClick={handleExportToExcel}
+                            disabled={loading || riepiloghi.size === 0}
+                        >
+                            Esporta
+                        </Button>
                         <IconButton onClick={handlePrevMonth}><ChevronLeft /></IconButton>
                         <Typography variant="h6" sx={{ minWidth: 200, textAlign: 'center' }}>
                             {format(currentDate, 'MMMM yyyy', { locale: it })}

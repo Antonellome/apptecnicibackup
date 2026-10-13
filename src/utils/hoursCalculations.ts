@@ -50,7 +50,9 @@ export const calculateWeeklyHours = (
         if (r.isDeleted) continue;
         const techDetail = r.dettaglioOreTecnici?.find(d => d.tecnicoId === tecnicoId);
         if(!techDetail) continue; // Salta se non ci sono dettagli per questo tecnico
-        const dateKey = format(toDateSafe(r.data), 'yyyy-MM-dd');
+        const dateFromRapportino = toDateSafe(r.data);
+        if (!dateFromRapportino) continue;
+        const dateKey = format(dateFromRapportino, 'yyyy-MM-dd');
         if (!rapportiniByDate[dateKey]) {
             rapportiniByDate[dateKey] = [];
         }
@@ -70,7 +72,7 @@ export const calculateWeeklyHours = (
             const techDetail = rapportino.dettaglioOreTecnici?.find(d => d.tecnicoId === tecnicoId);
             if (!techDetail) continue;
 
-            if (rapportino.isManual) {
+            if (techDetail.isManual) {
                 totalMinutiDiurni += (techDetail.ore || 0) * 60;
             } else if (techDetail.oraInizio && techDetail.oraFine) {
                 const start = parseTimeString(techDetail.oraInizio, data);
@@ -101,7 +103,10 @@ export const calculateWeeklyHours = (
         finalResult[dateKey] = {};
         const dayOfWeek = getDay(data);
         const isSaturday = dayOfWeek === 6;
-        const isHoliday = masterData.festivita?.some(f => format(toDateSafe(f.data), 'yyyy-MM-dd') === dateKey) || dayOfWeek === 0;
+        const isHoliday = masterData.festivita?.some(f => {
+            const festivitaDate = toDateSafe(f.data);
+            return festivitaDate ? format(festivitaDate, 'yyyy-MM-dd') === dateKey : false;
+        }) || dayOfWeek === 0;
 
         if (isSaturday || isHoliday) {
             if (diurniPostPausa > 0) {
